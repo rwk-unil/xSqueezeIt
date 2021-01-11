@@ -79,7 +79,7 @@ namespace {
         {0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0}
     //   0  1  2  3  4  5  6  7   8  9 10 11 12 13 14 15
-    }; 
+    };
 
     /**
      * @brief Final order when sorted by reverse prefix
@@ -212,5 +212,47 @@ namespace {
                 EXPECT_EQ(results[i].d[j], results_2[i].d[j]) << "for i = " << i << " j = " << j;
             }
         }
+    }
+
+    TEST(PBWT_EXP, a_delta_encode) {
+        ppa_t a = {0,1,2,3,4,5,6,7,8,9};
+        ppa_t next_a = {2,3,4,7,8,9,0,1,5,6};
+        a_delta_t expected_delta = {{6,2}, {0,3}, {8,2}, {3,3}};
+
+        auto delta = encode_a_delta(a, next_a);
+
+        for (size_t _ = 0; _ < expected_delta.size(); ++_) {
+            EXPECT_EQ(delta[_].pos, expected_delta[_].pos) << "_ = " << _;
+            EXPECT_EQ(delta[_].len, expected_delta[_].len) << "_ = " << _;
+            //std::cout << "{" << delta[_].pos << "," << delta[_].len << "}" << std::endl;
+        }
+    }
+
+    TEST(PBWT_EXP, a_delta_decode) {
+        ppa_t a = {0,1,2,3,4,5,6,7,8,9};
+        ppa_t expected_next_a = {2,3,4,7,8,9,0,1,5,6};
+        a_delta_t delta = {{6,2}, {0,3}, {8,2}, {3,3}};
+
+        auto next_a = next_a_from_delta(a, delta);
+
+        for (size_t _ = 0; _ < expected_next_a.size(); ++_) {
+            EXPECT_EQ(next_a[_], expected_next_a[_]) << "_ = " << _;
+        }
+    }
+
+    TEST(PBWT_EXP, a_delta_encode_decode) {
+        ppa_t a = {0,1,2,3,4,5,6,7,8,9};
+        ppa_t expected_next_a = {2,3,4,7,8,9,0,1,5,6};
+        auto delta = encode_a_delta(a, expected_next_a);
+        auto next_a = next_a_from_delta(a, delta);
+
+        for (size_t _ = 0; _ < expected_next_a.size(); ++_) {
+            EXPECT_EQ(next_a[_], expected_next_a[_]) << "_ = " << _;
+        }
+    }
+
+
+    TEST(PBWT_MATCH, reportSetMaximalMatches) {
+        algorithm_2<true>(hap_map_original, 0);
     }
 }
