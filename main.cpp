@@ -1,9 +1,10 @@
 #include "pbwt_exp.hpp" 
 
 int main(int argc, char* argv[]) {
-
-
     auto hap_map = read_from_macs_file<bool>("11k.macs");
+
+    algorithm_2<true>(hap_map, 0);
+    return 0;
 
     // std::cout << "Hap map : " << hap_map.size() << " " << hap_map.at(0).size() << std::endl;
 
@@ -39,7 +40,7 @@ int main(int argc, char* argv[]) {
     sum = std::accumulate(n.begin(), n.end(), 0.0);
     mean = sum / n.size();
     std::cout << "Sparse PBWT : " << sparse.size() << " " << mean << std::endl;
-    std::cout << "First RLE has " << n.front() << " encondings" << std::endl;
+    std::cout << "First RLE has " << n.front() << " encodings" << std::endl;
     sum = std::accumulate(l.begin(), l.end(), 0.0);
     mean = sum / l.size();
     std::cout << "Sparse PBWT RLE mean length : " << mean << std::endl;
