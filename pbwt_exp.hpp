@@ -10,6 +10,10 @@
 #include <x86intrin.h>
 #include <immintrin.h>
 
+/// @todo remove
+// Dangerous define
+//#define size_t uint32_t
+
 #ifndef __PBWT_EXP_HPP__
 #define __PBWT_EXP_HPP__
 
@@ -151,7 +155,7 @@ public:
                     if (active) {
                         // Stop of block
                         encoding.push_back({.position = pos,
-                                            .length = (it - y.begin()) - pos});
+                                            .length = static_cast<size_t>(it - y.begin()) - pos});
                         active = false;
                     } else {
                         // Continuation of false block
@@ -161,7 +165,7 @@ public:
             if (active) {
                 // Block that reaches the end
                 encoding.push_back({.position = pos,
-                                    .length = y.size() - pos});
+                                    .length = static_cast<size_t>(y.size() - pos)});
             }
         }
     };
@@ -447,6 +451,161 @@ typedef struct alg2_res_t {
 
 using hap_map_t = std::vector<std::vector<bool> >;
 
+typedef struct a_delta_entry_t {
+    size_t pos;
+    size_t len;
+} a_delta_entry_t;
+
+using a_delta_t = std::vector<a_delta_entry_t>;
+
+template <const bool VERIFY = false>
+inline void fill_rppa(ppa_t& rppa, const ppa_t& ppa) {
+    if constexpr(VERIFY) {
+        if (ppa.size() != rppa.size()) {
+            std::cerr << "vector sizes don't match" << std::endl;
+        }
+    }
+
+    const size_t N = ppa.size();
+    for (size_t i = 0; i < N; ++i) {
+        rppa[ppa[i]] = i;
+    }
+}
+
+// Encode the delta between two permutation vectors by blocks
+// A block indicates where the block of prev_a is in a and how long the block is
+// e.g., two exactly the same vectors will be encoded {0, N}
+// e.g., if a is prev_a with the first element at the end {N-1, 1}, {0, N-1}
+// etc. Worst case every index is permutated as a single block, then the data used
+// by this encoding will be twice the data of simply storing the original vectors
+// however, this should not be the case since there is a non random link between the
+// indices of the two permutation vectors.
+template<const bool VERIFIY = false>
+inline a_delta_t encode_a_delta(const ppa_t& prev_a, const ppa_t& a) {
+    if constexpr (VERIFIY) {
+        if (prev_a.size() != a.size()) {
+            throw "Sizes differ";
+        }
+    }
+
+    a_delta_t result;
+
+    const size_t N = a.size();
+    ppa_t rppa(N);
+    fill_rppa(rppa, a); // a can do i->index, rppa can do index->i
+    size_t i = 0;
+    size_t j = 0;
+    while (i < N) {
+        size_t counter = 1;
+        j = rppa[prev_a[i]]; // Find index in a
+        // While the next index is the same in both, increment counter (do not go over N)
+        while ((prev_a[i+counter] == a[j+counter]) and (i+counter < N)) {
+            counter++;
+        }
+
+        // Encode
+        result.push_back({j, counter});
+        // Update i
+        i += counter;
+    }
+
+    return result;
+}
+
+// Generates next permutation vector from current vector and encoded delta
+inline ppa_t next_a_from_delta(const ppa_t& a, const a_delta_t& delta) {
+    ppa_t result(a.size());
+    size_t counter = 0;
+    for (auto& e : delta) {
+        std::copy(a.begin()+counter, a.begin()+counter+e.len, result.begin()+e.pos);
+        counter += e.len;
+    }
+    return result;
+}
+
+template<typename T = a_delta_t>
+inline std::vector<T> encode_all_a(const std::vector<alg2_res_t>& to_encode) {
+    std::vector<T> result;
+    ppa_t natural_order(to_encode.front().a.size());
+    std::iota(natural_order.begin(), natural_order.end(), 0);
+    ppa_t& prev_a = natural_order;
+
+    for (const auto& e : to_encode) {
+        result.push_back(encode_a_delta(prev_a, e.a));
+        prev_a = e.a;
+    }
+
+    return result;
+}
+
+typedef struct match_t {
+    size_t a;
+    size_t b;
+    size_t start;
+    size_t end; // Note this is k and could be inferred from data structure position (e.g., if all the matches for a given k are in the same data structure)
+} match_t;
+
+using matches_t = std::vector<match_t>;
+
+// Careful about a, k relationship
+inline
+void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a, d_t& d, matches_t& matches) {
+    // Note : D should already have the sentinel at position 0
+    d.push_back(k+1);
+
+    // Note : this nomenclature is different from Durbin's (N,M are reversed)
+    const size_t M = hap_map.size();
+    const size_t N = a.size();
+
+    for (size_t i = 0; i < N; ++i) {
+        size_t m = i-1;
+        size_t n = i+1;
+        // Scan down the array
+        if (d[i] <= d[i+1]) {
+            while (d[m+1] <= d[i]) {
+                if (k < M and hap_map[k][a[m]] == hap_map[k][a[i]]) {
+                    goto next_i;
+                }
+                m--;
+            }
+        }
+
+        // Scan up the array
+        if (d[i] >= d[i+1]) {
+            while (d[n] <= d[i+1]) {
+                if (k < M and hap_map[k][a[n]] == hap_map[k][a[i]]) {
+                    goto next_i;
+                }
+                n++;
+            }
+        }
+
+        // Reporting
+        for (size_t j = m+1; j < i; ++j) {
+            // Report
+            matches.push_back({
+                .a = a[i],
+                .b = a[j],
+                .start = d[i],
+                .end = k
+            });
+        }
+        for (size_t j = i+1; j < n; ++j) {
+            // Report
+            matches.push_back({
+                .a = a[i],
+                .b = a[j],
+                .start = d[i+1],
+                .end = k
+            });
+        }
+
+        next_i:
+        ;
+    }
+    d.pop_back(); // Restore d
+}
+
 // Algorithm 2 as in Durbin's paper
 inline
 void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t& b, d_t& d, d_t& e) {
@@ -478,10 +637,14 @@ void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t
             v++;
             q = 0;
         }
-        // Concatenations
-        std::copy(b.begin(), b.begin()+v, a.begin()+u);
-        std::copy(e.begin(), e.begin()+v, d.begin()+u);
     }
+
+    // Concatenations
+    std::copy(b.begin(), b.begin()+v, a.begin()+u);
+    std::copy(e.begin(), e.begin()+v, d.begin()+u);
+    //std::cout << "- Memcopy number " << k << " of size " << v << std::endl;
+    //memcpy(a.data() + u, b.data(), v * sizeof(size_t));
+    //memcpy(d.data() + u, e.data(), v * sizeof(size_t));
 }
 
 template<typename T>
@@ -492,28 +655,50 @@ void print_vector(const std::vector<T>& v) {
     std::cout << std::endl;
 }
 
-// Surrounding call to algorithm 2 for all sites
+// Surrounding call to algorithm 2 for all sites // This is the standard thing
+template<const bool REPORT_MATCHES = false>
 std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_rate) {
     const size_t M = hap_map.size();
     const size_t N = hap_map.at(0).size();
     ppa_t a(N), b(N);
     std::iota(a.begin(), a.end(), 0);
-    d_t d(N, 0);
+    d_t d(N, 0); d[0] = 1; // First sentinel
     d_t e(N);
 
     std::vector<alg2_res_t> results;
+    matches_t matches; // Will be optimized out if not used
 
     for (size_t k = 0; k < M; ++k) {
         if (ss_rate and k and (k % ss_rate == 0)) {
             results.push_back({k, a, d});
         }
+        if constexpr (REPORT_MATCHES) algorithm_4_step(hap_map, k, a, d, matches);
         algorithm_2_step(hap_map, k, a, b, d, e);
         //std::cout << "alg 2 a k = " << k << " : ";
         //print_vector(a);
     }
+    if constexpr (REPORT_MATCHES) algorithm_4_step(hap_map, M, a, d, matches);
 
     //print_vector(a);
     results.push_back({M, a, d});
+    if constexpr (REPORT_MATCHES) {
+        std::string filename = "test_matches.txt";
+        std::fstream s(filename, s.out);
+        if (s.is_open()) {
+            //std::cout << "Match reporting : " << std::endl;
+            for (const auto& m : matches) {
+                /// @todo reporting
+                //std::cout << "Match between " << m.a << " and " << m.b << " from [" <<
+                //             m.start << " to " << m.end << "[" << std::endl;
+
+                // Same format as Durbin
+                s << "MATCH\t" << m.a << "\t" << m.b << "\t" << m.start << "\t" << m.end << "\t" << m.end-m.start << std::endl;
+            }
+            s.close();
+        } else {
+            // Failed to open file for some reason
+        }
+    }
 
     return results;
 }
@@ -587,20 +772,6 @@ void fix_a_d_range(const size_t& start, const size_t& stop,
         // Scan
         d[j] = *std::max_element(prev_d.begin() + scan_start, prev_d.begin() + scan_stop);
         //std::cout << "fixed d at " << j << " to : " << d[j] << std::endl;
-    }
-}
-
-template <const bool VERIFY = false>
-inline void fill_rppa(ppa_t& rppa, const ppa_t& ppa) {
-    if constexpr(VERIFY) {
-        if (ppa.size() != rppa.size()) {
-            std::cerr << "vector sizes don't match" << std::endl;
-        }
-    }
-
-    const size_t N = ppa.size();
-    for (size_t i = 0; i < N; ++i) {
-        rppa[ppa[i]] = i;
     }
 }
 
