@@ -447,6 +447,7 @@ typedef struct alg2_res_t {
 
 using hap_map_t = std::vector<std::vector<bool> >;
 
+// Algorithm 2 as in Durbin's paper
 inline
 void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t& b, d_t& d, d_t& e) {
     size_t u = 0;
@@ -491,6 +492,7 @@ void print_vector(const std::vector<T>& v) {
     std::cout << std::endl;
 }
 
+// Surrounding call to algorithm 2 for all sites
 std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_rate) {
     const size_t M = hap_map.size();
     const size_t N = hap_map.at(0).size();
@@ -517,6 +519,7 @@ std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_ra
 }
 
 
+// Algorithm 2 from offset for a given length, starting with natural order
 /// @todo add template to encode RLE's
 alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, const size_t offset, const size_t length) {
     // Here hap map is in the initial order
@@ -587,10 +590,27 @@ void fix_a_d_range(const size_t& start, const size_t& stop,
     }
 }
 
+template <const bool VERIFY = false>
+inline void fill_rppa(ppa_t& rppa, const ppa_t& ppa) {
+    if constexpr(VERIFY) {
+        if (ppa.size() != rppa.size()) {
+            std::cerr << "vector sizes don't match" << std::endl;
+        }
+    }
+
+    const size_t N = ppa.size();
+    for (size_t i = 0; i < N; ++i) {
+        rppa[ppa[i]] = i;
+    }
+}
+
+template <const bool DEBUG=false>
 void fix_a_d(std::vector<alg2_res_t>& results) {
     const size_t N = results[0].a.size();
     ppa_t rppa(N);
     ppa_t group;
+
+    size_t debug_fix_counter = 0;
 
     // This first result is always correct
     for (size_t _ = 1; _ < results.size(); ++_) {
@@ -601,10 +621,8 @@ void fix_a_d(std::vector<alg2_res_t>& results) {
         const auto& prev_a = results[_-1].a;
         const auto& prev_d = results[_-1].d;
 
-        for (size_t i = 0; i < N; ++i) {
-            // Create the reverse ppa (not needed if no fix => optimize this)
-            rppa[prev_a[i]] = i;
-        }
+        // Create the reverse ppa (not needed if no fix => optimize this)
+        fill_rppa(rppa, prev_a);
 
         size_t first_same_seq_index = 0;
 
@@ -617,6 +635,7 @@ void fix_a_d(std::vector<alg2_res_t>& results) {
                 const size_t last_group_size = i - first_same_seq_index;
                 if (last_group_size > 1) {
                     fix_a_d_range(first_same_seq_index, i, prev_a, prev_d, rppa, a, d);
+                    if constexpr (DEBUG) debug_fix_counter++;
                 }
 
                 // Current sequence is different from previous, so this is a new group
@@ -627,8 +646,10 @@ void fix_a_d(std::vector<alg2_res_t>& results) {
         const size_t last_group_size = N - first_same_seq_index;
         if (last_group_size > 1) { // may need fixing
             fix_a_d_range(first_same_seq_index, N, prev_a, prev_d, rppa, a, d);
+            if constexpr (DEBUG) debug_fix_counter++;
         }
     }
+    if constexpr (DEBUG) std::cout << "Fixes : " << debug_fix_counter << std::endl;
 }
 
 #endif /* __PBWT_EXP_HPP__ */
