@@ -1,9 +1,6 @@
 [submodule "benchmark"]
 	path = benchmark
 	url = https://github.com/google/benchmark.git
-[submodule "googletest"]
-	path = googletest
-	url = https://github.com/google/googletest.git
 [submodule "htslib"]
 	path = htslib
 	url = https://github.com/samtools/htslib.git
