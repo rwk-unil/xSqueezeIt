@@ -703,10 +703,12 @@ std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_ra
     return results;
 }
 
+static matches_t __place_holder__; // Trick to still use refernce even with no parameter
 
 // Algorithm 2 from offset for a given length, starting with natural order
 /// @todo add template to encode RLE's
-alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, const size_t offset, const size_t length) {
+template<const bool REPORT_MATCHES = false>
+alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, const size_t offset, const size_t length, matches_t& matches = __place_holder__) {
     // Here hap map is in the initial order
 
     // Here we apply algorithm 2 at offset position and only for length sites (markers)
@@ -714,13 +716,15 @@ alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, const size_t offset, const 
     const size_t N = hap_map[0].size(); // Number of haplotypes (samples)
     ppa_t a(N), b(N);
     std::iota(a.begin(), a.end(), 0); // Initial ordering (does not reflect actual ordering at position "offset")
-    d_t d(N, 0);
+    d_t d(N, 0); d[0] = offset+1; // First sentinel /// @todo check if causes problem in fix (should not)
     d_t e(N);
 
     // Go through the markers
     for (size_t k = 0; k < length; ++k) {
+        if constexpr (REPORT_MATCHES) algorithm_4_step(hap_map, k+offset, a, d, matches);
         algorithm_2_step(hap_map, k+offset, a, b, d, e);
     }
+    /// @todo TODO Add missing step of algorithm 4
 
     return {
         offset + length,
