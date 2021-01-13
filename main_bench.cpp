@@ -219,25 +219,42 @@ static void BM_no_return(benchmark::State& state) {
 //BENCHMARK(BM_no_return);
 
 // original version with no subsampling
+
+// This will change how much the parallelisation improves the runtime
+constexpr size_t SUBSAMPLING_RATE = 800;
+
 static void BM_alg2(benchmark::State& state) {
     auto hap_map = read_from_macs_file<bool>("11k.macs");
 
-    const size_t ss_rate = 100;
+    const size_t ss_rate = SUBSAMPLING_RATE;
 
     for (auto _ : state) {
         std::vector<alg2_res_t> result;
-        result = algorithm_2(hap_map, ss_rate);
+        result = algorithm_2<false /* Report Set Maximal Matches */>(hap_map, ss_rate);
         //print_vector(result.back().a);
     }
 }
 
+static void BM_alg2_4(benchmark::State& state) {
+    auto hap_map = read_from_macs_file<bool>("11k.macs");
+
+    const size_t ss_rate = SUBSAMPLING_RATE;
+
+    for (auto _ : state) {
+        std::vector<alg2_res_t> result;
+        result = algorithm_2<true /* Report Set Maximal Matches */>(hap_map, ss_rate);
+        //print_vector(result.back().a);
+    }
+}
 
 #include <thread>
+#include <map>
 static void BM_alg2_exp(benchmark::State& state) {
     auto hap_map = read_from_macs_file<bool>("11k.macs");
     const size_t M = hap_map.size();
     const size_t THREADS = 4;
-    const size_t ss_rate = 100;
+    const size_t ss_rate = SUBSAMPLING_RATE;
+    //const size_t look_back = 0;
     const size_t jumps = M / ss_rate;
     const size_t jumps_per_thread = jumps / THREADS;
     const size_t last_jumps = jumps - jumps_per_thread * THREADS;
@@ -245,16 +262,18 @@ static void BM_alg2_exp(benchmark::State& state) {
     const size_t jump = ss_rate;
     const size_t last_extra_len = M - jump * jumps;
 
+    std::vector<alg2_res_t> results(jumps);
+
     for (auto _ : state) {
-        std::vector<alg2_res_t> results(jumps);
         std::vector<std::thread> workers(THREADS);
         for (size_t i = 0; i < THREADS; ++i) {
             workers[i] = std::thread([=, &hap_map, &results]{
                 const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
                 for (size_t j = 0; j < jumps_to_do; ++j) {
+                    //const size_t go_back = (i and j) ? look_back : 0;
                     const size_t offset = i*jumps_per_thread+j;
-                    const size_t len = jump + ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
-                    results[offset] = algorithm_2_exp(hap_map, offset*jump, len);
+                    const size_t len = jump + /*go_back +*/ ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
+                    results[offset] = algorithm_2_exp(hap_map, offset*jump/*-go_back*/, len);
                 }
                 //results[i] = algorithm_2_exp(hap_map, i*jump, jump + ((i == (THREADS-1)) ? last_extra_len : 0));
             });
@@ -263,11 +282,90 @@ static void BM_alg2_exp(benchmark::State& state) {
             w.join();
         }
         fix_a_d(results);
+        //fix_a_d<true>(results); // This shows the number of fixes
         //print_vector(results.back().a);
+        //benchmark::DoNotOptimize(encode_all_a(results)); // This is just to measure the cost of this extra operation // Cost is almost nil
     }
+
+    auto encoded_as = encode_all_a(results);
+    // Do some statistics on the encoded a's
+    size_t counter = 0;
+    for (const auto& e : encoded_as) {
+        counter += e.size();
+    }
+
+    std::cout << "Normal  a's is " << results.size() * results[0].a.size() << " integer values" << std::endl;
+    std::cout << "Encoded a's is " << counter*2 << " integer values" << std::endl;
+
+    // Check what the d vectors look like
+    std::map<size_t, size_t> d_map;
+    for (const auto& e : results) {
+        //print_vector(e.d);
+        for (const auto d : e.d) {
+            if (d_map.find(d) != d_map.end()) {
+                d_map[d]++;
+            } else {
+                d_map[d] = 1;
+            }
+        }
+    }
+
+    std::cout << "Map size : " << d_map.size() << std::endl;
+    // for (const auto& e : d_map) {
+    //     std::cout << "{" << e.first << "," << e.second << "}" << std::endl; // This will massively spam
+    // }
+}
+
+static void BM_alg2_4_exp(benchmark::State& state) {
+    auto hap_map = read_from_macs_file<bool>("11k.macs");
+    const size_t M = hap_map.size();
+    const size_t THREADS = 4;
+    const size_t ss_rate = SUBSAMPLING_RATE;
+    //const size_t look_back = 0;
+    const size_t jumps = M / ss_rate;
+    const size_t jumps_per_thread = jumps / THREADS;
+    const size_t last_jumps = jumps - jumps_per_thread * THREADS;
+
+    const size_t jump = ss_rate;
+    const size_t last_extra_len = M - jump * jumps;
+
+    // These two structures are shared between threads but not modified, only contents are touched, therefore no synchronization is needed
+    std::vector<alg2_res_t> results(jumps);
+    std::vector<matches_t> matches(jumps);
+
+    for (auto _ : state) {
+        matches.clear();
+        matches.insert(matches.begin(), jumps, {});
+
+        std::vector<std::thread> workers(THREADS);
+        for (size_t i = 0; i < THREADS; ++i) {
+            workers[i] = std::thread([=, &hap_map, &results, &matches]{
+                const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
+                for (size_t j = 0; j < jumps_to_do; ++j) {
+                    //const size_t go_back = (i and j) ? look_back : 0;
+                    const size_t offset = i*jumps_per_thread+j;
+                    const size_t len = jump + /*go_back +*/ ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
+                    results[offset] = algorithm_2_exp<true /* Rep Matches */>(hap_map, offset*jump/*-go_back*/, len, matches[offset]);
+                }
+            });
+        }
+        for (auto& w : workers) {
+            w.join();
+        }
+        fix_a_d(results); // This should also fix the matches
+    }
+
+    size_t match_counter = 0;
+    for (const auto& m : matches) {
+        match_counter += m.size();
+    }
+    std::cout << "Found " << match_counter << " uncorrected matches" << std::endl;
+    std::cout << "Expected matches should be 373344" << std::endl; // wc -l on file
 }
 
 BENCHMARK(BM_alg2);
 BENCHMARK(BM_alg2_exp);
+BENCHMARK(BM_alg2_4);
+BENCHMARK(BM_alg2_4_exp);
 
 BENCHMARK_MAIN();
