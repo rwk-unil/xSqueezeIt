@@ -546,10 +546,24 @@ typedef struct match_t {
 } match_t;
 
 using matches_t = std::vector<match_t>;
+// Unordered map has constant time find, whereas map has logarithmic time find
+using match_candidates_t = std::unordered_map<size_t, std::unordered_map<size_t, size_t> >;
+static matches_t __place_holder__; // Trick to still use refernce even with no parameter
+static match_candidates_t __cand_place_holder__;
+
+inline void update_candidates(match_candidates_t& candidates, size_t a, size_t b, size_t k) {
+    auto c = candidates.find(a);
+    if (c == candidates.end()) {
+        candidates.insert({a, {{b, k}}});
+    } else {
+        c->second.insert({b, k}); // b key should not exist
+    }
+}
 
 // Careful about a, k relationship
 inline
-void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a, d_t& d, matches_t& matches) {
+template <const bool EXPERIMENTAL = false>
+void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a, d_t& d, matches_t& matches, match_candidates_t& candidates = __cand_place_holder__, bool start = true, size_t limit = 0) {
     // Note : D should already have the sentinel at position 0
     d.push_back(k+1);
 
@@ -560,6 +574,8 @@ void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a,
     for (size_t i = 0; i < N; ++i) {
         size_t m = i-1;
         size_t n = i+1;
+        /// @TODO : The case where the d is 0 is special and should be added to candidates with the experimental version, because the conditions are not representative when d is "0" !
+
         // Scan down the array
         if (d[i] <= d[i+1]) {
             while (d[m+1] <= d[i]) {
@@ -580,24 +596,53 @@ void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a,
             }
         }
 
+        /// @todo remove duplicate code (inline fun)
         // Reporting
         for (size_t j = m+1; j < i; ++j) {
             // Report
-            matches.push_back({
-                .a = a[i],
-                .b = a[j],
-                .start = d[i],
-                .end = k
-            });
+            if constexpr (EXPERIMENTAL) {
+                if ((d[i] == 0 /*< limit*/) and (start == false)) {
+                    // Candidate
+                    update_candidates(candidates, a[i], a[j], k);
+                } else { // Matches that started in block can be reported, if d=0 only report for first block
+                    matches.push_back({
+                        .a = a[i],
+                        .b = a[j],
+                        .start = d[i],
+                        .end = k
+                    });
+                }
+            } else { // Non experimental version
+                matches.push_back({
+                    .a = a[i],
+                    .b = a[j],
+                    .start = d[i],
+                    .end = k
+                });
+            }
         }
         for (size_t j = i+1; j < n; ++j) {
             // Report
-            matches.push_back({
-                .a = a[i],
-                .b = a[j],
-                .start = d[i+1],
-                .end = k
-            });
+            if constexpr (EXPERIMENTAL) {
+                if ((d[i+1] == 0 /*< limit*/) and (start == false)) {
+                    // Candidate
+                    update_candidates(candidates, a[i], a[j], k);
+                } else {
+                    matches.push_back({
+                        .a = a[i],
+                        .b = a[j],
+                        .start = d[i+1],
+                        .end = k
+                    });
+                }
+            } else { // Non experimental version
+                matches.push_back({
+                    .a = a[i],
+                    .b = a[j],
+                    .start = d[i+1],
+                    .end = k
+                });
+            }
         }
 
         next_i:
@@ -657,7 +702,7 @@ void print_vector(const std::vector<T>& v) {
 
 // Surrounding call to algorithm 2 for all sites // This is the standard thing
 template<const bool REPORT_MATCHES = false>
-std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_rate) {
+std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_rate, matches_t& matches = __place_holder__) {
     const size_t M = hap_map.size();
     const size_t N = hap_map.at(0).size();
     ppa_t a(N), b(N);
@@ -666,7 +711,6 @@ std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_ra
     d_t e(N);
 
     std::vector<alg2_res_t> results;
-    matches_t matches; // Will be optimized out if not used
 
     for (size_t k = 0; k < M; ++k) {
         if (ss_rate and k and (k % ss_rate == 0)) {
@@ -681,34 +725,14 @@ std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_ra
 
     //print_vector(a);
     results.push_back({M, a, d});
-    if constexpr (REPORT_MATCHES) {
-        std::string filename = "test_matches.txt";
-        std::fstream s(filename, s.out);
-        if (s.is_open()) {
-            //std::cout << "Match reporting : " << std::endl;
-            for (const auto& m : matches) {
-                /// @todo reporting
-                //std::cout << "Match between " << m.a << " and " << m.b << " from [" <<
-                //             m.start << " to " << m.end << "[" << std::endl;
-
-                // Same format as Durbin
-                s << "MATCH\t" << m.a << "\t" << m.b << "\t" << m.start << "\t" << m.end << "\t" << m.end-m.start << std::endl;
-            }
-            s.close();
-        } else {
-            // Failed to open file for some reason
-        }
-    }
 
     return results;
 }
 
-static matches_t __place_holder__; // Trick to still use refernce even with no parameter
-
 // Algorithm 2 from offset for a given length, starting with natural order
 /// @todo add template to encode RLE's
 template<const bool REPORT_MATCHES = false>
-alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, const size_t offset, const size_t length, matches_t& matches = __place_holder__) {
+alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t length, matches_t& matches = __place_holder__, match_candidates_t& candidates = __cand_place_holder__, bool first = true) {
     // Here hap map is in the initial order
 
     // Here we apply algorithm 2 at offset position and only for length sites (markers)
@@ -719,12 +743,32 @@ alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, const size_t offset, const 
     d_t d(N, 0); d[0] = offset+1; // First sentinel /// @todo check if causes problem in fix (should not)
     d_t e(N);
 
+    // Experimental stuff :
+    //if (offset) {
+    //    for (size_t i = 1; i < N; ++i) {
+    //        d[i] = (i % (offset-1)) + 1;
+    //    }
+    //}
+
     // Go through the markers
     for (size_t k = 0; k < length; ++k) {
-        if constexpr (REPORT_MATCHES) algorithm_4_step(hap_map, k+offset, a, d, matches);
+        if constexpr (REPORT_MATCHES) {
+            if (k) { // This is needed because 1) d will be 0's and 2) this is done in previous step (see call below, offset+length)
+                algorithm_4_step<true /* EXP */>(hap_map, k+offset, a, d, matches, candidates, first, offset);
+            }
+        }
         algorithm_2_step(hap_map, k+offset, a, b, d, e);
     }
     /// @todo TODO Add missing step of algorithm 4
+    // This needs some extra thinking
+    if constexpr (REPORT_MATCHES) algorithm_4_step<true /* EXP */>(hap_map, offset+length, a, d, matches, candidates, first, offset);
+
+    // Exp stuff
+    //for (size_t i = 1; i < N; ++i) {
+    //    if (d[i] < offset) {
+    //        d[i] = 0;
+    //    }
+    //}
 
     return {
         offset + length,
@@ -825,6 +869,68 @@ void fix_a_d(std::vector<alg2_res_t>& results) {
         }
     }
     if constexpr (DEBUG) std::cout << "Fixes : " << debug_fix_counter << std::endl;
+}
+
+// Get real matches from the candidates given the real a and d vectors (fixed)
+void matches_from_candidates(const match_candidates_t& candidates, const ppa_t& a, d_t& d, matches_t& matches) {
+    const size_t N = a.size();
+
+    // This is similar to algorithm 4 but instead of knowing the next symbol is different we know the two sequences in the candidates differ in the next block
+
+    // Note : D should already have the sentinel at position 0
+    d.push_back(d[0]);
+
+    // For every index
+    for (size_t i = 0; i < N; ++i) {
+        size_t m = i-1;
+        size_t n = i+1;
+
+        auto c = candidates.find(a[i]);
+        if (c != candidates.end()) {
+            // Only do the work if we have a candidate for this i
+            // Scan down the array
+            if (d[i] <= d[i+1]) {
+                while (d[m+1] <= d[i]) {
+                    // Skip is done at candidate check above
+                    m--;
+                }
+            }
+
+            // Scan up the array
+            if (d[i] >= d[i+1]) {
+                while (d[n] <= d[i+1]) {
+                    // Skip is done at candidate check above
+                    n++;
+                }
+            }
+
+            // Reporting
+            for (size_t j = m+1; j < i; ++j) {
+                /// @todo Check this, maybe the find did not work becase wrong vectors were passed
+                auto entry = c->second.find(a[j]);
+                if (entry != c->second.end()) {
+                    matches.push_back({
+                        .a = a[i],
+                        .b = a[j],
+                        .start = d[i],
+                        .end = entry->second
+                    });
+                }
+            }
+            for (size_t j = i+1; j < n; ++j) {
+                auto entry = c->second.find(a[j]);
+                if (entry != c->second.end()) {
+                    matches.push_back({
+                        .a = a[i],
+                        .b = a[j],
+                        .start = d[i+1],
+                        .end = entry->second
+                    });
+                }
+            }
+        }
+    }
+    d.pop_back(); // Restore d
 }
 
 #endif /* __PBWT_EXP_HPP__ */

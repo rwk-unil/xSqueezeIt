@@ -228,22 +228,40 @@ static void BM_alg2(benchmark::State& state) {
 
     const size_t ss_rate = SUBSAMPLING_RATE;
 
+    std::vector<alg2_res_t> result;
+
     for (auto _ : state) {
-        std::vector<alg2_res_t> result;
         result = algorithm_2<false /* Report Set Maximal Matches */>(hap_map, ss_rate);
-        //print_vector(result.back().a);
     }
+    //print_vector(result.back().a);
+    //print_vector(result.back().d);
 }
 
 static void BM_alg2_4(benchmark::State& state) {
     auto hap_map = read_from_macs_file<bool>("11k.macs");
 
     const size_t ss_rate = SUBSAMPLING_RATE;
+    matches_t matches;
 
     for (auto _ : state) {
         std::vector<alg2_res_t> result;
-        result = algorithm_2<true /* Report Set Maximal Matches */>(hap_map, ss_rate);
+        result = algorithm_2<true /* Report Set Maximal Matches */>(hap_map, ss_rate, matches);
         //print_vector(result.back().a);
+    }
+
+    std::string filename = "normal_matches.txt";
+    std::fstream s(filename, s.out);
+    if (s.is_open()) {
+        for (const auto& m : matches) {
+            //std::cout << "Match between " << m.a << " and " << m.b << " from [" <<
+            //             m.start << " to " << m.end << "[" << std::endl;
+
+            // Same format as Durbin
+            s << "MATCH\t" << m.a << "\t" << m.b << "\t" << m.start << "\t" << m.end << "\t" << m.end-m.start << std::endl;
+        }
+        s.close();
+    } else {
+        // Failed to open file for some reason
     }
 }
 
@@ -286,6 +304,9 @@ static void BM_alg2_exp(benchmark::State& state) {
         //print_vector(results.back().a);
         //benchmark::DoNotOptimize(encode_all_a(results)); // This is just to measure the cost of this extra operation // Cost is almost nil
     }
+
+    //print_vector(results.back().a);
+    //print_vector(results.back().d);
 
     auto encoded_as = encode_all_a(results);
     // Do some statistics on the encoded a's
@@ -333,19 +354,24 @@ static void BM_alg2_4_exp(benchmark::State& state) {
     std::vector<alg2_res_t> results(jumps);
     std::vector<matches_t> matches(jumps);
 
+    std::vector<match_candidates_t> candidates(jumps);
+
     for (auto _ : state) {
+        // These are because the benchmark is run multiple times and the data structures persist
         matches.clear();
         matches.insert(matches.begin(), jumps, {});
+        candidates.clear();
+        candidates.insert(candidates.begin(), jumps, {});
 
         std::vector<std::thread> workers(THREADS);
         for (size_t i = 0; i < THREADS; ++i) {
-            workers[i] = std::thread([=, &hap_map, &results, &matches]{
+            workers[i] = std::thread([=, &hap_map, &results, &matches, &candidates]{
                 const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
                 for (size_t j = 0; j < jumps_to_do; ++j) {
                     //const size_t go_back = (i and j) ? look_back : 0;
                     const size_t offset = i*jumps_per_thread+j;
                     const size_t len = jump + /*go_back +*/ ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
-                    results[offset] = algorithm_2_exp<true /* Rep Matches */>(hap_map, offset*jump/*-go_back*/, len, matches[offset]);
+                    results[offset] = algorithm_2_exp<true /* Rep Matches */>(hap_map, offset*jump/*-go_back*/, len, matches[offset], candidates[offset], !(i or j) /* first */);
                 }
             });
         }
@@ -353,19 +379,48 @@ static void BM_alg2_4_exp(benchmark::State& state) {
             w.join();
         }
         fix_a_d(results); // This should also fix the matches
+
+        // Fix the matches (can be done in parallel) here we add the missing matches
+        for (size_t i = 0; i < THREADS; ++i) {
+            workers[i] = std::thread([=, &results, &matches, &candidates]{
+                const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
+                for (size_t j = 0; j < jumps_to_do; ++j) {
+                    //const size_t go_back = (i and j) ? look_back : 0;
+                    const size_t offset = i*jumps_per_thread+j;
+
+                    if (offset) { // First has no candidates
+                        // a and d (the fixed ones) come from the previous step !
+                        matches_from_candidates(candidates[offset], results[offset-1].a, results[offset-1].d, matches[offset]);
+                    }
+                }
+            });
+        }
+        for (auto& w : workers) {
+            w.join();
+        }
     }
 
+    std::string filename = "parallel_matches.txt";
+    std::fstream s(filename, s.out);
+    if (!s.is_open()) return;
+
     size_t match_counter = 0;
-    for (const auto& m : matches) {
-        match_counter += m.size();
+    size_t block_counter = 0;
+    for (const auto& m_vect : matches) {
+        match_counter += m_vect.size();
+        s << "---- Block : " << block_counter++ << std::endl;
+        for (const auto& m : m_vect) {
+            s << "MATCH\t" << m.a << "\t" << m.b << "\t" << m.start << "\t" << m.end << "\t" << m.end-m.start << std::endl;
+        }
     }
-    std::cout << "Found " << match_counter << " uncorrected matches" << std::endl;
+    s.close();
+    std::cout << "Found " << match_counter << " matches" << std::endl;
     std::cout << "Expected matches should be 373344" << std::endl; // wc -l on file
 }
 
-BENCHMARK(BM_alg2);
+//BENCHMARK(BM_alg2);
 BENCHMARK(BM_alg2_exp);
-BENCHMARK(BM_alg2_4);
-BENCHMARK(BM_alg2_4_exp);
+//BENCHMARK(BM_alg2_4);
+//BENCHMARK(BM_alg2_4_exp);
 
 BENCHMARK_MAIN();
