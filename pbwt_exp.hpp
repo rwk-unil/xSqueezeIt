@@ -562,8 +562,7 @@ inline void update_candidates(match_candidates_t& candidates, size_t a, size_t b
 
 // Careful about a, k relationship
 inline
-template <const bool EXPERIMENTAL = false>
-void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a, d_t& d, matches_t& matches, match_candidates_t& candidates = __cand_place_holder__, bool start = true, size_t limit = 0) {
+void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a, d_t& d, matches_t& matches) {
     // Note : D should already have the sentinel at position 0
     d.push_back(k+1);
 
@@ -600,49 +599,21 @@ void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a,
         // Reporting
         for (size_t j = m+1; j < i; ++j) {
             // Report
-            if constexpr (EXPERIMENTAL) {
-                if ((d[i] == 0 /*< limit*/) and (start == false)) {
-                    // Candidate
-                    update_candidates(candidates, a[i], a[j], k);
-                } else { // Matches that started in block can be reported, if d=0 only report for first block
-                    matches.push_back({
-                        .a = a[i],
-                        .b = a[j],
-                        .start = d[i],
-                        .end = k
-                    });
-                }
-            } else { // Non experimental version
-                matches.push_back({
-                    .a = a[i],
-                    .b = a[j],
-                    .start = d[i],
-                    .end = k
-                });
-            }
+            matches.push_back({
+                .a = a[i],
+                .b = a[j],
+                .start = d[i],
+                .end = k
+            });
         }
         for (size_t j = i+1; j < n; ++j) {
             // Report
-            if constexpr (EXPERIMENTAL) {
-                if ((d[i+1] == 0 /*< limit*/) and (start == false)) {
-                    // Candidate
-                    update_candidates(candidates, a[i], a[j], k);
-                } else {
-                    matches.push_back({
-                        .a = a[i],
-                        .b = a[j],
-                        .start = d[i+1],
-                        .end = k
-                    });
-                }
-            } else { // Non experimental version
-                matches.push_back({
-                    .a = a[i],
-                    .b = a[j],
-                    .start = d[i+1],
-                    .end = k
-                });
-            }
+            matches.push_back({
+                .a = a[i],
+                .b = a[j],
+                .start = d[i+1],
+                .end = k
+            });
         }
 
         next_i:
@@ -732,8 +703,10 @@ std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_ra
 // Algorithm 2 from offset for a given length, starting with natural order
 /// @todo add template to encode RLE's
 template<const bool REPORT_MATCHES = false>
-alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t length, matches_t& matches = __place_holder__, match_candidates_t& candidates = __cand_place_holder__, bool first = true) {
+alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t length, matches_t& matches = __place_holder__) {
     // Here hap map is in the initial order
+
+    // TODO : Make it possible to pass a,d
 
     // Here we apply algorithm 2 at offset position and only for length sites (markers)
     //const size_t M = hap_map.size(); // Number of variant sites (markers)
@@ -743,32 +716,17 @@ alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t lengt
     d_t d(N, 0); d[0] = offset+1; // First sentinel /// @todo check if causes problem in fix (should not)
     d_t e(N);
 
-    // Experimental stuff :
-    //if (offset) {
-    //    for (size_t i = 1; i < N; ++i) {
-    //        d[i] = (i % (offset-1)) + 1;
-    //    }
-    //}
-
     // Go through the markers
     for (size_t k = 0; k < length; ++k) {
         if constexpr (REPORT_MATCHES) {
             if (k) { // This is needed because 1) d will be 0's and 2) this is done in previous step (see call below, offset+length)
-                algorithm_4_step<true /* EXP */>(hap_map, k+offset, a, d, matches, candidates, first, offset);
+                algorithm_4_step(hap_map, k+offset, a, d, matches);
             }
         }
         algorithm_2_step(hap_map, k+offset, a, b, d, e);
     }
-    /// @todo TODO Add missing step of algorithm 4
-    // This needs some extra thinking
-    if constexpr (REPORT_MATCHES) algorithm_4_step<true /* EXP */>(hap_map, offset+length, a, d, matches, candidates, first, offset);
 
-    // Exp stuff
-    //for (size_t i = 1; i < N; ++i) {
-    //    if (d[i] < offset) {
-    //        d[i] = 0;
-    //    }
-    //}
+    if constexpr (REPORT_MATCHES) algorithm_4_step(hap_map, offset+length, a, d, matches);
 
     return {
         offset + length,
@@ -871,6 +829,7 @@ void fix_a_d(std::vector<alg2_res_t>& results) {
     if constexpr (DEBUG) std::cout << "Fixes : " << debug_fix_counter << std::endl;
 }
 
+/// @deprecated This is no longer needed with the "sane" approach
 // Get real matches from the candidates given the real a and d vectors (fixed)
 void matches_from_candidates(const match_candidates_t& candidates, const ppa_t& a, d_t& d, matches_t& matches) {
     const size_t N = a.size();

@@ -272,7 +272,7 @@ static void BM_alg2_exp(benchmark::State& state) {
     const size_t M = hap_map.size();
     const size_t THREADS = 4;
     const size_t ss_rate = SUBSAMPLING_RATE;
-    //const size_t look_back = 0;
+    //const size_t look_back = 0; // DO NOT GO BACK / LOOK BACK, this is crap
     const size_t jumps = M / ss_rate;
     const size_t jumps_per_thread = jumps / THREADS;
     const size_t last_jumps = jumps - jumps_per_thread * THREADS;
@@ -371,7 +371,7 @@ static void BM_alg2_4_exp(benchmark::State& state) {
                     //const size_t go_back = (i and j) ? look_back : 0;
                     const size_t offset = i*jumps_per_thread+j;
                     const size_t len = jump + /*go_back +*/ ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
-                    results[offset] = algorithm_2_exp<true /* Rep Matches */>(hap_map, offset*jump/*-go_back*/, len, matches[offset], candidates[offset], !(i or j) /* first */);
+                    results[offset] = algorithm_2_exp<false /* Rep Matches */>(hap_map, offset*jump/*-go_back*/, len);
                 }
             });
         }
@@ -381,23 +381,23 @@ static void BM_alg2_4_exp(benchmark::State& state) {
         fix_a_d(results); // This should also fix the matches
 
         // Fix the matches (can be done in parallel) here we add the missing matches
-        for (size_t i = 0; i < THREADS; ++i) {
-            workers[i] = std::thread([=, &results, &matches, &candidates]{
-                const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
-                for (size_t j = 0; j < jumps_to_do; ++j) {
-                    //const size_t go_back = (i and j) ? look_back : 0;
-                    const size_t offset = i*jumps_per_thread+j;
+        // for (size_t i = 0; i < THREADS; ++i) {
+        //     workers[i] = std::thread([=, &results, &matches, &candidates]{
+        //         const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
+        //         for (size_t j = 0; j < jumps_to_do; ++j) {
+        //             //const size_t go_back = (i and j) ? look_back : 0;
+        //             const size_t offset = i*jumps_per_thread+j;
 
-                    if (offset) { // First has no candidates
-                        // a and d (the fixed ones) come from the previous step !
-                        matches_from_candidates(candidates[offset], results[offset-1].a, results[offset-1].d, matches[offset]);
-                    }
-                }
-            });
-        }
-        for (auto& w : workers) {
-            w.join();
-        }
+        //             if (offset) { // First has no candidates
+        //                 // a and d (the fixed ones) come from the previous step !
+        //                 matches_from_candidates(candidates[offset], results[offset-1].a, results[offset-1].d, matches[offset]);
+        //             }
+        //         }
+        //     });
+        // }
+        // for (auto& w : workers) {
+        //     w.join();
+        // }
     }
 
     std::string filename = "parallel_matches.txt";
