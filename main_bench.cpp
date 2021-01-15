@@ -222,6 +222,7 @@ static void BM_no_return(benchmark::State& state) {
 
 // This will change how much the parallelisation improves the runtime
 constexpr size_t SUBSAMPLING_RATE = 800;
+constexpr size_t THREADS = 4;
 
 static void BM_alg2(benchmark::State& state) {
     auto hap_map = read_from_macs_file<bool>("11k.macs");
@@ -270,7 +271,6 @@ static void BM_alg2_4(benchmark::State& state) {
 static void BM_alg2_exp(benchmark::State& state) {
     auto hap_map = read_from_macs_file<bool>("11k.macs");
     const size_t M = hap_map.size();
-    const size_t THREADS = 4;
     const size_t ss_rate = SUBSAMPLING_RATE;
     //const size_t look_back = 0; // DO NOT GO BACK / LOOK BACK, this is crap
     const size_t jumps = M / ss_rate;
@@ -340,9 +340,8 @@ static void BM_alg2_exp(benchmark::State& state) {
 static void BM_alg2_4_exp(benchmark::State& state) {
     auto hap_map = read_from_macs_file<bool>("11k.macs");
     const size_t M = hap_map.size();
-    const size_t THREADS = 4;
     const size_t ss_rate = SUBSAMPLING_RATE;
-    //const size_t look_back = 0;
+
     const size_t jumps = M / ss_rate;
     const size_t jumps_per_thread = jumps / THREADS;
     const size_t last_jumps = jumps - jumps_per_thread * THREADS;
@@ -354,50 +353,43 @@ static void BM_alg2_4_exp(benchmark::State& state) {
     std::vector<alg2_res_t> results(jumps);
     std::vector<matches_t> matches(jumps);
 
-    std::vector<match_candidates_t> candidates(jumps);
-
     for (auto _ : state) {
         // These are because the benchmark is run multiple times and the data structures persist
         matches.clear();
         matches.insert(matches.begin(), jumps, {});
-        candidates.clear();
-        candidates.insert(candidates.begin(), jumps, {});
 
+        // Compute the estimated a,d's in parallel
         std::vector<std::thread> workers(THREADS);
         for (size_t i = 0; i < THREADS; ++i) {
-            workers[i] = std::thread([=, &hap_map, &results, &matches, &candidates]{
+            workers[i] = std::thread([=, &hap_map, &results]{
                 const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
                 for (size_t j = 0; j < jumps_to_do; ++j) {
-                    //const size_t go_back = (i and j) ? look_back : 0;
                     const size_t offset = i*jumps_per_thread+j;
-                    const size_t len = jump + /*go_back +*/ ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
-                    results[offset] = algorithm_2_exp<false /* Rep Matches */>(hap_map, offset*jump/*-go_back*/, len);
+                    const size_t len = jump + ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
+                    results[offset] = algorithm_2_exp<false /* Rep Matches */>(hap_map, offset*jump, len);
                 }
             });
         }
         for (auto& w : workers) {
             w.join();
         }
-        fix_a_d(results); // This should also fix the matches
+        // Sequentially fix the a,d's
+        fix_a_d(results);
 
-        // Fix the matches (can be done in parallel) here we add the missing matches
-        // for (size_t i = 0; i < THREADS; ++i) {
-        //     workers[i] = std::thread([=, &results, &matches, &candidates]{
-        //         const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
-        //         for (size_t j = 0; j < jumps_to_do; ++j) {
-        //             //const size_t go_back = (i and j) ? look_back : 0;
-        //             const size_t offset = i*jumps_per_thread+j;
-
-        //             if (offset) { // First has no candidates
-        //                 // a and d (the fixed ones) come from the previous step !
-        //                 matches_from_candidates(candidates[offset], results[offset-1].a, results[offset-1].d, matches[offset]);
-        //             }
-        //         }
-        //     });
-        // }
-        // for (auto& w : workers) {
-        //     w.join();
-        // }
+        // Use the fixed a,d's for parallel matching
+        for (size_t i = 0; i < THREADS; ++i) {
+            workers[i] = std::thread([=, &hap_map, &results, &matches]{
+                const size_t jumps_to_do = jumps_per_thread + (i == THREADS-1 ? last_jumps : 0);
+                for (size_t j = 0; j < jumps_to_do; ++j) {
+                    const size_t offset = i*jumps_per_thread+j;
+                    const size_t len = jump + ((i == THREADS-1) and (j == jumps_to_do-1) ? last_extra_len : 0);
+                    results[offset] = algorithm_2_exp<true /* Rep Matches */>(hap_map, offset*jump, len, offset ? results[offset-1].a : ppa_t(0), offset ? results[offset-1].d : d_t(0), matches[offset]);
+                }
+            });
+        }
+        for (auto& w : workers) {
+            w.join();
+        }
     }
 
     std::string filename = "parallel_matches.txt";
@@ -418,9 +410,73 @@ static void BM_alg2_4_exp(benchmark::State& state) {
     std::cout << "Expected matches should be 373344" << std::endl; // wc -l on file
 }
 
-//BENCHMARK(BM_alg2);
+static void BM_alg2_4_exp_thread_optimal(benchmark::State& state) {
+    auto hap_map = read_from_macs_file<bool>("11k.macs");
+    const size_t M = hap_map.size();
+
+    const size_t ss_rate = M / THREADS;
+    const size_t last_extra_len = M - ss_rate * THREADS;
+
+    // These two structures are shared between threads but not modified, only contents are touched, therefore no synchronization is needed
+    std::vector<alg2_res_t> results(THREADS);
+    std::vector<matches_t> matches(THREADS);
+
+    for (auto _ : state) {
+        // These are because the benchmark is run multiple times and the data structures persist
+        matches.clear();
+        matches.insert(matches.begin(), THREADS, {});
+
+        // Compute the estimated a,d's in parallel
+        std::vector<std::thread> workers(THREADS);
+        for (size_t i = 0; i < THREADS; ++i) {
+            workers[i] = std::thread([=, &hap_map, &results]{
+                const size_t len = ss_rate + ((i == THREADS-1) ? last_extra_len : 0);
+                results[i] = algorithm_2_exp<false /* Rep Matches */>(hap_map, i*ss_rate, len);
+            });
+        }
+        for (auto& w : workers) {
+            w.join();
+        }
+        // Sequentially fix the a,d's
+        fix_a_d(results);
+
+        /// @todo THIS CAN BE IMPROVED BY :
+        /// Matching for thread 0 above and only running the code below for the remaining threads, however, the threads above may have to wait on the first one to finish so it could be counter productive
+
+        // Use the fixed a,d's for parallel matching
+        for (size_t i = 0; i < THREADS; ++i) {
+            workers[i] = std::thread([=, &hap_map, &results, &matches]{
+                const size_t len = ss_rate + ((i == THREADS-1) ? last_extra_len : 0);
+                results[i] = algorithm_2_exp<true /* Rep Matches */>(hap_map, i*ss_rate, len, i ? results[i-1].a : ppa_t(0), i ? results[i-1].d : d_t(0), matches[i]);
+            });
+        }
+        for (auto& w : workers) {
+            w.join();
+        }
+    }
+
+    std::string filename = "parallel_matches_thread_optimal.txt";
+    std::fstream s(filename, s.out);
+    if (!s.is_open()) return;
+
+    size_t match_counter = 0;
+    size_t block_counter = 0;
+    for (const auto& m_vect : matches) {
+        match_counter += m_vect.size();
+        s << "---- Block : " << block_counter++ << std::endl;
+        for (const auto& m : m_vect) {
+            s << "MATCH\t" << m.a << "\t" << m.b << "\t" << m.start << "\t" << m.end << "\t" << m.end-m.start << std::endl;
+        }
+    }
+    s.close();
+    std::cout << "Found " << match_counter << " matches" << std::endl;
+    std::cout << "Expected matches should be 373344" << std::endl; // wc -l on file
+}
+
+BENCHMARK(BM_alg2);
 BENCHMARK(BM_alg2_exp);
-//BENCHMARK(BM_alg2_4);
-//BENCHMARK(BM_alg2_4_exp);
+BENCHMARK(BM_alg2_4);
+BENCHMARK(BM_alg2_4_exp);
+BENCHMARK(BM_alg2_4_exp_thread_optimal);
 
 BENCHMARK_MAIN();

@@ -703,7 +703,7 @@ std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_ra
 // Algorithm 2 from offset for a given length, starting with natural order
 /// @todo add template to encode RLE's
 template<const bool REPORT_MATCHES = false>
-alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t length, matches_t& matches = __place_holder__) {
+alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t length, const ppa_t& starting_a = {}, const d_t& starting_d = {}, matches_t& matches = __place_holder__) {
     // Here hap map is in the initial order
 
     // TODO : Make it possible to pass a,d
@@ -712,9 +712,19 @@ alg2_res_t algorithm_2_exp(const hap_map_t& hap_map, size_t offset, size_t lengt
     //const size_t M = hap_map.size(); // Number of variant sites (markers)
     const size_t N = hap_map[0].size(); // Number of haplotypes (samples)
     ppa_t a(N), b(N);
-    std::iota(a.begin(), a.end(), 0); // Initial ordering (does not reflect actual ordering at position "offset")
+    if (starting_a.size()) { // If a is given copy it
+        std::copy(starting_a.begin(), starting_a.end(), a.begin());
+    } else {
+        std::iota(a.begin(), a.end(), 0); // Initial ordering (does not reflect actual ordering at position "offset")
+    }
+
     d_t d(N, 0); d[0] = offset+1; // First sentinel /// @todo check if causes problem in fix (should not)
     d_t e(N);
+    if (starting_d.size()) {
+        std::copy(starting_d.begin(), starting_d.end(), d.begin());
+    } else {
+        // Nothing
+    }
 
     // Go through the markers
     for (size_t k = 0; k < length; ++k) {
