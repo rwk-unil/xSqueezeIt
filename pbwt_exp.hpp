@@ -10,6 +10,8 @@
 #include <x86intrin.h>
 #include <immintrin.h>
 
+#include "synced_bcf_reader.h"
+
 /// @todo remove
 // Dangerous define
 //#define size_t uint32_t
@@ -436,6 +438,130 @@ std::vector<std::vector<bool> > read_from_macs_file(const std::string& filename)
         std::cout << "Sites parsed : " << current_site << std::endl;
         return hap_map;
     }
+}
+
+template <typename T>
+std::vector<std::vector<T> > read_from_bcf_file(const std::string& filename, size_t max_m = 0, size_t max_n = 0) {
+    std::vector<std::vector<T> > hap_map;
+
+    // https://github.com/samtools/htslib/blob/develop/htslib/synced_bcf_reader.h
+    bcf_srs_t * sr = bcf_sr_init();
+	sr->collapse = COLLAPSE_NONE;
+	sr->require_index = 1;
+
+    bcf_sr_add_reader(sr, filename.c_str());
+    size_t n_samples = bcf_hdr_nsamples(sr->readers[0].header);
+    size_t count = 0;
+
+    unsigned int nset = 0;
+    bcf1_t* line; // https://github.com/samtools/htslib/blob/develop/htslib/vcf.h
+    while ((nset = bcf_sr_next_line(sr))) {
+        if (max_m and (count >= max_m)) {
+            std::cout << "Stopped because of max m : " << max_m << std::endl;
+            break;
+        }
+        line = bcf_sr_get_line(sr, 0 /* file */);
+        if (line->n_allele != 2) {
+            std::cerr << "Number of alleles is different than 2" << std::endl;
+        } else {
+            hap_map.push_back(std::vector<T>(0));
+            bcf_unpack(line, BCF_UN_STR);
+            std::string chr = bcf_hdr_id2name(sr->readers[0].header, line->rid);
+            //int pos = line->pos+1;
+            std::string id = std::string(line->d.id);
+            std::string ref = std::string(line->d.allele[0]);
+            std::string alt = std::string(line->d.allele[1]);
+            //unsigned int cref = 0;
+            //unsigned int calt = 0;
+            int *gt_arr = NULL;
+            int ngt_arr = 0;
+            int ngt = bcf_get_genotypes(sr->readers[0].header, line, &gt_arr, &ngt_arr);
+
+            int line_max_ploidy = ngt / n_samples;
+            size_t sample_counter = 0;
+
+            for (int i = 0; i < n_samples; ++i) {
+                if (max_n and (sample_counter >= max_n)) {
+                    break;
+                }
+                int32_t* ptr = gt_arr + i * line_max_ploidy;
+                for (int j = 0; j < 2 /* ploidy, @todo check */; ++j) {
+                    bool a = (bcf_gt_allele(ptr[j]) == 1);
+                    hap_map.back().push_back(a);
+                    sample_counter++;
+                }
+            }
+        }
+        count++;
+    }
+
+    bcf_sr_destroy(sr);
+
+    return hap_map;
+}
+
+std::vector<Pbwt<>::SparseRLE> sparse_read_bcf_file(const std::string& filename, size_t max_m = 0, size_t max_n = 0) {
+    std::vector<Pbwt<>::SparseRLE> result;
+
+    // https://github.com/samtools/htslib/blob/develop/htslib/synced_bcf_reader.h
+    bcf_srs_t * sr = bcf_sr_init();
+	sr->collapse = COLLAPSE_NONE;
+	sr->require_index = 1;
+
+    bcf_sr_add_reader(sr, filename.c_str());
+    size_t n_samples = bcf_hdr_nsamples(sr->readers[0].header);
+    std::vector<bool> variants(n_samples);
+    if (max_n) {
+        variants.resize(max_n + (max_n & 1));
+    }
+    size_t count = 0;
+
+    unsigned int nset = 0;
+    bcf1_t* line; // https://github.com/samtools/htslib/blob/develop/htslib/vcf.h
+    while ((nset = bcf_sr_next_line(sr))) {
+        if (max_m and (count >= max_m)) {
+            std::cout << "Stopped because of max m : " << max_m << std::endl;
+            break;
+        }
+        line = bcf_sr_get_line(sr, 0 /* file */);
+        if (line->n_allele != 2) {
+            std::cerr << "Number of alleles is different than 2" << std::endl;
+        } else {
+            bcf_unpack(line, BCF_UN_STR);
+            //std::string chr = bcf_hdr_id2name(sr->readers[0].header, line->rid);
+            //int pos = line->pos+1;
+            //std::string id = std::string(line->d.id);
+            //std::string ref = std::string(line->d.allele[0]);
+            //std::string alt = std::string(line->d.allele[1]);
+            //unsigned int cref = 0;
+            //unsigned int calt = 0;
+            int *gt_arr = NULL;
+            int ngt_arr = 0;
+            int ngt = bcf_get_genotypes(sr->readers[0].header, line, &gt_arr, &ngt_arr);
+
+            int line_max_ploidy = ngt / n_samples;
+            size_t sample_counter = 0;
+
+            for (int i = 0; i < n_samples; ++i) {
+                if (max_n and (sample_counter >= max_n)) {
+                    break;
+                }
+                int32_t* ptr = gt_arr + i * line_max_ploidy;
+                for (int j = 0; j < 2 /* ploidy, @todo check */; ++j) {
+                    bool a = (bcf_gt_allele(ptr[j]) == 1);
+                    variants[sample_counter] = a;
+                    sample_counter++;
+                }
+            }
+
+            //result.push_back(Pbwt<>::SparseRLE(variants));
+        }
+        count++;
+    }
+    bcf_sr_destroy(sr);
+
+    result.push_back(Pbwt<>::SparseRLE(variants)); // TODO Remove
+    return result;
 }
 
 typedef std::vector<size_t> ppa_t;
@@ -970,6 +1096,80 @@ std::vector<alg2_integral_res_t> algorithm_integral_de(const hap_map_t& hap_map)
     }
 
     return results;
+}
+
+std::vector<size_t> get_alt_allele_counts(const hap_map_t& hap_map) {
+    const size_t M = hap_map.size();
+    std::vector<size_t> alt_allele_counts(M);
+
+    for (size_t i = 0; i < M; ++i) {
+        size_t count = 0;
+        for (const auto a : hap_map[i]) {
+            count += a;
+        }
+        alt_allele_counts[i] = count;
+    }
+
+    return alt_allele_counts;
+}
+
+// Get the permutations of markers given alt allele count
+std::vector<size_t> get_allele_count_permutation(const hap_map_t& hap_map) {
+    auto all_counts = get_alt_allele_counts(hap_map);
+    std::vector<size_t> permutations(hap_map.size());
+    std::iota(permutations.begin(), permutations.end(), 0);
+
+    // Sort the hap map indices by alt allele counts, this results in permutations of the markers, given in permutations
+    std::sort(permutations.begin(), permutations.end(), [&](size_t a, size_t b){
+        return all_counts[a] < all_counts[b];
+    });
+
+    return permutations;
+}
+
+// Creates a new hap_map that is sorted given permutationsXS
+hap_map_t get_hap_map_sorted_by_permutations(const hap_map_t& hap_map, const std::vector<size_t>& permutations) {
+    const size_t M = hap_map.size();
+    const size_t N = hap_map.size();
+
+    hap_map_t sorted_hap_map(M, hap_map_t::value_type(N));
+
+    for (size_t i = 0; i < M; ++i) {
+        for (size_t j = 0; j < N; ++j) {
+            sorted_hap_map[i][j] = hap_map[permutations[i]][j];
+        }
+    }
+
+    return sorted_hap_map;
+}
+
+#include <set>
+
+size_t distinct(const hap_map_t& hap_map, const size_t start, const size_t end) {
+    if (end < start) {
+        std::cerr << "End should be after start" << std::endl;
+        return -1;
+    }
+    if (end - start > 64) {
+        std::cerr << "Only regions of up to 64 markers are currently supported" << std::endl;
+        return -1;
+    }
+
+    const size_t len = end - start;
+    const size_t N = hap_map[start].size();
+
+    std::set<size_t> set;
+
+
+    for (size_t j = 0; j < N; ++j) {
+        size_t word = 0;
+        for (size_t i = 0; i < len; ++i) {
+            word |= ((size_t)(hap_map[start+i][j]) & 1) << i;
+        }
+        set.insert(word);
+    }
+
+    return set.size();
 }
 
 #endif /* __PBWT_EXP_HPP__ */
