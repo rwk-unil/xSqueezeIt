@@ -902,4 +902,74 @@ void matches_from_candidates(const match_candidates_t& candidates, const ppa_t& 
     d.pop_back(); // Restore d
 }
 
+typedef struct alg2_integral_res_t {
+    size_t d_integral;
+    size_t d_size;
+    size_t e_integral;
+    size_t e_size;
+} alg2_integral_res_t;
+
+inline
+void algorithm_2_step_prime(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t& b, d_t& d, d_t& e, size_t& u, size_t& v, size_t& d_integral, size_t& e_integral) {
+    d_integral = 0;
+    e_integral = 0;
+    u = 0;
+    v = 0;
+    size_t p = k+1;
+    size_t q = k+1;
+    const size_t N = hap_map[0].size();
+
+    for (size_t i = 0; i < N; ++i) {
+        // Update the counters for each symbol (here 0,1)
+        if (d[i] > p) {
+            /// @todo This can be replaced by conditional swap assembly
+            p = d[i];
+        }
+        if (d[i] > q) {
+            /// @todo This can be replaced by conditional swap assembly
+            q = d[i];
+        }
+
+        if (hap_map[k][a[i]] == 0) {
+            a[u] = a[i];
+            d[u] = p;
+            d_integral += k+1-p;
+            u++;
+            p = 0;
+        } else {
+            b[v] = a[i];
+            e[v] = q;
+            e_integral += k+1-q;
+            v++;
+            q = 0;
+        }
+    }
+
+    // Concatenations
+    std::copy(b.begin(), b.begin()+v, a.begin()+u);
+    std::copy(e.begin(), e.begin()+v, d.begin()+u);
+}
+
+std::vector<alg2_integral_res_t> algorithm_integral_de(const hap_map_t& hap_map) {
+    const size_t M = hap_map.size();
+    const size_t N = hap_map.at(0).size();
+    ppa_t a(N), b(N);
+    std::iota(a.begin(), a.end(), 0);
+    d_t d(N, 0); d[0] = 1; // First sentinel
+    d_t e(N);
+    size_t u = 0;
+    size_t v = 0;
+    size_t d_integral = 0;
+    size_t e_integral = 0;
+
+    std::vector<alg2_integral_res_t> results;
+
+    for (size_t k = 0; k < M; ++k) {
+        algorithm_2_step_prime(hap_map, k, a, b, d, e, u, v, d_integral, e_integral);
+        results.push_back({d_integral, u, e_integral, v});
+    }
+
+    return results;
+}
+
 #endif /* __PBWT_EXP_HPP__ */
