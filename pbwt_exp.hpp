@@ -438,11 +438,11 @@ std::vector<std::vector<T> > read_from_bcf_file(const std::string& filename, siz
         } else {
             hap_map.push_back(std::vector<T>(0));
             bcf_unpack(line, BCF_UN_STR);
-            std::string chr = bcf_hdr_id2name(sr->readers[0].header, line->rid);
+            //std::string chr = bcf_hdr_id2name(sr->readers[0].header, line->rid);
             //int pos = line->pos+1;
-            std::string id = std::string(line->d.id);
-            std::string ref = std::string(line->d.allele[0]);
-            std::string alt = std::string(line->d.allele[1]);
+            //std::string id = std::string(line->d.id);
+            //std::string ref = std::string(line->d.allele[0]);
+            //std::string alt = std::string(line->d.allele[1]);
             //unsigned int cref = 0;
             //unsigned int calt = 0;
             int ngt = bcf_get_genotypes(sr->readers[0].header, line, &gt_arr, &ngt_arr);
@@ -806,7 +806,7 @@ void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t
 template<typename T>
 void print_vector(const std::vector<T>& v) {
     for (const auto& e : v) {
-        std::cout << e << " ";
+        std::cout << (uint64_t)e << " ";
     }
     std::cout << std::endl;
 }
