@@ -510,6 +510,7 @@ private:
     std::vector<std::vector<T> > hap_map;
 };
 
+/// @todo
 std::vector<Pbwt<>::SparseRLE> sparse_read_bcf_file(const std::string& filename, size_t max_m = 0, size_t max_n = 0) {
     std::vector<Pbwt<>::SparseRLE> result;
 
@@ -759,14 +760,14 @@ void algorithm_4_step(const hap_map_t& hap_map, const size_t& k, const ppa_t& a,
     d.pop_back(); // Restore d
 }
 
-// Algorithm 2 as in Durbin's paper
+// Step of algorithm 2
 inline
-void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t& b, d_t& d, d_t& e) {
+void algorithm_2_step(const std::vector<bool>& x, const size_t& k, ppa_t& a, ppa_t& b, d_t& d, d_t& e) {
     size_t u = 0;
     size_t v = 0;
     size_t p = k+1;
     size_t q = k+1;
-    const size_t N = hap_map[0].size();
+    const size_t N = x.size();
 
     for (size_t i = 0; i < N; ++i) {
         // Update the counters for each symbol (here 0,1)
@@ -779,7 +780,7 @@ void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t
             q = d[i];
         }
 
-        if (hap_map[k][a[i]] == 0) {
+        if (x[a[i]] == 0) { // yk[i] is x[a[i]]
             a[u] = a[i];
             d[u] = p;
             u++;
@@ -795,9 +796,11 @@ void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t
     // Concatenations
     std::copy(b.begin(), b.begin()+v, a.begin()+u);
     std::copy(e.begin(), e.begin()+v, d.begin()+u);
-    //std::cout << "- Memcopy number " << k << " of size " << v << std::endl;
-    //memcpy(a.data() + u, b.data(), v * sizeof(size_t));
-    //memcpy(d.data() + u, e.data(), v * sizeof(size_t));
+}
+// Algorithm 2 as in Durbin's paper
+inline
+void algorithm_2_step(const hap_map_t& hap_map, const size_t& k, ppa_t& a, ppa_t& b, d_t& d, d_t& e) {
+    algorithm_2_step(hap_map[k], k, a, b, d, e);
 }
 
 template<typename T>
