@@ -253,36 +253,6 @@ private:
 };
 
 /// @todo The sorts below are non optimized (slow because of non pre-sized vectors)
-
-#if 0
-/// @todo this sort is crap (wrong)
-template<typename T>
-void pbwt_sort(std::vector<std::vector<T> >& hap_map) {
-    // This sorts the next column, so no need for permuting, since the values are permutated
-    for (size_t i = 0; i < hap_map.size()-1; ++i) {
-        std::vector<size_t> a,b;
-        std::vector<T> y;
-
-        for (size_t j = 0; j < hap_map[0].size(); ++j) {
-            if (hap_map[i][j]) {
-                b.push_back(j);
-            } else {
-                a.push_back(j);
-            }
-        }
-        for (const auto& _ : a) {
-            y.push_back(hap_map[i+1][_]);
-        }
-        for (const auto& _ : b) {
-            y.push_back(hap_map[i+1][_]);
-        }
-        for (size_t _ = 0; _ < hap_map[0].size(); ++_) {
-            hap_map[i+1][_] = y[_];
-        }
-    }
-}
-#endif
-
 template<typename T>
 void pbwt_sort(std::vector<std::vector<T> >& hap_map) {
     const auto& hap_map_sites = hap_map.size();
@@ -360,8 +330,8 @@ void exp_pbwt_sort_a(const std::vector<std::vector<T> >& hap_map, const std::str
     // }
 }
 
-template<typename T>
-std::vector<std::vector<bool> > read_from_macs_file(const std::string& filename) {
+template<typename T = bool>
+std::vector<std::vector<T> > read_from_macs_file(const std::string& filename) {
     T conv[256];
     /// @todo conversion for more than 2 alleles
     conv[(size_t)'0'] = 0;
@@ -440,7 +410,7 @@ std::vector<std::vector<bool> > read_from_macs_file(const std::string& filename)
     }
 }
 
-template <typename T>
+template <typename T = bool>
 std::vector<std::vector<T> > read_from_bcf_file(const std::string& filename, size_t max_m = 0, size_t max_n = 0) {
     std::vector<std::vector<T> > hap_map;
 
@@ -454,6 +424,8 @@ std::vector<std::vector<T> > read_from_bcf_file(const std::string& filename, siz
     size_t count = 0;
 
     unsigned int nset = 0;
+    int *gt_arr = NULL;
+    int ngt_arr = 0;
     bcf1_t* line; // https://github.com/samtools/htslib/blob/develop/htslib/vcf.h
     while ((nset = bcf_sr_next_line(sr))) {
         if (max_m and (count >= max_m)) {
@@ -473,8 +445,6 @@ std::vector<std::vector<T> > read_from_bcf_file(const std::string& filename, siz
             std::string alt = std::string(line->d.allele[1]);
             //unsigned int cref = 0;
             //unsigned int calt = 0;
-            int *gt_arr = NULL;
-            int ngt_arr = 0;
             int ngt = bcf_get_genotypes(sr->readers[0].header, line, &gt_arr, &ngt_arr);
 
             int line_max_ploidy = ngt / n_samples;
@@ -494,11 +464,51 @@ std::vector<std::vector<T> > read_from_bcf_file(const std::string& filename, siz
         }
         count++;
     }
-
+    free(gt_arr);
     bcf_sr_destroy(sr);
 
     return hap_map;
 }
+
+template<typename T>
+class HapMap {
+public:
+    virtual size_t size() const = 0;
+    virtual const std::vector<T> operator [](size_t i) const = 0;
+    virtual std::vector<T> & operator [](size_t i) = 0;
+};
+
+#include <regex>
+
+// This is very slow compared to a std::vector !!! Because of []
+template<typename T>
+class HapMapStdVector : public HapMap<T> {
+public:
+    HapMapStdVector(const std::vector<std::vector<T> >& v) {hap_map = v;}
+    HapMapStdVector(size_t count, const std::vector<T>& value = std::vector<T>()) { hap_map = std::vector<std::vector<T > >(count, value);}
+    HapMapStdVector(std::string filename) {
+        const std::regex macs_regex(".+\\.macs");
+        const std::regex bcf_regex(".+\\.bcf");
+        std::cmatch m;
+
+        if (std::regex_match(filename.c_str(), m, macs_regex)) {
+            hap_map = read_from_macs_file<T>(filename);
+        } else if (std::regex_match(filename.c_str(), m, bcf_regex)) {
+            hap_map = read_from_bcf_file<T>(filename);
+        } else {
+            std::cerr << "Could not determine file type" << std::endl;
+            throw "BAD_FILE_TYPE";
+        }
+    }
+
+    typedef std::vector<T> value_type;
+    size_t size() const {return hap_map.size();}
+    // This crushes performance !
+    const std::vector<T> operator [](const size_t i) const {return hap_map[i];}
+    std::vector<T> & operator [](const size_t i) {return hap_map[i];}
+private:
+    std::vector<std::vector<T> > hap_map;
+};
 
 std::vector<Pbwt<>::SparseRLE> sparse_read_bcf_file(const std::string& filename, size_t max_m = 0, size_t max_n = 0) {
     std::vector<Pbwt<>::SparseRLE> result;
@@ -515,7 +525,8 @@ std::vector<Pbwt<>::SparseRLE> sparse_read_bcf_file(const std::string& filename,
         variants.resize(max_n + (max_n & 1));
     }
     size_t count = 0;
-
+    int *gt_arr = NULL;
+    int ngt_arr = 0;
     unsigned int nset = 0;
     bcf1_t* line; // https://github.com/samtools/htslib/blob/develop/htslib/vcf.h
     while ((nset = bcf_sr_next_line(sr))) {
@@ -535,8 +546,6 @@ std::vector<Pbwt<>::SparseRLE> sparse_read_bcf_file(const std::string& filename,
             //std::string alt = std::string(line->d.allele[1]);
             //unsigned int cref = 0;
             //unsigned int calt = 0;
-            int *gt_arr = NULL;
-            int ngt_arr = 0;
             int ngt = bcf_get_genotypes(sr->readers[0].header, line, &gt_arr, &ngt_arr);
 
             int line_max_ploidy = ngt / n_samples;
@@ -558,6 +567,7 @@ std::vector<Pbwt<>::SparseRLE> sparse_read_bcf_file(const std::string& filename,
         }
         count++;
     }
+    free(gt_arr);
     bcf_sr_destroy(sr);
 
     result.push_back(Pbwt<>::SparseRLE(variants)); // TODO Remove
@@ -576,6 +586,7 @@ typedef struct alg2_res_t {
 } alg2_res_t;
 
 using hap_map_t = std::vector<std::vector<bool> >;
+//using hap_map_t = HapMapStdVector<bool>; // Do not use ! Slow
 
 typedef struct a_delta_entry_t {
     size_t pos;
@@ -801,7 +812,7 @@ void print_vector(const std::vector<T>& v) {
 template<const bool REPORT_MATCHES = false>
 std::vector<alg2_res_t> algorithm_2(const hap_map_t& hap_map, const size_t ss_rate, matches_t& matches = __place_holder__) {
     const size_t M = hap_map.size();
-    const size_t N = hap_map.at(0).size();
+    const size_t N = hap_map[0].size();
     ppa_t a(N), b(N);
     std::iota(a.begin(), a.end(), 0);
     d_t d(N, 0); d[0] = 1; // First sentinel
@@ -1078,7 +1089,7 @@ void algorithm_2_step_prime(const hap_map_t& hap_map, const size_t& k, ppa_t& a,
 
 std::vector<alg2_integral_res_t> algorithm_integral_de(const hap_map_t& hap_map) {
     const size_t M = hap_map.size();
-    const size_t N = hap_map.at(0).size();
+    const size_t N = hap_map[0].size();
     ppa_t a(N), b(N);
     std::iota(a.begin(), a.end(), 0);
     d_t d(N, 0); d[0] = 1; // First sentinel
