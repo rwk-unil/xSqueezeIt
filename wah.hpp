@@ -66,6 +66,7 @@ namespace wah {
                     state.state = Wah2State::NONE;
                     wah_p++;
                 }
+                break;
             case Wah2State::IN_WAH_0_COUNTER :
                 res = false;
                 state.counter++;
@@ -73,6 +74,7 @@ namespace wah {
                     state.state = Wah2State::NONE;
                     wah_p++;
                 }
+                break;
             case Wah2State::IN_WAH_1_COUNTER :
                 res = true;
                 state.counter++;
@@ -80,6 +82,7 @@ namespace wah {
                     state.state = Wah2State::NONE;
                     wah_p++;
                 }
+                break;
             default :
                 std::cerr << "Broken WAH 2 State" << std::endl;
                 throw "Broken WAH 2 State";
@@ -92,7 +95,7 @@ namespace wah {
     template <typename AET = size_t, typename WAH_T = uint16_t>
     class DecompressPointer {
     public:
-        DecompressPointer(const std::vector<AET> a_i, const size_t len, WAH_T* wah_p) : wah_p(wah_p) {
+        DecompressPointer(const std::vector<AET>& a_i, const size_t len, WAH_T* wah_p) : wah_p(wah_p) {
             N = a_i.size();
             a.resize(N);
             b.resize(N);
@@ -100,6 +103,7 @@ namespace wah {
             samples.resize(N);
             // This may be made copyless by passing a pointer for the first a
             std::copy(a_i.begin(), a_i.end(), a.begin());
+            position = 0;
             length = len;
             // Default should already be set
             state.state = Wah2State::NONE;
