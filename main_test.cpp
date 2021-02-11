@@ -258,7 +258,7 @@ namespace {
     }
 
     TEST(WAH, backAndForth) {
-        std::vector<bool> binary_array = 
+        std::vector<bool> binary_array =
             {0,1,1,0,0,0,0,1,0,0,
              0,0,1,0,0,0,0,1,1,1,
              0,0,0,0,0,0,0,0,0,0,
@@ -272,6 +272,32 @@ namespace {
 
         auto wah = wah_encode(binary_array);
         auto decoded = wah_decode(wah);
+
+        // Decoded can have a different size, but should not differ more than WAH encoding WAH bits
+        //print_vector(binary_array);
+        //print_vector(decoded);
+        //print_vector(wah);
+        ASSERT_GE(decoded.size(), binary_array.size());
+        for(size_t i = 0; i < binary_array.size(); ++i) {
+            ASSERT_EQ(binary_array[i], decoded[i]) << "Original array and decoded differ at position " << i;
+        }
+    }
+
+    TEST(WAH2, backAndForth) {
+        std::vector<bool> binary_array =
+            {0,1,1,0,0,0,0,1,0,0,
+             0,0,1,0,0,0,0,1,1,1,
+             0,0,0,0,0,0,0,0,0,0,
+             1,1,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0,
+             0,0,0,0,0,0,0,0,0,0};
+
+        auto wah = wah_encode2(binary_array);
+        auto decoded = wah_decode2(wah);
 
         // Decoded can have a different size, but should not differ more than WAH encoding WAH bits
         //print_vector(binary_array);
