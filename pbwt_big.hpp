@@ -2,254 +2,9 @@
 #define __PBWT_BIG_HPP__
 
 #include "pbwt_exp.hpp"
+#include "wah.hpp"
 
-/*
- * Strategy : Allow a maximum block size (this will also reduce the RAM burden)
- * The BCF file is read by variant for all samples (possible to stop early but not optimal)
- *
- * Input parameter : Block size in number of samples and number of variants
- * Let's start by the number of samples
- *
- * */
-
-/// @brief Word Aligned Hybrid encoding of a bit vector
-template <typename T = uint8_t>
-inline std::vector<T> wah_encode(std::vector<bool>& bits) {
-    constexpr size_t WAH_BITS = sizeof(T)*8-1;
-    // Wahbit
-    //             ,\
-    //             \\\,_
-    //              \` ,\
-    //         __,.-" =__)
-    //       ."        )
-    //    ,_/   ,    \/\_
-    //    \_|    )_-\ \_-`
-    //jgs    `-----` `--`  By Joan Stark
-    // 0b1000'0000 for 8b
-    constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
-    // 0b0111'1111 for 8b
-    constexpr T WAH_MAX_COUNTER = WAH_HIGH_BIT-1;
-    constexpr T WAH_MAX_ENCODE = ~((T)(0));
-
-    // Resize to have no problems accessing in the loop below (removes conditionals from loop)
-    size_t BITS_WAH_SIZE = bits.size() / WAH_BITS;
-    const size_t BITS_REM = bits.size() % WAH_BITS; // Hope compiler combines the divide above and this mod
-    const size_t ORIGINAL_SIZE = bits.size();
-    if (BITS_REM) {
-        BITS_WAH_SIZE += 1;
-        bits.resize(bits.size() + (WAH_BITS-BITS_REM), 0);
-    }
-
-    std::vector<T> wah;
-
-    T not_set_counter = 0;
-    size_t b = 0; // b = i*WAH_BITS+j // but counter reduces number of ops
-    for (size_t i = 0; i < BITS_WAH_SIZE; ++i) { // Process loop
-        T word = 0;
-
-        // Scan WAH-BITS in bits (e.g., 7 for uint8_t, 31 for uint32_t)
-        for (size_t j = 0; j < WAH_BITS; ++j) { // WAH word loop
-            // b will always be in the vector because it has been resized above
-            if (bits[b++]) { /// @todo Check if if need to/can be optimized
-                word |= WAH_HIGH_BIT;
-            }
-            word >>= 1;
-        }
-        // If bits found, encode them on N+1 bits
-        if (word) {
-            // Encode the number of previous blocks of WAH_BITS null bits
-            if (not_set_counter) {
-                wah.push_back(WAH_HIGH_BIT | not_set_counter);
-                not_set_counter = 0;
-            }
-            wah.push_back(word);
-        } else {
-            // Handle possible counter overflow (unlikely)
-            if (not_set_counter == WAH_MAX_COUNTER) {
-                wah.push_back(WAH_MAX_ENCODE); // = WAH_HIGH_BIT | not_set_counter = WAH_HIGH_BIT | WAH_MAX_COUNTER
-                not_set_counter = 0;
-            }
-            // Increment counter
-            not_set_counter++;
-        }
-    }
-
-    // Note that this could be deduced from known size, i.e., non encoded bits could be supposed zero by default
-    if (not_set_counter) {
-        wah.push_back(WAH_HIGH_BIT | not_set_counter);
-    }
-
-    if (BITS_REM) {
-        bits.resize(ORIGINAL_SIZE);
-    }
-
-    return wah;
-}
-
-template <typename T = uint8_t>
-inline std::vector<bool> wah_decode(const std::vector<T>& wah) {
-    constexpr size_t WAH_BITS = sizeof(T)*8-1;
-    constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
-    constexpr T WAH_MAX_COUNTER = WAH_HIGH_BIT-1;
-
-    const size_t WAH_SIZE = wah.size();
-
-    std::vector<bool> bits;
-    for (size_t i = 0; i < WAH_SIZE; ++i) {
-        T word = wah[i];
-        if (word & WAH_HIGH_BIT) {
-            // Expand with zeroes
-            bits.resize(bits.size() + (wah[i] & WAH_MAX_COUNTER)*WAH_BITS, 0);
-        } else {
-            // Expand with value
-            for (size_t j = 0; j < WAH_BITS; ++j) {
-                bits.push_back(word & 1); // May not be the most effective way
-                word >>= 1;
-            }
-        }
-    }
-
-    return bits;
-}
-
-/// @brief Word Aligned Hybrid encoding of a bit vector
-template <typename T = uint8_t> // This should be one of uint8-16-32-64_t
-inline std::vector<T> wah_encode2(std::vector<bool>& bits) {
-    // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
-    constexpr size_t WAH_BITS = sizeof(T)*8-1;
-    // Wahbit
-    //             ,\
-    //             \\\,_
-    //              \` ,\
-    //         __,.-" =__)
-    //       ."        )
-    //    ,_/   ,    \/\_
-    //    \_|    )_-\ \_-`
-    //jgs    `-----` `--`  By Joan Stark
-    // 0b1000'0000 for 8b
-    constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
-    // 0b0011'1111 for 8b
-    constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
-    constexpr T WAH_ALL_BITS_SET = T(~T(0)) & ~WAH_HIGH_BIT;
-    constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
-    constexpr T WAH_MAX_ENCODE_0 = ~T(0) & ~WAH_COUNT_1_BIT;
-    constexpr T WAH_MAX_ENCODE_1 = ~T(0);
-
-    // Resize to have no problems accessing in the loop below (removes conditionals from loop)
-    size_t BITS_WAH_SIZE = bits.size() / WAH_BITS;
-    const size_t BITS_REM = bits.size() % WAH_BITS; // Hope compiler combines the divide above and this mod
-    const size_t ORIGINAL_SIZE = bits.size();
-    if (BITS_REM) {
-        BITS_WAH_SIZE += 1;
-        bits.resize(bits.size() + (WAH_BITS-BITS_REM), 0);
-    }
-
-    std::vector<T> wah;
-
-    T not_set_counter = 0;
-    T all_set_counter = 0;
-    size_t b = 0; // b = i*WAH_BITS+j // but counter reduces number of ops
-    for (size_t i = 0; i < BITS_WAH_SIZE; ++i) { // Process loop
-        T word = 0;
-
-        // Scan WAH-BITS in bits (e.g., 7 for uint8_t, 31 for uint32_t)
-        for (size_t j = 0; j < WAH_BITS; ++j) { // WAH word loop
-            // b will always be in the vector because it has been resized above
-            if (bits[b++]) { /// @todo Check if if need to/can be optimized
-                word |= WAH_HIGH_BIT;
-            }
-            word >>= 1;
-        }
-
-        /// @note : Inner ifs should be mutually exclusive, counters should not be non zero at the same time ! (This could be reduced to a single counter and a boolean value to indicate what we count)
-
-        // If no bits in word increment block counter
-        if (word == (T)(0)) {
-            // Encode the number of previous blocks of WAH_BITS set bits
-            if (all_set_counter) {
-                wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
-                all_set_counter = 0;
-            }
-            // Handle possible counter overflow (unlikely)
-            if (not_set_counter == WAH_MAX_COUNTER) {
-                wah.push_back(WAH_MAX_ENCODE_0);
-                not_set_counter = 0;
-            }
-            // Increment counter
-            not_set_counter++;
-        // If all bits are set in word increment block counter
-        } else if (word == WAH_ALL_BITS_SET) {
-            // Encode the number of previous blocks of WAH_BITS null bits
-            if (not_set_counter) {
-                wah.push_back(WAH_HIGH_BIT | not_set_counter);
-                not_set_counter = 0;
-            }
-            // Handle possible counter overflow (unlikely)
-            if (all_set_counter == WAH_MAX_COUNTER) {
-                wah.push_back(WAH_MAX_ENCODE_1);
-                all_set_counter = 0;
-            }
-            // Increment counter
-            all_set_counter++;
-        } else {
-            if (all_set_counter) {
-                wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
-                all_set_counter = 0;
-            }
-            // Encode the number of previous blocks of WAH_BITS null bits
-            if (not_set_counter) {
-                wah.push_back(WAH_HIGH_BIT | not_set_counter);
-                not_set_counter = 0;
-            }
-            wah.push_back(word);
-        }
-    }
-
-    if (not_set_counter) {
-        wah.push_back(WAH_HIGH_BIT | not_set_counter);
-    }
-    if (all_set_counter) {
-        wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
-    }
-
-    if (BITS_REM) {
-        bits.resize(ORIGINAL_SIZE);
-    }
-
-    return wah;
-}
-
-template <typename T = uint8_t>
-inline std::vector<bool> wah_decode2(const std::vector<T>& wah) {
-    constexpr size_t WAH_BITS = sizeof(T)*8-1;
-    constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
-    constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
-    constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
-
-    const size_t WAH_SIZE = wah.size();
-
-    std::vector<bool> bits;
-    for (size_t i = 0; i < WAH_SIZE; ++i) {
-        T word = wah[i];
-        if (word & WAH_HIGH_BIT) {
-            if (word & WAH_COUNT_1_BIT) {
-                // Expand with ones
-                bits.resize(bits.size() + (wah[i] & WAH_MAX_COUNTER)*WAH_BITS, 1);
-            } else {
-                // Expand with zeroes
-                bits.resize(bits.size() + (wah[i] & WAH_MAX_COUNTER)*WAH_BITS, 0);
-            }
-        } else {
-            // Expand with value
-            for (size_t j = 0; j < WAH_BITS; ++j) {
-                bits.push_back(word & 1); // May not be the most effective way
-                word >>= 1;
-            }
-        }
-    }
-
-    return bits;
-}
+using namespace wah;
 
 bool has_extension(const std::string& filename, const std::string& extension) {
     const std::regex ext_regex(std::string(".+\\") + extension);
@@ -336,10 +91,18 @@ typedef struct compress_file_arg_t {
     size_t      index_rate           = 8192;
 } compress_file_arg_t;
 
-inline const compress_file_arg_t COMPRESS_FILE_DEFAULT_ARGS;
+typedef struct compress_file_template_arg_t {
+    bool        return_wah_vector    = false;
+} compress_file_template_arg_t;
 
-template <typename T = bool>
-void compress_file(std::string filename, const compress_file_arg_t& args = COMPRESS_FILE_DEFAULT_ARGS) {
+inline const compress_file_arg_t COMPRESS_FILE_DEFAULT_ARGS;
+inline constexpr compress_file_template_arg_t COMPRESS_FILE_DEFAULT_TEMPLATE_ARGS;
+
+// The output is only for testing, unless specific args are passed to template output is empty
+template <typename T = bool, typename WAH_T = uint16_t, const struct compress_file_template_arg_t& TARGS = COMPRESS_FILE_DEFAULT_TEMPLATE_ARGS>
+std::vector<std::vector<WAH_T> > compress_file(std::string filename, const compress_file_arg_t& args = COMPRESS_FILE_DEFAULT_ARGS) {
+    std::vector<std::vector<WAH_T> > wah_result;
+
     // It is hard to efficiently interleave functions in C++ :(
     // i.e., having outer structure fixed but inner function calls specific to condition
     // Currying would help
@@ -352,6 +115,7 @@ void compress_file(std::string filename, const compress_file_arg_t& args = COMPR
         initialize_bcf_file_reader(bcf_fri, filename);
 
         const size_t N = bcf_fri.n_samples * 2; // Bi allelic /// @todo check
+
         ppa_t a(N), b(N);
         std::iota(a.begin(), a.end(), 0);
         d_t d(N, 0); d[0] = 1; // First sentinel
@@ -366,7 +130,7 @@ void compress_file(std::string filename, const compress_file_arg_t& args = COMPR
             for(size_t i = 0; i < samples.size(); ++i) {
                 sorted_samples[i] = samples[a[i]]; // PBWT sorted
             }
-            auto wah = wah_encode<uint16_t>(sorted_samples);
+            auto wah = wah_encode<WAH_T>(sorted_samples);
             wah_sizes.push_back(wah.size());
             //std::cout << "WAH size for k = " << k << " is " << wah.size() << std::endl;
             // size_t sum_of_1s = 0;
@@ -394,10 +158,14 @@ void compress_file(std::string filename, const compress_file_arg_t& args = COMPR
         std::cerr << "Unknown extension of file " << filename << std::endl;
         throw "Unknown extension";
     }
+
+    return wah_result;
 }
 
-template <typename T = bool, typename WAH_T = uint16_t>
-void compress_file_exp(std::string filename, const compress_file_arg_t& args = COMPRESS_FILE_DEFAULT_ARGS) {
+template <typename T = bool, typename WAH_T = uint16_t, const struct compress_file_template_arg_t& TARGS = COMPRESS_FILE_DEFAULT_TEMPLATE_ARGS>
+std::vector<std::vector<std::vector<WAH_T> > > compress_file_exp(std::string filename, const compress_file_arg_t& args = COMPRESS_FILE_DEFAULT_ARGS) {
+    std::vector<std::vector<std::vector<WAH_T> > > wah_result;
+
     // It is hard to efficiently interleave functions in C++ :(
     // i.e., having outer structure fixed but inner function calls specific to condition
     // Currying would help
@@ -433,12 +201,12 @@ void compress_file_exp(std::string filename, const compress_file_arg_t& args = C
                 ofs_v.push_back(std::ofstream(fname, std::ios::out | std::ofstream::binary));
                 if (!(ofs_v.back().is_open())) {
                     std::cerr << "Could not open file " << fname << std::endl;
-                    return;
+                    return wah_result;
                 }
                 ofs_i_v.push_back(std::ofstream(finame, std::ios::out | std::ofstream::binary));
                 if (!(ofs_i_v.back().is_open())) {
                     std::cerr << "Could not open file " << finame << std::endl;
-                    return;
+                    return wah_result;
                 }
             }
         }
@@ -473,6 +241,10 @@ void compress_file_exp(std::string filename, const compress_file_arg_t& args = C
         extract_next_variant_and_update_bcf_sr(samples, bcf_fri);
         for (size_t k = 0; !samples.empty() and !(args.stop_at_variant_n and (k >= args.stop_at_variant_n)); k++, extract_next_variant_and_update_bcf_sr(samples, bcf_fri)) {
 
+            if constexpr (TARGS.return_wah_vector) {
+                wah_result.push_back(std::vector<std::vector<WAH_T> >(NUMBER_OF_BLOCKS));
+            }
+
             // Do the same processing for each block
             for(size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
                 // This copy could be omitted if iterators were used instead of references to vectors in algorithm_2_step
@@ -494,6 +266,9 @@ void compress_file_exp(std::string filename, const compress_file_arg_t& args = C
 
                 // WAH encode the sorted samples (next column)
                 const auto wah = wah_encode2<WAH_T>(sorted_samples);
+                if constexpr (TARGS.return_wah_vector) {
+                    wah_result.back()[i] = wah;
+                }
                 wah_words += wah.size();
 if (0) {
                 std::cout << "WAH : ";
@@ -565,7 +340,9 @@ if (0) {
         std::cout << "RAW size : " << raw_size << " MBytes" << std::endl;
         size_t compressed_size = wah_words * sizeof(WAH_T) / (1024 * 1024);
         std::cout << "Compressed size : " << compressed_size << " MBytes" << std::endl;
-        std::cout << "Reduction is vs RAW is : " << raw_size / compressed_size << std::endl;
+        if (compressed_size) {
+            std::cout << "Reduction is vs RAW is : " << raw_size / compressed_size << std::endl;
+        }
 
         // Close files
         for (auto& ofs : ofs_v) {
@@ -579,6 +356,8 @@ if (0) {
         std::cerr << "Unknown extension of file " << filename << std::endl;
         throw "Unknown extension";
     }
+
+    return wah_result;
 }
 
 #endif
