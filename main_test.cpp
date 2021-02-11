@@ -308,4 +308,16 @@ namespace {
             ASSERT_EQ(binary_array[i], decoded[i]) << "Original array and decoded differ at position " << i;
         }
     }
+
+    TEST(WAH2, allOnes) {
+        std::vector<bool> binary_array(1<<16, 1);
+
+        auto wah = wah_encode2(binary_array);
+        auto decoded = wah_decode2(wah);
+
+        ASSERT_GE(decoded.size(), binary_array.size());
+        for(size_t i = 0; i < binary_array.size(); ++i) {
+            ASSERT_EQ(binary_array[i], decoded[i]) << "Original array and decoded differ at position " << i;
+        }
+    }
 }
