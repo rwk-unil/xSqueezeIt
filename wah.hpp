@@ -125,6 +125,13 @@ namespace wah {
             samples_sorted = true;
             position++;
 
+            // This is an edge case because number of samples may not be a multiple of WAH_BITS
+            if (state.state != Wah2State::NONE) {
+                wah_p++;
+                state.counter = 0;
+                state.state = Wah2State::NONE;
+            }
+
             return true;
         }
 
