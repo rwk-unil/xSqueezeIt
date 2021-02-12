@@ -365,4 +365,130 @@ if (0) {
     return wah_result;
 }
 
+/// @todo read the tmp struct, ppa_t is already a vector
+
+template<typename WAH_T, typename AET>
+struct block_result_data_structs_t {
+    std::vector<std::vector<WAH_T> > wah = {};
+    std::vector<std::vector<AET> > ssa = {};
+    size_t ssa_rate = 0;
+};
+
+template <typename T = bool, typename WAH_T = uint16_t, const struct compress_file_template_arg_t& TARGS = COMPRESS_FILE_DEFAULT_TEMPLATE_ARGS>
+std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > compress_file_new(std::string filename, const compress_file_arg_t& args = COMPRESS_FILE_DEFAULT_ARGS) {
+    if (has_extension(filename, ".bcf") or has_extension(filename, ".vcf.gz") or has_extension(filename, ".vcf")) {
+        bcf_file_reader_info_t bcf_fri;
+        initialize_bcf_file_reader(bcf_fri, filename);
+
+        size_t wah_words = 0;
+
+        const size_t N = bcf_fri.n_samples * 2; // Bi allelic /// @todo check
+
+        size_t NUMBER_OF_BLOCKS = 1;
+        size_t BLOCK_REM = N;
+
+        if (args.samples_block_size) {
+            BLOCK_REM = N % args.samples_block_size;
+            NUMBER_OF_BLOCKS = N / args.samples_block_size + (BLOCK_REM ? 1 : 0);
+        }
+
+        std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > res(NUMBER_OF_BLOCKS);
+        for (auto & r : res) { r.ssa_rate = args.index_rate; }
+        std::vector<ppa_t> a_s(NUMBER_OF_BLOCKS);
+        std::vector<ppa_t> b_s(NUMBER_OF_BLOCKS);
+
+        for (auto& a : a_s) {
+            a.resize(args.samples_block_size);
+        }
+        for (auto& b : b_s) {
+            b.resize(args.samples_block_size);
+        }
+        if (BLOCK_REM) {
+            // The last block is almost certainly smaller than the full block size
+            // Unless a block size of 0 is specified, then BLOCK_REM is N
+            a_s.back().resize(BLOCK_REM);
+            b_s.back().resize(BLOCK_REM);
+        }
+        for(auto & a : a_s) {
+            // Initial order (natural order)
+            std::iota(a.begin(), a.end(), 0);
+        }
+
+        std::cout << "Number of blocks : " << NUMBER_OF_BLOCKS << std::endl;
+        std::cout << "Block sizes : " << args.samples_block_size << " last is : " << BLOCK_REM << std::endl;
+
+        ///
+        std::vector<T> samples; // A full line of samples for a given variant
+
+        // Work on the variants until the end of the BCF / VCF file (or stop given in arguments)
+        extract_next_variant_and_update_bcf_sr(samples, bcf_fri);
+        for (size_t k = 0; !samples.empty() and !(args.stop_at_variant_n and (k >= args.stop_at_variant_n)); k++, extract_next_variant_and_update_bcf_sr(samples, bcf_fri)) {
+            // Do the same processing for each block
+            for(size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
+                const size_t OFFSET = i * args.samples_block_size;
+                auto& a = a_s[i];
+                auto& b = b_s[i];
+                const size_t BN = a.size();
+
+                /// @todo Optimize this, can be done with zero copy see comment :
+                // Sorting the samples is here temporarily, until the wah_encode function is rewritten to take a permutation vector, so for now manually permute
+                std::vector<T> sorted_samples(BN);
+                for(size_t j = 0; j < BN; ++j) {
+                    // This can be optimized out by passing samples + a_k to wah_encode
+                    sorted_samples[j] = samples[a[j]+OFFSET]; // PBWT sorted
+                }
+
+                // WAH encode the sorted samples (next column)
+                res[i].wah.push_back(wah_encode2<WAH_T>(sorted_samples));
+                wah_words += res[i].wah.back().size(); // For statistics
+                if ((k % args.index_rate) == 0) { // Also take the first one, later it might not be iota anymore
+                    res[i].ssa.push_back(std::vector<uint16_t>(BN));
+                    std::copy(a.begin(), a.end(), res[i].ssa.back().begin());
+                }
+
+                // Apply Durbin2014 algorithm 1 (per block)
+                {
+                    size_t u = 0;
+                    size_t v = 0;
+
+                    for (size_t j = 0; j < BN; ++j) {
+                        if (samples[a[j]+OFFSET] == 0) {
+                            a[u] = a[j];
+                            u++;
+                        } else {
+                            b[v] = a[j];
+                            v++;
+                        }
+                    }
+                    std::copy(b.begin(), b.begin()+v, a.begin()+u);
+                } // Algorithm 1
+            } // Block loop
+        } // k (variant) loop
+
+        // Some summary statistics for debug
+        std::cout << "Block size : " << args.samples_block_size << std::endl;
+        std::cout << "Number of blocks : " << NUMBER_OF_BLOCKS << std::endl;
+        std::cout << "Total number of WAH words : " << wah_words << " " << sizeof(WAH_T)*8 << "-bits" << std::endl;
+        //std::cout << "Average size of encoding : " << mean << std::endl;
+        //std::cout << "Number of variant sites visited : " << bcf_fri.var_count << std::endl;
+        std::cout << "Number of samples : " << bcf_fri.n_samples * 2 << std::endl;
+
+        // samples x 2 x variants bits
+        size_t raw_size = bcf_fri.n_samples * 2 * bcf_fri.var_count / (8 * 1024 * 1024);
+        std::cout << "RAW size : " << raw_size << " MBytes" << std::endl;
+        size_t compressed_size = wah_words * sizeof(WAH_T) / (1024 * 1024);
+        std::cout << "Compressed size : " << compressed_size << " MBytes" << std::endl;
+        if (compressed_size) {
+            std::cout << "Reduction is vs RAW is : " << raw_size / compressed_size << std::endl;
+        }
+
+        destroy_bcf_file_reader(bcf_fri);
+        return res;
+    } else {
+        std::cerr << "Unknown extension of file " << filename << std::endl;
+        throw "Unknown extension";
+        return {};
+    }
+}
+
 #endif

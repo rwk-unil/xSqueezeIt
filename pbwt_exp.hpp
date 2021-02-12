@@ -661,6 +661,18 @@ inline ppa_t next_a_from_delta(const ppa_t& a, const a_delta_t& delta) {
     return result;
 }
 
+/// @todo make to_encode const and redo this with ppa_t of new type
+inline std::vector<a_delta_t> encode_a_s(std::vector<ppa_t>& to_encode) {
+    std::vector<a_delta_t> result;
+    ppa_t& prev_a = to_encode.front();
+    for (size_t i = 1; i < to_encode.size(); ++i) {
+        result.push_back(encode_a_delta(prev_a, to_encode[i]));
+        prev_a = to_encode[i];
+    }
+
+    return result;
+}
+
 template<typename T = a_delta_t>
 inline std::vector<T> encode_all_a(const std::vector<alg2_res_t>& to_encode) {
     std::vector<T> result;
