@@ -49,6 +49,12 @@ void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
     bcf_fri.line = nullptr; /// @todo check if should be freed, probably not
 }
 
+inline unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri) {
+    unsigned int nset = bcf_sr_next_line(bcf_fri.sr);
+    bcf_fri.line = bcf_sr_get_line(bcf_fri.sr, 0 /* First file of possibly more in sr */);
+    return nset;
+}
+
 /// @todo check if better to return a std::vector or simply reuse one passed by reference
 template <typename T = bool>
 inline void extract_next_variant_and_update_bcf_sr(std::vector<T>& samples, bcf_file_reader_info_t& bcf_fri) {
@@ -57,8 +63,7 @@ inline void extract_next_variant_and_update_bcf_sr(std::vector<T>& samples, bcf_
 
     samples.resize(bcf_fri.n_samples * 2 /* two alleles */); /// @note could be removed if sure it is passed of correct size
     unsigned int nset = 0;
-    if ((nset = bcf_sr_next_line(bcf_fri.sr))) {
-        bcf_fri.line = bcf_sr_get_line(bcf_fri.sr, 0 /* First file of possibly more in sr */);
+    if ((nset = bcf_next_line(bcf_fri))) {
         if (bcf_fri.line->n_allele != 2) {
             /// @todo Handle this case
             std::cerr << "Number of alleles is different than 2" << std::endl;
