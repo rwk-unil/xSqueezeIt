@@ -37,10 +37,7 @@ namespace wah {
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
         // 0b0011'1111 for 8b
         constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
-        constexpr T WAH_ALL_BITS_SET = T(~T(0)) & ~WAH_HIGH_BIT;
         constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
-        constexpr T WAH_MAX_ENCODE_0 = ~T(0) & ~WAH_COUNT_1_BIT;
-        constexpr T WAH_MAX_ENCODE_1 = ~T(0);
 
         const T wah_word = *wah_p;
         const size_t wah_counter_val = size_t(wah_word & (WAH_MAX_COUNTER))*size_t(WAH_BITS);
@@ -95,14 +92,16 @@ namespace wah {
     template <typename AET = size_t, typename WAH_T = uint16_t>
     class DecompressPointer {
     public:
-        DecompressPointer(const std::vector<AET>& a_i, const size_t len, WAH_T* wah_p) : wah_p(wah_p) {
+        DecompressPointer(const std::vector<AET>& a_i, const size_t len, WAH_T* wah_p) : wah_p(wah_p), wah_origin(wah_p) {
             N = a_i.size();
+            a_origin.resize(N);
             a.resize(N);
             b.resize(N);
             samples_sorted = false;
             samples.resize(N);
             // This may be made copyless by passing a pointer for the first a
             std::copy(a_i.begin(), a_i.end(), a.begin());
+            std::copy(a_i.begin(), a_i.end(), a_origin.begin());
             position = 0;
             length = len;
             // Default should already be set
@@ -139,23 +138,36 @@ namespace wah {
             return true;
         }
 
+        // Puts the pointer back at the start
+        void reset() {
+            wah_p = wah_origin;
+            position = 0;
+            samples_sorted = false;
+            std::copy(a_origin.begin(), a_origin.end(), a.begin());
+            state.state = Wah2State::NONE;
+            state.counter = 0;
+        }
+
         // Check if samples are ready (needs at least one advance)
         bool samples_ready() const { return samples_sorted; }
-        // Returns true if this pointer is done (went through all)
-        bool done() const { return position >= length; }
+        // Offset of samples relative to start (samples need to be ready for it to be valid)
+        size_t get_position() const { return position-1; }
         // Return the samples
         const std::vector<bool>& get_samples_at_position() const { return samples; }
+        // Returns true if this pointer is done (went through all)
+        bool done() const { return position >= length; }
 
     protected:
         AET N;
         size_t position;
         size_t length;
-        int toggle = 0;
+        std::vector<AET> a_origin;
         std::vector<AET> a;
         std::vector<AET> b;
         bool samples_sorted = false;
         std::vector<bool> samples;
         WAH_T* wah_p;
+        WAH_T* wah_origin;
         Wah2State_t state;
     };
 
