@@ -92,6 +92,7 @@ void decompress(const std::string& ifname, const std::string& ofname) {
     hts_close(fp);
 }
 
+// This is just a function to test the htslib C API
 void add_sample(const std::string& ifname, const std::string& ofname) {
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);

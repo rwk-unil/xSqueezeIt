@@ -365,7 +365,10 @@ if (0) {
     return wah_result;
 }
 
-/// @todo read the tmp struct, ppa_t is already a vector
+typedef struct block_tmp_data_t {
+    ppa_t a = {};
+    ppa_t b = {};
+} block_tmp_data_t;
 
 template<typename WAH_T, typename AET>
 struct block_result_data_structs_t {
@@ -373,6 +376,64 @@ struct block_result_data_structs_t {
     std::vector<std::vector<AET> > ssa = {};
     size_t ssa_rate = 0;
 };
+
+typedef struct file_offsets_t {
+    size_t indices;
+    size_t ssas;
+    size_t wahs;
+    size_t wahs_size;
+} file_offsets_t;
+
+template<typename WAH_T, typename AET>
+file_offsets_t get_file_offsets(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result) {
+    /// @todo define somewhere else
+    const size_t HEADER_SIZE = 256;
+    // Is the result vector size
+    const size_t NUMBER_OF_BLOCKS = result.size();
+    // Any subsampled a will have this size
+    size_t NUMBER_OF_SAMPLES = 0;
+    for (const auto& b : result) { // For each block add the number
+        NUMBER_OF_SAMPLES += b.ssa.back().size();
+    }
+
+    // The number of subsampled a's (same for all blocks)
+    const size_t NUMBER_OF_SSAS = result.back().ssa.size();
+
+    // Indexes for WAH's (indexes for a's can be deduced)
+    // uint32_t should be enough, but this has to be checked
+    /// @todo check if output file is less than 4GBytes otherwhise error because of this
+    const size_t INDICES_SIZE = NUMBER_OF_BLOCKS * NUMBER_OF_SSAS * sizeof(uint32_t);
+
+    // Number of samples time number of subsampled a's
+    const size_t SSAS_SIZE = NUMBER_OF_SAMPLES * NUMBER_OF_SSAS * sizeof(AET);
+
+    size_t WAH_SIZE = 0;
+    for (const auto& b : result) { // For all blocks
+        for (const auto& wah : b.wah) { // For all WAH's
+            WAH_SIZE += wah.size();
+        }
+    }
+
+    WAH_SIZE *= sizeof(WAH_T);
+
+    return {.indices = HEADER_SIZE,
+            .ssas = HEADER_SIZE + INDICES_SIZE,
+            .wahs = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE,
+            .wahs_size = WAH_SIZE};
+}
+
+/**
+ * @brief get_file_size returns the number of bytes necessary to store the result
+ * @param result the result that would be stored in the file
+ * */
+template<typename WAH_T, typename AET>
+size_t get_file_size(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result) {
+    const file_offsets_t offsets = get_file_offsets(result);
+
+    const size_t TOTAL_SIZE = offsets.wahs + offsets.wahs_size;
+
+    return TOTAL_SIZE;
+}
 
 template <typename T = bool, typename WAH_T = uint16_t, const struct compress_file_template_arg_t& TARGS = COMPRESS_FILE_DEFAULT_TEMPLATE_ARGS>
 std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > compress_file_new(std::string filename, const compress_file_arg_t& args = COMPRESS_FILE_DEFAULT_ARGS) {
@@ -393,25 +454,22 @@ std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > compress_file_
         }
 
         std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > res(NUMBER_OF_BLOCKS);
-        for (auto & r : res) { r.ssa_rate = args.index_rate; }
-        std::vector<ppa_t> a_s(NUMBER_OF_BLOCKS);
-        std::vector<ppa_t> b_s(NUMBER_OF_BLOCKS);
+        for (auto& r : res) { r.ssa_rate = args.index_rate; }
+        std::vector<block_tmp_data_t> block_tmp(NUMBER_OF_BLOCKS);
+        for (auto& tmp : block_tmp) {
+            tmp.a.resize(args.samples_block_size);
+            tmp.b.resize(args.samples_block_size);
+        }
 
-        for (auto& a : a_s) {
-            a.resize(args.samples_block_size);
-        }
-        for (auto& b : b_s) {
-            b.resize(args.samples_block_size);
-        }
         if (BLOCK_REM) {
             // The last block is almost certainly smaller than the full block size
             // Unless a block size of 0 is specified, then BLOCK_REM is N
-            a_s.back().resize(BLOCK_REM);
-            b_s.back().resize(BLOCK_REM);
+            block_tmp.back().a.resize(BLOCK_REM);
+            block_tmp.back().b.resize(BLOCK_REM);
         }
-        for(auto & a : a_s) {
+        for(auto& tmp : block_tmp) {
             // Initial order (natural order)
-            std::iota(a.begin(), a.end(), 0);
+            std::iota(tmp.a.begin(), tmp.a.end(), 0);
         }
 
         std::cout << "Number of blocks : " << NUMBER_OF_BLOCKS << std::endl;
@@ -426,8 +484,8 @@ std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > compress_file_
             // Do the same processing for each block
             for(size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
                 const size_t OFFSET = i * args.samples_block_size;
-                auto& a = a_s[i];
-                auto& b = b_s[i];
+                auto& a = block_tmp[i].a;
+                auto& b = block_tmp[i].b;
                 const size_t BN = a.size();
 
                 /// @todo Optimize this, can be done with zero copy see comment :
@@ -489,6 +547,117 @@ std::vector<struct block_result_data_structs_t<WAH_T, uint16_t> > compress_file_
         throw "Unknown extension";
         return {};
     }
+}
+
+constexpr uint32_t ENDIANNESS = 0xaabbccdd;
+constexpr uint32_t MAGIC = 0xfeed1767;
+constexpr uint32_t VERSION = 1;
+constexpr uint8_t PLOIDY_DEFAULT = 2;
+
+struct header_t {
+    // 32 bytes
+    uint32_t endianness = ENDIANNESS;
+    uint32_t first_magic = MAGIC;
+    uint32_t version = VERSION;
+    uint8_t  ploidy = PLOIDY_DEFAULT;
+    uint8_t  ind_bytes = 0;
+    uint8_t  aet_bytes = 0;
+    uint8_t  wah_bytes = 0;
+    uint32_t rsvd_1[4] = {0,};
+
+    // 64 bytes
+    uint64_t hap_samples = 0;
+    uint32_t block_size = 0;
+    uint32_t number_of_blocks = 0;
+    uint32_t ss_rate = 0;
+    uint32_t number_of_ssas = 0;
+    uint32_t rsvd_2[2] = {0,};
+    uint8_t  rsvd_2b[32] = {0,};
+
+    // 128 bytes
+    uint8_t rsvd_3[128] = {0,};
+
+    // 32 bytes
+    uint32_t rsvd_4[3] = {0,};
+    uint32_t sample_name_chksum = 0;;
+    uint32_t bcf_file_chksum = 0;
+    uint32_t data_chksum = 0;
+    uint32_t header_chksum = 0;
+    uint32_t last_magic = MAGIC;
+} __attribute__((__packed__));
+
+typedef struct header_t header_t;
+
+template<typename WAH_T, typename AET>
+void save_result_to_file(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result, const std::string& filename) {
+
+    std::fstream s(filename, s.binary | s.out);
+    if (!s.is_open()) {
+        std::cerr << "Failed to open file " << filename << std::endl;
+        throw "Failed to open file";
+    }
+
+    const auto& offsets = get_file_offsets(result);
+
+    // Write the header
+    header_t header = {
+        .ind_bytes = 4,
+        .aet_bytes = sizeof(AET),
+        .wah_bytes = sizeof(WAH_T),
+        .hap_samples = 0 /* TODO */,
+        .block_size = 0 /* TODO */,
+        .number_of_blocks = 0 /* TODO */,
+        .ss_rate = 0 /* TODO */,
+        .number_of_ssas = 0 /* TODO */,
+        .sample_name_chksum = 0 /* TODO */,
+        .bcf_file_chksum = 0 /* TODO */,
+        .data_chksum = 0 /* TODO */,
+        .header_chksum = 0 /* TODO */
+    };
+    s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+
+    std::cout << "header " << s.tellp() << " bytes written" << std::endl;
+
+    // Write the indices
+    const size_t indices_size = offsets.ssas - offsets.indices;
+    std::vector<uint32_t>indices(indices_size / sizeof(uint32_t));
+    size_t index_counter = 0;
+    size_t index_offset = 0;
+    size_t wah_counter = 0;
+    for(const auto& b : result) {
+        wah_counter = 0;
+        for (const auto& wah : b.wah) {
+            if ((wah_counter % b.ssa_rate) == 0) {
+                indices[index_counter++] = index_offset;
+            }
+            index_offset += wah.size() * sizeof(decltype(wah.back()));
+            wah_counter++;
+        }
+    }
+
+    s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices)::value_type));
+
+    std::cout << "indices " << s.tellp() << " total bytes written" << std::endl;
+
+    // Write the permutation arrays
+    for(const auto& b : result) {
+        for(const auto& a : b.ssa) {
+            s.write(reinterpret_cast<const char*>(a.data()), a.size() * sizeof(decltype(a.back())));
+        }
+    }
+
+    std::cout << "a's " << s.tellp() << " total bytes written" << std::endl;
+
+    // Write the compressed data
+    for(const auto& b : result) {
+        for(const auto& w : b.wah) {
+            s.write(reinterpret_cast<const char*>(w.data()), w.size() * sizeof(decltype(w.back())));
+        }
+    }
+
+    std::cout << "wah's " << s.tellp() << " total bytes written" << std::endl;
+
+    s.close();
 }
 
 #endif
