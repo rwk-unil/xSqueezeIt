@@ -1,0 +1,9 @@
+*.csv
+*.bin
+*.csi
+*.bcf
+*.o
+*.d
+*.macs
+*.txt
+*.xlsx
