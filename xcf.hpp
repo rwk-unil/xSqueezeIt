@@ -19,6 +19,50 @@ std::vector<std::string> extract_samples(const bcf_file_reader_info_t& bcf_fri) 
 }
 
 /**
+ * @brief writes a vector of strings to a given file
+ * 
+ * The strings are newline separated in the output file
+ * 
+ * @param v the vector of strings to be written
+ * @param ofname the file to write the vector to
+ * */
+void string_vector_to_file(const std::vector<std::string>& v, const std::string& ofname) {
+    std::fstream s(ofname, s.out);
+    if (!s.is_open()) {
+        std::cerr << "Failed to open file " << ofname << std::endl;
+        throw "Failed to open file";
+    }
+
+    for (const auto& str : v) {
+        s << str << std::endl;
+    }
+    s.close();
+}
+
+/**
+ * @brief reads a file and outputs a vector of strings that corresponds to the lines in the file
+ * @param ifname the file to be read 
+ * @return the vector with the lines of the file
+ * */
+std::vector<std::string> string_vector_from_file(const std::string& ifname) {
+    std::fstream s(ifname, s.in);
+    if (!s.is_open()) {
+        std::cerr << "Failed to open file " << ifname << std::endl;
+        throw "Failed to open file";
+    }
+
+    std::vector<std::string> result;
+
+    for (std::string line; std::getline(s, line); ) {
+        result.push_back(line);
+    }
+    
+    s.close();
+
+    return result;
+}
+
+/**
  * @brief extract_samples Returns a vector with the sample IDs of file
  * @param fname File name of VCF / BCF file for sample ID extraction
  * */
@@ -92,6 +136,7 @@ void decompress(const std::string& ifname, const std::string& ofname) {
     hts_close(fp);
 }
 
+#if 0
 // This is just a function to test the htslib C API
 void add_sample(const std::string& ifname, const std::string& ofname) {
     bcf_file_reader_info_t bcf_fri;
@@ -139,5 +184,6 @@ void add_sample(const std::string& ifname, const std::string& ofname) {
     bcf_hdr_destroy(hdr);
     destroy_bcf_file_reader(bcf_fri);
 }
+#endif
 
 #endif /* __XCF_HPP__ */

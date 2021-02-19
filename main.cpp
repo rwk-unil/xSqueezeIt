@@ -1,5 +1,6 @@
 #include "pbwt_exp.hpp"
-#include "pbwt_big.hpp" 
+#include "pbwt_big.hpp"
+#include "compressor.hpp" 
 #include <thread>
 #include <chrono>
 
@@ -46,9 +47,34 @@ int main(int argc, char* argv[]) {
     for(;;);
 
     return 0;
-#endif
 
-    // auto h = read_from_bcf_file<bool>("../../Data/ref_panel_1000k_msprime_sim.bcf", 100);
+    Compressor::test("../../Data/pbwt/test.vcf.gz");
+    
+    return 0;
+
+    auto h = read_from_bcf_file<bool>("../../Data/ref_panel_1000k_msprime_sim.bcf", 20000, 100);
+    std::string filename = "example_js.txt";
+    std::fstream s(filename, s.out);
+    if (!s.is_open()) return 1;
+    for (auto& col : h) {
+        bool all_null = true;
+        for (auto e : col) {
+            if (e) {
+                all_null = false;
+                break;
+            }
+        }
+        if (!all_null) {
+            for (auto e : col) {
+                s << e;
+            }
+            s << std::endl;
+        }
+    }
+    s.flush();
+    s.close();
+    return 0;
+#endif
     // for (const auto& cols : h) {
     //     size_t sum_of_1s = 0;
     //     for (const auto e : cols) {
@@ -66,8 +92,38 @@ int main(int argc, char* argv[]) {
 
     // Does not compress yet, only applies PBWT alg2 to whole file
     // Running PBWT on a 1'000'000 x 1'000'000 matrix is not reasonable
-    const compress_file_arg_t ARGS = {.stop_at_variant_n = 10000};
-    compress_file("../../Data/ref_panel_1000k_msprime_sim.bcf", ARGS);
+    //const compress_file_arg_t ARGS = {.stop_at_variant_n = 1000, .samples_block_size = 10000};
+    const compress_file_arg_t ARGS = {.stop_at_variant_n = 10000, .samples_block_size = 10000};
+    //compress_file("../../Data/ref_panel_1000k_msprime_sim.bcf", ARGS);
+    //compress_file_exp("../../Data/ref_panel_1000k_msprime_sim.bcf", ARGS);
+    //compress_file_exp("../../Data/pbwt/ALL.chr20.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz");
+    const compress_file_arg_t output_args = {.generate_output_file = true, .output_file_name = "wah.bin"};
+    //auto wahs = compress_file_exp<bool, uint16_t, compress_file_template_arg_t{.return_wah_vector = true}>("../../Data/pbwt/chr20_bi_allelic.bcf", output_args);
+    //compress_file_exp("../../Data/pbwt/chr20_bi_allelic.bcf");
+
+    constexpr static compress_file_template_arg_t MYTARGS = {.return_wah_vector = true};
+    auto wahs = compress_file_exp<bool, uint16_t, MYTARGS>("../../Data/pbwt/chr20_bi_allelic.bcf", {.stop_at_variant_n = 100});
+
+    std::vector<uint16_t> all_wahs;
+    for (const auto& col : wahs) {
+        for (const auto& block : col) {
+            for (const auto& wah : block) {
+                print_wah2(wah);
+                all_wahs.push_back(wah);
+            }
+            std::cout << std::endl;
+        }
+    }
+    
+    std::vector<size_t> a(5008);
+    std::iota(a.begin(), a.end(), 0);
+    DecompressPointer dcp(a, wahs.size(), all_wahs.data());
+    dcp.advance();
+    print_vector(dcp.get_samples_at_position());
+    dcp.advance();
+    print_vector(dcp.get_samples_at_position());
+    dcp.advance();
+    print_vector(dcp.get_samples_at_position());
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 

@@ -554,7 +554,7 @@ constexpr uint32_t MAGIC = 0xfeed1767;
 constexpr uint32_t VERSION = 1;
 constexpr uint8_t PLOIDY_DEFAULT = 2;
 
-struct header_t {
+struct header_s {
     // 32 bytes
     uint32_t endianness = ENDIANNESS;
     uint32_t first_magic = MAGIC;
@@ -567,12 +567,15 @@ struct header_t {
 
     // 64 bytes
     uint64_t hap_samples = 0;
+    uint64_t num_variants = 0;
     uint32_t block_size = 0;
     uint32_t number_of_blocks = 0;
     uint32_t ss_rate = 0;
     uint32_t number_of_ssas = 0;
-    uint32_t rsvd_2[2] = {0,};
-    uint8_t  rsvd_2b[32] = {0,};
+    uint32_t indices_offset = 0;
+    uint32_t ssas_offset = 0;
+    uint32_t wahs_offset = 0;
+    uint8_t  rsvd_2b[20] = {0,};
 
     // 128 bytes
     uint8_t rsvd_3[128] = {0,};
@@ -586,8 +589,9 @@ struct header_t {
     uint32_t last_magic = MAGIC;
 } __attribute__((__packed__));
 
-typedef struct header_t header_t;
+typedef struct header_s header_t;
 
+/// @deprecated (in compressor.hpp now)
 template<typename WAH_T, typename AET>
 void save_result_to_file(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result, const std::string& filename) {
 
@@ -605,6 +609,7 @@ void save_result_to_file(const std::vector<struct block_result_data_structs_t<WA
         .aet_bytes = sizeof(AET),
         .wah_bytes = sizeof(WAH_T),
         .hap_samples = 0 /* TODO */,
+        .num_variants = 0 /* TODO */,
         .block_size = 0 /* TODO */,
         .number_of_blocks = 0 /* TODO */,
         .ss_rate = 0 /* TODO */,

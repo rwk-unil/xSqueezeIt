@@ -17,7 +17,6 @@ XDB=lldb
 
 # Project specific :
 TARGET := pbwt_main
-TARGET := $(strip $(TARGET))
 SOURCES := main.cpp #io/genotype_reader.cpp #$(wildcard *.cpp) $(wildcard objects/*.cpp) $(wildcard containers/*.cpp)
 OBJS := $(SOURCES:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
@@ -31,6 +30,10 @@ TEST_EXECUTABLE := pbwt_test
 TEST_SOURCES := main_test.cpp $(BENCHMARK_PATH)/googletest/googletest/src/gtest_main.cc
 TEST_OBJS := $(TEST_SOURCES:.cpp=.o)
 TEST_OBJS := $(TEST_OBJS:.cc=.o)
+
+MAIN_XCF := main_xcf
+MAIN_XCF_SOURCES := main_xcf.cpp
+MAIN_XCF_OBJS := $(MAIN_XCF_SOURCES:.cpp=.o)
 
 # Rules
 all : $(TARGET)
@@ -62,6 +65,12 @@ test_debug : $(TEST_EXECUTABLE)
 
 $(TEST_EXECUTABLE) : $(TEST_OBJS)
 	$(LD) $(LDFLAGS) -L $(BENCHMARK_PATH)/build/lib/ $^ $(LIBS) -lgtest -o $@
+
+main_xcf.cpp : xcf.hpp pbwt_exp.hpp pbwt_big.hpp
+	touch $@
+
+$(MAIN_XCF) : $(MAIN_XCF_OBJS)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Link the target
 $(TARGET) : $(OBJS)

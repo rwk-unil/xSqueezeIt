@@ -1,6 +1,14 @@
 #ifndef __WAH_HPP__
 #define __WAH_HPP__
 
+template <typename T>
+void print_vector_(const std::vector<T>& v) {
+    for (auto & e : v) {
+        std::cout << e << " ";
+    }
+    std::cout << std::endl;
+}
+
 namespace wah {
 
     template<typename T>
@@ -111,13 +119,18 @@ namespace wah {
 
         // Will update a
         bool advance() { // Algorithm 1
-            if (position >= length-1) {return false;} // Did not advance
+            if (position >= length) {
+                std::cerr << "Advance called without advancing" << std::endl;
+                return false;
+            } // Did not advance
+
+            //print_vector_(a);
 
             AET u = 0;
             AET v = 0;
             for (size_t i = 0; i < N; ++i) {
                 bool x = wah2_pull<WAH_T>(wah_p, state);
-                if (x) {
+                if (x == 0) {
                     a[u++] = a[i];
                 } else {
                     b[v++] = a[i];
