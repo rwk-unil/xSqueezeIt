@@ -4,7 +4,7 @@ VCF / BCF Genotype data compressor based on positional Burrows-Wheeler transform
 
 Variants are left in BCF format, genotype data is custom encoded. The genotype data can then be further compressed with standard tools such as gzip.
 
-## Build
+## Build
 
 ```shell
 # Clone
@@ -22,9 +22,9 @@ cd ..
 make
 ```
 
-## Run
+## Run
 
-### Compression
+### Compression
 
 ```shell
 # ./console_app <-c|-x> -f <input file> -o <output file>
@@ -37,7 +37,7 @@ mkdir output
 # output/chr20.bin_var.bcf which is the variant data, can be opened with bcftools
 ```
 
-### Extraction
+### Extraction
 
 ```shell
 # Extraction :
@@ -45,13 +45,13 @@ mkdir output
 ./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command
 ```
 
-### Pipe into bcftools
+### Pipe into bcftools
 
 ```shell
 # Or pipe directly into bcftools (some examples) :
 ./console_app -x -f output/chr20.bin | bcftools view | less
 ./console_app -x -f output/chr20.bin | bcftools view -s HG00111,NA12878 | less
-./console_app -x -f output/chr20.bin | bcftools stats
+./console_app -x -f output/chr20.bin | bcftools stats > chr20_stats.txt
 ```
 
 ## Notes
