@@ -40,7 +40,7 @@ mkdir output
 ### Extraction
 
 ```shell
-# Extraction :
+# Extraction (requires both files generated above) :
 ./console_app -x -f output/chr20.bin -o output/chr20.bcf
 ./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command
 ```
@@ -54,8 +54,9 @@ mkdir output
 ./console_app -x -f output/chr20.bin | bcftools stats > chr20_stats.txt
 ```
 
-## Notes
+## Notes / TODO
 
+- Rename the compressor (now console_app ...)
 - Only supports phased data for the moment
 - Only supports bi-allelic sites for the moment
     - Convert multi-allelic VCF/BCF to bi-allelic with bcftools :  
