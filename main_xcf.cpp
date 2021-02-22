@@ -36,15 +36,19 @@ int main() {
 
     c.save_result_to_file(output_file);
 
-    std::cout << "index the variant file " << variant_file << " before we continue" << std::endl;
-    int _ = 0;
-    std::cin >> _;
+    //std::cout << "index the variant file " << variant_file << " before we continue" << std::endl;
+    //int _ = 0;
+    //std::cin >> _;
+    std::cout << "Indexing " << variant_file << std::endl;
+    create_index_file(variant_file);
 
     Decompressor d(output_file, variant_file);
     d.decompress(decompressed_file);
 
-    std::cout << "index the variant file " << decompressed_file << " before we continue" << std::endl;
-    std::cin >> _;
+    //std::cout << "index the variant file " << decompressed_file << " before we continue" << std::endl;
+    //std::cin >> _;
+    std::cout << "Indexing " << decompressed_file << std::endl;
+    create_index_file(decompressed_file);
 
     auto hm_ref = read_from_bcf_file<bool>(input_file);
     std::cout << "Ref extracted" << std::endl;

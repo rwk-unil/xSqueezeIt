@@ -20,9 +20,9 @@ std::vector<std::string> extract_samples(const bcf_file_reader_info_t& bcf_fri) 
 
 /**
  * @brief writes a vector of strings to a given file
- * 
+ *
  * The strings are newline separated in the output file
- * 
+ *
  * @param v the vector of strings to be written
  * @param ofname the file to write the vector to
  * */
@@ -41,7 +41,7 @@ void string_vector_to_file(const std::vector<std::string>& v, const std::string&
 
 /**
  * @brief reads a file and outputs a vector of strings that corresponds to the lines in the file
- * @param ifname the file to be read 
+ * @param ifname the file to be read
  * @return the vector with the lines of the file
  * */
 std::vector<std::string> string_vector_from_file(const std::string& ifname) {
@@ -56,7 +56,7 @@ std::vector<std::string> string_vector_from_file(const std::string& ifname) {
     for (std::string line; std::getline(s, line); ) {
         result.push_back(line);
     }
-    
+
     s.close();
 
     return result;
@@ -118,22 +118,24 @@ public:
     const size_t BLOCK_SIZE;
 };
 
-void decompress(const std::string& ifname, const std::string& ofname) {
-    // Check if variant bcf exists
+void create_index_file(std::string filename, int n_threads = 1) {
+    int ret = bcf_index_build3(filename.c_str() /* input */,
+                               NULL /* Output filename, or NULL to add .csi/.tbi */,
+                               14 /* Positive to generate CSI, or 0 to generate TBI, CSI bin size (CSI default is 14) */,
+                               n_threads /* n_threads */);
 
-    // Check if block files exist
-
-    // Check if wah files exist
-
-    // Check if index files exist
-
-    // Output file
-    htsFile *fp = hts_open(ofname.c_str(), "wb"); ///@todo "wb" "wz"
-
-
-
-    // Close everything
-    hts_close(fp);
+    if (ret != 0) {
+        if (ret == -2) {
+            std::cerr << "index: failed to open " << filename << std::endl;
+            throw "Failed to open file";
+        } else if (ret == -3) {
+            std::cerr << "index: " << filename << " is in a format that cannot be usefully indexed" << std::endl;
+            throw "Failed to index";
+        } else {
+            std::cerr << "index: failed to create index for " << filename << std::endl;
+            throw "Failed to index";
+        }
+    }
 }
 
 #if 0

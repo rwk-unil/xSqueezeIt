@@ -598,7 +598,7 @@ typedef struct header_s header_t;
 template<typename WAH_T, typename AET>
 void save_result_to_file(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result, const std::string& filename) {
 
-    std::fstream s(filename, s.binary | s.out);
+    std::fstream s(filename, s.binary | s.out);
     if (!s.is_open()) {
         std::cerr << "Failed to open file " << filename << std::endl;
         throw "Failed to open file";

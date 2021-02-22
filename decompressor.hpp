@@ -79,7 +79,7 @@ public:
             throw "Failed to mmap file";
         }
 
-        // Test the memory map
+        // Test the memory map (first thing is the endianness in the header)
         uint32_t endianness = *(uint32_t*)(file_mmap);
         if (endianness != ENDIANNESS) {
             std::cerr << "Bad endianness in memory map" << std::endl;
