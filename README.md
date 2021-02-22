@@ -51,7 +51,7 @@ mkdir output
 # Or pipe directly into bcftools (some examples) :
 ./console_app -x -f output/chr20.bin | bcftools view | less
 ./console_app -x -f output/chr20.bin | bcftools view -s HG00111,NA12878 | less
-./console_app -x -f output/chr20.bin | bcftools stats > chr20_stats.txt
+./console_app -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
 ```
 
 ## Notes / TODO
