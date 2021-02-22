@@ -78,8 +78,9 @@ std::vector<std::string> extract_samples(const std::string& fname) {
  * @brief remove_samples Removes all the samples from a VCF / BCF file and saves the result in a VCF / BCF file
  * @param ifname Input file name
  * @param ofname Output file name
+ * @return The number of variants
  * */
-void remove_samples(const std::string& ifname, const std::string& ofname) {
+size_t remove_samples(const std::string& ifname, const std::string& ofname) {
     // Input file
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
@@ -88,23 +89,36 @@ void remove_samples(const std::string& ifname, const std::string& ofname) {
     htsFile *fp = hts_open(ofname.c_str(), "wb"); /// @todo wb wz or other
 
     /* The bottleneck of VCF reading is parsing of genotype fields. If the reader knows in advance that only subset of samples is needed (possibly no samples at all), the performance of bcf_read() can be significantly improved by calling bcf_hdr_set_samples after bcf_hdr_read(). */
-    bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* is file */); // All samples is "-", NULL is none
+    int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
+    if (ret < 0) {
+        std::cerr << "Failed to set no samples in header for file " << ifname << std::endl;
+        throw "Failed to remove samples";
+    }
     bcf_hdr_t *hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
 
     // Write the header
-    bcf_hdr_write(fp, hdr);
+    ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header to file " << ofname << std::endl;
+        throw "Failed to remove samples";
+    }
 
     // Write the variants
+    size_t variants = 0;
     while (bcf_next_line(bcf_fri)) {
+        /// @note this could maybe be improved by removing the dup / destroy
         bcf1_t *rec = bcf_dup(bcf_fri.line);
-        bcf_write1(fp, hdr, rec);
+        ret = bcf_write1(fp, hdr, rec);
         bcf_destroy(rec);
+        variants++;
     }
 
     // Close everything
     hts_close(fp);
     bcf_hdr_destroy(hdr);
     destroy_bcf_file_reader(bcf_fri);
+
+    return variants;
 }
 
 // Temporary class to hold metadata

@@ -191,7 +191,11 @@ public:
         }
 
         // Write the header to the new file
-        bcf_hdr_write(fp, hdr);
+        int ret = bcf_hdr_write(fp, hdr);
+        if (ret < 0) {
+            std::cerr << "Could not write header to file " << ofname << std::endl;
+            throw "Failed to write file";
+        }
 
         // Decompress and add the genotype data to the new file
         int32_t* genotypes = new int32_t[header.hap_samples];
@@ -205,6 +209,7 @@ public:
                 for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
                     dp_s[b].advance();
                     auto& samples = dp_s[b].get_samples_at_position();
+                    // The samples are sorted by id (natural order)
                     for (size_t j = 0; j < samples.size(); ++j) {
                         genotypes[_++] = bcf_gt_phased(samples[j]);
                     }
@@ -212,7 +217,7 @@ public:
 #else
                 // OLD SINGLE BLOCK CODE
                 dp.advance();
-                auto& samples = dp.get_samples_at_position(); // They are sorted in pbwt order
+                auto& samples = dp.get_samples_at_position(); // They are sorted in natural order (i.e., by id)
                 for (size_t j = 0; j < header.hap_samples; ++j) {
                     /// @todo unphased
                     genotypes[j] = bcf_gt_phased(samples[j]);
@@ -222,7 +227,7 @@ public:
 
                 bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */);
 
-                bcf_write1(fp, hdr, rec);
+                ret = bcf_write1(fp, hdr, rec);
                 bcf_destroy(rec);
             } else {
                 std::cerr << "Could not read variant line " << i << " in bcf" << std::endl;
