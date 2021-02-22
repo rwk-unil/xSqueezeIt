@@ -35,7 +35,7 @@ int main(int argc, const char *argv[]) {
 
         std::string variant_file(ofname + "_var.bcf");
         remove_samples(filename, variant_file);
-        create_index_file(variant_file);
+
         std::cout << "Generated file " << variant_file << " containing variants only" << std::endl;
         Compressor c;
         c.compress_in_memory(filename);
@@ -51,6 +51,7 @@ int main(int argc, const char *argv[]) {
         }
 
         std::string variant_file(filename + "_var.bcf");
+        create_index_file(variant_file);
         Decompressor d(filename, variant_file);
         d.decompress(ofname);
     } else {
