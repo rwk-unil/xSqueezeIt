@@ -25,6 +25,7 @@
 
 #include "vcf.h"
 #include "hts.h"
+#include "xcf.hpp"
 
 #include "pbwt_big.hpp"
 

@@ -16,8 +16,8 @@ LDFLAGS=-O3 -L $(HTSLIB_PATH)
 XDB=lldb
 
 # Project specific :
-TARGET := pbwt_main
-SOURCES := main.cpp #io/genotype_reader.cpp #$(wildcard *.cpp) $(wildcard objects/*.cpp) $(wildcard containers/*.cpp)
+TARGET := console_app
+SOURCES := console_app.cpp #io/genotype_reader.cpp #$(wildcard *.cpp) $(wildcard objects/*.cpp) $(wildcard containers/*.cpp)
 OBJS := $(SOURCES:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
 DEPENDENCIES := $($CPP_SOURCES:.cpp=.d)

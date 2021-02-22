@@ -71,7 +71,7 @@ public:
             std::cerr << "Failed to open file " << filename << std::endl;
             throw "Failed to open file";
         }
-        std::cout << "File size is : " << file_size << std::endl;
+        //std::cerr << "File size is : " << file_size << std::endl;
         file_mmap = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
         if (file_mmap == NULL) {
             std::cerr << "Failed to memory map file " << filename << std::endl;
