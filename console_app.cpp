@@ -1,4 +1,6 @@
 #include <iostream>
+#include <filesystem>
+namespace fs = std::filesystem;
 
 #include "CLI11.hpp"
 
@@ -17,19 +19,44 @@ int main(int argc, const char *argv[]) {
     //app.add_option("-O, --output-type", O, "output type b|u|z|v");
     bool compress = false;
     bool decompress = false;
+    bool info = false;
     app.add_flag("-c,--compress", compress, "Compress");
     app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
+    app.add_flag("-i,--info", info, "Get info on file");
 
     CLI11_PARSE(app, argc, argv);
 
+    if (info) {
+        if (filename.compare("-") == 0) {
+            std::cerr << "INFO : Input is stdin" << std::endl;
+        } else {
+            std::cerr << "INFO : File is " << filename << std::endl;
+            std::cerr << "INFO : " << filename << " size is " << fs::file_size(filename) << " bytes" << std::endl;
+            std::string variants(filename + "_var.bcf");
+            if (fs::exists(variants)) {
+                std::cerr << "INFO : " << variants << " size is " << fs::file_size(variants) << " bytes" << std::endl;
+            }
+            header_t hdr;
+            int ret = fill_header_from_file(filename, hdr);
+            if (ret == 0) {
+                std::cerr << "INFO : Header is\t\t\t" << sizeof(header_t) << " bytes" << std::endl;
+                std::cerr << "INFO : Indices is\t\t\t" << hdr.ssas_offset - hdr.indices_offset << " bytes" << std::endl;
+                std::cerr << "INFO : Subsampled permutation arrays is\t" << hdr.wahs_offset - hdr.ssas_offset << " bytes" << std::endl;
+                std::cerr << "INFO : WAH Genotype data is\t\t" << hdr.samples_offset - hdr.wahs_offset << " bytes" << std::endl;
+                std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
+            }
+        }
+        std::cerr << std::endl;
+    }
+
     if (compress && decompress) {
-        std::cerr << "Cannot both compress and decompress, choose one" << std::endl;
+        std::cerr << "Cannot both compress and decompress, choose one" << std::endl << std::endl;
         app.exit(CLI::CallForHelp());
     } else if (compress) {
         /// @todo query overwrites
 
         if(ofname.compare("-") == 0) {
-            std::cerr << "Cannot output compressed file(s) to stdout" << std::endl;
+            std::cerr << "Cannot output compressed file(s) to stdout" << std::endl << std::endl;
             app.exit(CLI::CallForHelp());
         }
 
@@ -46,7 +73,7 @@ int main(int argc, const char *argv[]) {
         /// @todo query overwrites
 
         if(filename.compare("-") == 0) {
-            std::cerr << "Cannot decompress file(s) from stdin" << std::endl;
+            std::cerr << "Cannot decompress file(s) from stdin" << std::endl << std::endl;
             app.exit(CLI::CallForHelp());
         }
 
@@ -55,7 +82,7 @@ int main(int argc, const char *argv[]) {
         Decompressor d(filename, variant_file);
         d.decompress(ofname);
     } else {
-        std::cerr << "Choose either to compress or decompress" << std::endl;
+        std::cerr << "Choose either to compress or decompress" << std::endl << std::endl;
         app.exit(CLI::CallForHelp());
     }
 

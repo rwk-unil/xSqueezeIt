@@ -136,4 +136,21 @@ struct header_s {
 
 typedef struct header_s header_t;
 
+int fill_header_from_file(const std::string filename, header_t& header) {
+    std::fstream s(filename, s.binary | s.in);
+    if (!s.is_open()) {
+        std::cerr << "Failed to open file " << filename << std::endl;
+        throw "Failed to open file";
+    }
+
+    // Read the header
+    s.read((char *)(&header), sizeof(header_t));
+    s.close();
+
+    if ((header.first_magic != MAGIC) or (header.last_magic != MAGIC)) {
+        return -1;
+    }
+    return 0;
+}
+
 #endif /* __COMPRESSION_HPP__ */
