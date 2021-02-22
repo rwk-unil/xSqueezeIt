@@ -26,12 +26,10 @@
 #include "vcf.h"
 #include "hts.h"
 
+#include "compression.hpp"
 #include "xcf.hpp"
 #include "wah.hpp"
 using namespace wah;
-
-//#include "pbwt_big.hpp"
-#include "compression.hpp"
 
 template <typename T = bool, typename WAH_T = uint16_t, typename AET = uint16_t, const struct compress_file_template_arg_t& TARGS = COMPRESS_FILE_DEFAULT_TEMPLATE_ARGS>
 class Compressor {

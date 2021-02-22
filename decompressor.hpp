@@ -23,7 +23,7 @@
 #ifndef __DECOMPRESSOR_HPP__
 #define __DECOMPRESSOR_HPP__
 
-#include "pbwt_big.hpp"
+#include "compression.hpp"
 #include "xcf.hpp"
 
 #include "vcf.h"
