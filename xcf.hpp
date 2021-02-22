@@ -1,10 +1,98 @@
 #ifndef __XCF_HPP__
 #define __XCF_HPP__
 
+#include <cstdint>
+#include <cstddef>
+#include <iostream>
+#include <fstream>
 #include <string>
-#include "pbwt_big.hpp"
+#include <regex>
+
 #include "vcf.h"
 #include "hts.h"
+#include "synced_bcf_reader.h"
+
+bool has_extension(const std::string& filename, const std::string& extension) {
+    const std::regex ext_regex(std::string(".+\\") + extension);
+    return std::regex_match(filename.c_str(), ext_regex);
+}
+
+typedef struct bcf_file_reader_info_t {
+    bcf_srs_t* sr = nullptr; /* The BCF Synced reader */
+    size_t n_samples = 0; /* The number of samples */
+    size_t var_count = 0; /* The number of variant sites extracted */
+    int* gt_arr = nullptr; /* Pointer on genotype data array */
+    int ngt_arr = 0; /* Size of above array as given by bcf_get_genotypes() */
+    bcf1_t* line = nullptr; /* Current line pointer */
+
+} bcf_file_reader_info_t;
+
+void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::string& filename) {
+    bcf_fri.sr = bcf_sr_init();
+    bcf_fri.sr->collapse = COLLAPSE_NONE;
+    bcf_fri.sr->require_index = 1;
+
+    bcf_sr_add_reader(bcf_fri.sr, filename.c_str());
+    bcf_fri.n_samples = bcf_hdr_nsamples(bcf_fri.sr->readers[0].header);
+
+    bcf_fri.var_count = 0; // Already set by default
+    bcf_fri.gt_arr = nullptr; // Already set by default
+    bcf_fri.ngt_arr = 0; // Already set by default
+    bcf_fri.line = nullptr; // Already set by default
+}
+
+void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
+    if (bcf_fri.gt_arr != nullptr) {
+        free(bcf_fri.gt_arr); // C allocation from realloc() inside htslib
+        bcf_fri.gt_arr = nullptr;
+    }
+    if (bcf_fri.sr != nullptr) {
+        bcf_sr_destroy(bcf_fri.sr);
+        bcf_fri.sr = nullptr;
+    }
+    bcf_fri.var_count = 0;
+    bcf_fri.ngt_arr = 0;
+    bcf_fri.line = nullptr; /// @todo check if should be freed, probably not
+}
+
+inline unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri) {
+    unsigned int nset = bcf_sr_next_line(bcf_fri.sr);
+    bcf_fri.line = bcf_sr_get_line(bcf_fri.sr, 0 /* First file of possibly more in sr */);
+    return nset;
+}
+
+/// @todo check if better to return a std::vector or simply reuse one passed by reference
+template <typename T = bool>
+inline void extract_next_variant_and_update_bcf_sr(std::vector<T>& samples, bcf_file_reader_info_t& bcf_fri) {
+    // No checks are done on bcf_fri in this function because it is supposed to be called in large loops
+    // Check the sanity of bcf_fri before calling this function
+
+    samples.resize(bcf_fri.n_samples * 2 /* two alleles */); /// @note could be removed if sure it is passed of correct size
+    unsigned int nset = 0;
+    if ((nset = bcf_next_line(bcf_fri))) {
+        if (bcf_fri.line->n_allele != 2) {
+            /// @todo Handle this case
+            std::cerr << "Number of alleles is different than 2" << std::endl;
+        } else {
+            bcf_unpack(bcf_fri.line, BCF_UN_STR);
+            // Here info about the variant could be extracted
+            int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+            int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+            for (int i = 0; i < bcf_fri.n_samples; ++i) {
+                int32_t* ptr = (bcf_fri.gt_arr) + i * line_max_ploidy;
+                for (int j = 0; j < 2 /* ploidy, @todo check */; ++j) {
+                    bool a = (bcf_gt_allele(ptr[j]) == 1);
+                    samples[i*2+j] = a;
+                }
+            }
+        }
+        bcf_fri.var_count++;
+    } else {
+        // No next line, indicate this by returning an empty vector
+        samples.clear();
+    }
+}
 
 /**
  * @brief extract_samples Returns a vector with the sample IDs
@@ -151,55 +239,5 @@ void create_index_file(std::string filename, int n_threads = 1) {
         }
     }
 }
-
-#if 0
-// This is just a function to test the htslib C API
-void add_sample(const std::string& ifname, const std::string& ofname) {
-    bcf_file_reader_info_t bcf_fri;
-    initialize_bcf_file_reader(bcf_fri, ifname);
-
-    htsFile *fp = hts_open(ofname.c_str(), "wb");
-
-    bcf_hdr_t *hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
-
-    bcf_hdr_add_sample(hdr, "NA12878");
-    bcf_hdr_write(fp, hdr);
-
-    int32_t genotypes[10][2] = {
-        {0,0},
-        {0,1},
-        {1,0},
-        {1,1},
-        {0,1},
-        {0,0},
-        {1,0},
-        {1,1},
-        {0,0},
-        {1,1}
-    };
-
-    for(size_t i = 0; i < 10; ++i) {
-        genotypes[i][0] = bcf_gt_phased(genotypes[i][0]);
-        genotypes[i][1] = bcf_gt_phased(genotypes[i][1]);
-    }
-
-    for (size_t i = 0; i < 10; ++i) {
-        if (bcf_next_line(bcf_fri)) {
-            bcf1_t *rec = bcf_dup(bcf_fri.line);
-
-            std::cout << "Number of samples : " << bcf_hdr_nsamples(hdr) << std::endl;
-            bcf_update_genotypes(hdr, rec, genotypes[i], bcf_hdr_nsamples(hdr)*2 /* ploidy */);
-
-            bcf_write1(fp, hdr, rec);
-
-            bcf_destroy(rec);
-        }
-    }
-
-    hts_close(fp);
-    bcf_hdr_destroy(hdr);
-    destroy_bcf_file_reader(bcf_fri);
-}
-#endif
 
 #endif /* __XCF_HPP__ */

@@ -7,30 +7,30 @@
 
 int main(int argc, const char *argv[]) {
 
-    CLI::App app{"App description"};
+    CLI::App app{"VCF/BCF Compressor"};
 
     std::string filename = "-";
     app.add_option("-f,--file", filename, "A help string");
     std::string ofname = "-";
     app.add_option("-o,--output", ofname, "Output file name, default is stdio");
-    char O = 'u';
-    app.add_option("-O, --output-type", O, "output type b|u|z|v");
-    bool compress;
-    bool decompress;
+    //char O = 'u';
+    //app.add_option("-O, --output-type", O, "output type b|u|z|v");
+    bool compress = false;
+    bool decompress = false;
     app.add_flag("-c,--compress", compress, "Compress");
     app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
 
     CLI11_PARSE(app, argc, argv);
 
     if (compress && decompress) {
-        std::cerr << "Cannot both compress or decompress, choose one" << std::endl;
-        return -1;
+        std::cerr << "Cannot both compress and decompress, choose one" << std::endl;
+        app.exit(CLI::CallForHelp());
     } else if (compress) {
         /// @todo query overwrites
 
         if(ofname.compare("-") == 0) {
             std::cerr << "Cannot output compressed file(s) to stdout" << std::endl;
-            return -1;
+            app.exit(CLI::CallForHelp());
         }
 
         std::string variant_file(ofname + "_var.bcf");
@@ -47,7 +47,7 @@ int main(int argc, const char *argv[]) {
 
         if(filename.compare("-") == 0) {
             std::cerr << "Cannot decompress file(s) from stdin" << std::endl;
-            return -1;
+            app.exit(CLI::CallForHelp());
         }
 
         std::string variant_file(filename + "_var.bcf");
@@ -56,6 +56,7 @@ int main(int argc, const char *argv[]) {
         d.decompress(ofname);
     } else {
         std::cerr << "Choose either to compress or decompress" << std::endl;
+        app.exit(CLI::CallForHelp());
     }
 
     return 0;
