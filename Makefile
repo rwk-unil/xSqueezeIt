@@ -1,4 +1,4 @@
-HTSLIB_PATH := ../htslib/htslib
+HTSLIB_PATH := ./htslib/
 
 # C++ Compiler
 CXX=g++
