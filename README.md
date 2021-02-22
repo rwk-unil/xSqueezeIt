@@ -1,5 +1,9 @@
 # VCF / BCF Compressor
 
+VCF / BCF Genotype data compressor based on positional Burrows-Wheeler transform (PBWT) and 16-bit Word Aligned Hybrid (WAH) encoding.
+
+Variants are left in BCF format, genotype data is custom encoded. The genotype data can then be further compressed with standard tools such as gzip.
+
 ## Build
 
 ```shell
@@ -58,3 +62,10 @@ mkdir output
       ```shell
       bcftools norm -m any multi_allelic.bcf -o bi_allelic.bcf -O b
       ```
+
+## Further works
+
+- Extraction
+- Filtering
+- Based on the block compression scheme for faster access
+- Based on permutation sub sampling for faster / parallel access
