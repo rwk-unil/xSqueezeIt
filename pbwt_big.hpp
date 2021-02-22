@@ -381,6 +381,7 @@ typedef struct file_offsets_t {
     size_t indices;
     size_t ssas;
     size_t wahs;
+    size_t samples;
     size_t wahs_size;
 } file_offsets_t;
 
@@ -416,9 +417,10 @@ file_offsets_t get_file_offsets(const std::vector<struct block_result_data_struc
 
     WAH_SIZE *= sizeof(WAH_T);
 
-    return {.indices = HEADER_SIZE,
-            .ssas = HEADER_SIZE + INDICES_SIZE,
-            .wahs = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE,
+    return {.indices   = HEADER_SIZE,
+            .ssas      = HEADER_SIZE + INDICES_SIZE,
+            .wahs      = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE,
+            .samples   = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE + WAH_SIZE,
             .wahs_size = WAH_SIZE};
 }
 
@@ -575,7 +577,8 @@ struct header_s {
     uint32_t indices_offset = 0;
     uint32_t ssas_offset = 0;
     uint32_t wahs_offset = 0;
-    uint8_t  rsvd_2b[20] = {0,};
+    uint32_t samples_offset = 0;
+    uint8_t  rsvd_2b[16] = {0,};
 
     // 128 bytes
     uint8_t rsvd_3[128] = {0,};

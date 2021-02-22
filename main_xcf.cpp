@@ -18,8 +18,8 @@ int main() {
 
     std::string samples_names_file = "samples_cpp.txt";
     //std::string input_file = "../../Data/pbwt/micro.bcf";
-    //std::string input_file = "../../Data/pbwt/chr20_mini.bcf";
-    std::string input_file = "../../Data/pbwt/chr20_bi_allelic.bcf";
+    std::string input_file = "../../Data/pbwt/chr20_mini.bcf";
+    //std::string input_file = "../../Data/pbwt/chr20_bi_allelic.bcf";
     std::string variant_file = "variants.bcf";
     std::string output_file = "compress_output_file.bin";
     std::string decompressed_file = "decompressed.bcf";
@@ -40,7 +40,7 @@ int main() {
     int _ = 0;
     std::cin >> _;
 
-    Decompressor d(output_file, variant_file, samples_names_file);
+    Decompressor d(output_file, variant_file);
     d.decompress(decompressed_file);
 
     std::cout << "index the variant file " << decompressed_file << " before we continue" << std::endl;

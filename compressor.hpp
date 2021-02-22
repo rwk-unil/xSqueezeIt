@@ -163,7 +163,9 @@ public:
         const auto& result = this->compression_result_per_block;
         const auto& offsets = get_file_offsets(result);
 
-        // Write the header
+        //////////////////////
+        // Write the header //
+        //////////////////////
         header_t header = {
             .ind_bytes = 4,
             .aet_bytes = sizeof(AET),
@@ -177,6 +179,7 @@ public:
             .indices_offset = (uint32_t)offsets.indices,
             .ssas_offset = (uint32_t)offsets.ssas,
             .wahs_offset = (uint32_t)offsets.wahs,
+            .samples_offset = (uint32_t)offsets.samples,
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,
@@ -186,7 +189,9 @@ public:
 
         std::cout << "header " << s.tellp() << " bytes written" << std::endl;
 
-        // Write the indices
+        ///////////////////////
+        // Write the indices //
+        ///////////////////////
         const size_t indices_size = offsets.ssas - offsets.indices;
         std::vector<uint32_t>indices(indices_size / sizeof(uint32_t));
         size_t index_counter = 0;
@@ -207,7 +212,9 @@ public:
 
         std::cout << "indices " << s.tellp() << " total bytes written" << std::endl;
 
-        // Write the permutation arrays
+        //////////////////////////////////
+        // Write the permutation arrays //
+        //////////////////////////////////
         for(const auto& b : result) {
             for(const auto& a : b.ssa) {
                 s.write(reinterpret_cast<const char*>(a.data()), a.size() * sizeof(decltype(a.back())));
@@ -216,7 +223,9 @@ public:
 
         std::cout << "a's " << s.tellp() << " total bytes written" << std::endl;
 
-        // Write the compressed data
+        ///////////////////////////////
+        // Write the compressed data //
+        ///////////////////////////////
         for(const auto& b : result) {
             for(const auto& w : b.wah) {
                 s.write(reinterpret_cast<const char*>(w.data()), w.size() * sizeof(decltype(w.back())));
@@ -224,6 +233,13 @@ public:
         }
 
         std::cout << "wah's " << s.tellp() << " total bytes written" << std::endl;
+
+        ////////////////////////////
+        // Write the sample names //
+        ////////////////////////////
+        for(const auto& sample : sample_list) {
+            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
+        }
 
         s.close();
     }

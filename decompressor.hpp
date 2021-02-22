@@ -38,10 +38,7 @@
 class Decompressor {
 public:
 
-    Decompressor(std::string filename, std::string bcf_nosamples, std::string sample_list_file) : filename(filename), bcf_nosamples(bcf_nosamples) {
-        // Extract the sample list
-        sample_list = string_vector_from_file(sample_list_file);
-
+    Decompressor(std::string filename, std::string bcf_nosamples) : filename(filename), bcf_nosamples(bcf_nosamples) {
         std::fstream s(filename, s.binary | s.in);
         if (!s.is_open()) {
             std::cerr << "Failed to open file " << filename << std::endl;
@@ -57,6 +54,14 @@ public:
             std::cerr << "Bad magic" << std::endl;
             std::cerr << "Expected : " << MAGIC << " got : "  << header.first_magic << ", " << header.last_magic << std::endl;
             throw "Bad magic";
+        }
+
+        // Extract the sample list
+        sample_list.clear();
+        s.seekg(header.samples_offset);
+        std::string str;
+        while(std::getline(s, str, '\0').good()) {
+            sample_list.push_back(str);
         }
         s.close();
 
