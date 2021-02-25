@@ -6,6 +6,8 @@ Variants are left in BCF format, genotype data is custom encoded. The genotype d
 
 ## Build
 
+This build requires GCC 8+ because modern C++17 features are used.
+
 ```shell
 # Clone
 git clone https://github.com/rwk-unil/pbwt_exp.git #TODO Public repo
@@ -17,6 +19,8 @@ autoheader
 autoconf
 ./configure
 make
+sudo make install
+sudo ldconfig
 cd ..
 # Build application
 make
