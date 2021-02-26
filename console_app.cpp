@@ -20,11 +20,19 @@ int main(int argc, const char *argv[]) {
     bool compress = false;
     bool decompress = false;
     bool info = false;
+    bool wait = false;
     app.add_flag("-c,--compress", compress, "Compress");
     app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
     app.add_flag("-i,--info", info, "Get info on file");
+    app.add_flag("--wait", wait, "DEBUG - wait for int input");
 
     CLI11_PARSE(app, argc, argv);
+
+    if (wait) {
+        // Wait for input
+        int _;
+        std::cin >> _;
+    }
 
     if (info) {
         if (filename.compare("-") == 0) {
@@ -51,13 +59,17 @@ int main(int argc, const char *argv[]) {
 
     if (compress && decompress) {
         std::cerr << "Cannot both compress and decompress, choose one" << std::endl << std::endl;
-        app.exit(CLI::CallForHelp());
+        exit(app.exit(CLI::CallForHelp()));
     } else if (compress) {
         /// @todo query overwrites
 
+        if(filename.compare("-") and !fs::exists(filename)) {
+            std::cerr << "File " << filename << " does not exist" << std::endl;
+            exit(app.exit(CLI::RuntimeError()));
+        }
         if(ofname.compare("-") == 0) {
             std::cerr << "Cannot output compressed file(s) to stdout" << std::endl << std::endl;
-            app.exit(CLI::CallForHelp());
+            exit(app.exit(CLI::CallForHelp()));
         }
 
         std::string variant_file(ofname + "_var.bcf");
@@ -74,7 +86,11 @@ int main(int argc, const char *argv[]) {
 
         if(filename.compare("-") == 0) {
             std::cerr << "Cannot decompress file(s) from stdin" << std::endl << std::endl;
-            app.exit(CLI::CallForHelp());
+            exit(app.exit(CLI::CallForHelp()));
+        }
+        if(!fs::exists(filename)) {
+            std::cerr << "File " << filename << " does not exist" << std::endl;
+            exit(app.exit(CLI::RuntimeError()));
         }
 
         std::string variant_file(filename + "_var.bcf");
@@ -83,7 +99,7 @@ int main(int argc, const char *argv[]) {
         d.decompress(ofname);
     } else {
         std::cerr << "Choose either to compress or decompress" << std::endl << std::endl;
-        app.exit(CLI::CallForHelp());
+        exit(app.exit(CLI::CallForHelp()));
     }
 
     return 0;

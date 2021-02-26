@@ -73,6 +73,7 @@ inline void extract_next_variant_and_update_bcf_sr(std::vector<T>& samples, bcf_
         if (bcf_fri.line->n_allele != 2) {
             /// @todo Handle this case
             std::cerr << "Number of alleles is different than 2" << std::endl;
+            samples.clear();
         } else {
             bcf_unpack(bcf_fri.line, BCF_UN_STR);
             // Here info about the variant could be extracted
