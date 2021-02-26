@@ -21,10 +21,12 @@ int main(int argc, const char *argv[]) {
     bool decompress = false;
     bool info = false;
     bool wait = false;
+    bool verify = false;
     app.add_flag("-c,--compress", compress, "Compress");
     app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
     app.add_flag("-i,--info", info, "Get info on file");
     app.add_flag("--wait", wait, "DEBUG - wait for int input");
+    app.add_flag("--verify", verify, "DEBUG - verify");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -81,6 +83,25 @@ int main(int argc, const char *argv[]) {
         std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
         c.save_result_to_file(ofname);
         std::cout << "File " << ofname << " written" << std::endl;
+
+        if (verify) { // Slow (because requires decompression and verification)
+            create_index_file(variant_file);
+            Decompressor d(ofname, variant_file);
+            std::string verify_file(ofname + "_verify.bcf");
+            d.decompress(verify_file);
+            create_index_file(verify_file);
+            if (matrices_differ(filename, verify_file)) {
+                std::cerr << "Matrices differ !" << std::endl;
+                fs::remove(verify_file);
+                fs::remove(verify_file + ".csi");
+                exit(-1);
+            } else {
+                std::cerr << "Verify successful !" << std::endl;
+                fs::remove(verify_file);
+                fs::remove(verify_file + ".csi");
+            }
+        }
+
     } else if (decompress) {
         /// @todo query overwrites
 

@@ -241,4 +241,44 @@ void create_index_file(std::string filename, int n_threads = 1) {
     }
 }
 
+std::vector<std::vector<bool> > extract_matrix(std::string filename) {
+    std::vector<std::vector<bool> > matrix(1);
+
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+
+    extract_next_variant_and_update_bcf_sr(matrix.back(), bcf_fri);
+    for(; !matrix.back().empty(); matrix.push_back(std::vector<bool>(matrix.back().size())), extract_next_variant_and_update_bcf_sr(matrix.back(), bcf_fri));
+    matrix.pop_back();
+
+    destroy_bcf_file_reader(bcf_fri);
+    return matrix;
+}
+
+bool matrices_differ(std::string f1, std::string f2) {
+    auto m1 = extract_matrix(f1);
+    auto m2 = extract_matrix(f2);
+
+    if (m1.size() != m2.size()) {
+        std::cerr << "Different outer size" << std::endl;
+        return true;
+    }
+
+    for (size_t i = 0; i < m1.size(); ++i) {
+        if (m1[i].size() != m2[i].size()) {
+            std::cerr << "Different inner size at " << i << std::endl;
+            return true;
+        }
+
+        for (size_t j = 0; j < m1[i].size(); ++j) {
+            if (m1[i][j] != m2[i][j]) {
+                std::cerr << "Different value at " << i << ", " << j << std::endl;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 #endif /* __XCF_HPP__ */

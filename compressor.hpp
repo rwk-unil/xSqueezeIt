@@ -142,11 +142,11 @@ public:
             this->num_ssas = res.back().ssa.size(); // All the same size
             // samples x 2 x variants bits
             size_t raw_size = bcf_fri.n_samples * 2 * bcf_fri.var_count / (8 * 1024 * 1024);
-            std::cout << "RAW size : " << raw_size << " MBytes" << std::endl;
+            std::cout << "RAW size (GT bits, not input file) : " << raw_size << " MBytes" << std::endl;
             size_t compressed_size = wah_words * sizeof(WAH_T) / (1024 * 1024);
             std::cout << "Compressed size : " << compressed_size << " MBytes" << std::endl;
             if (compressed_size) {
-                std::cout << "Reduction is vs RAW is : " << raw_size / compressed_size << std::endl;
+                std::cout << "Reduction vs RAW is : " << raw_size / compressed_size << std::endl;
             }
 
             destroy_bcf_file_reader(bcf_fri);
