@@ -93,16 +93,9 @@ public:
                     const size_t BN = a.size();
 
                     /// @todo Optimize this, can be done with zero copy see comment :
-                    // Sorting the samples is here temporarily, until the wah_encode function is rewritten to take a permutation vector, so for now manually permute
+                    // Sorting the samples is here temporarily, until the wah_encode function is rewritten to take a permutation vector, so for now manually permute (filled in alg 1 below)
                     std::vector<T> sorted_samples(BN);
-                    for(size_t j = 0; j < BN; ++j) {
-                        // This can be optimized out by passing samples + a_k to wah_encode
-                        sorted_samples[j] = samples[a[j]+OFFSET]; // PBWT sorted
-                    }
 
-                    // WAH encode the sorted samples (next column)
-                    res[i].wah.push_back(wah_encode2<WAH_T>(sorted_samples));
-                    wah_words += res[i].wah.back().size(); // For statistics
                     if ((k % args.index_rate) == 0) { // Also take the first one, later it might not be iota anymore
                         res[i].ssa.push_back(std::vector<AET>(BN));
                         std::copy(a.begin(), a.end(), res[i].ssa.back().begin());
@@ -115,7 +108,9 @@ public:
                         size_t v = 0;
 
                         for (size_t j = 0; j < BN; ++j) {
-                            if (samples[a[j]+OFFSET] == 0) {
+                            //if (samples[a[j]+OFFSET] == 0) {
+                            sorted_samples[j] = samples[a[j]+OFFSET]; // PBWT sorted
+                            if (sorted_samples[j] == 0) {
                                 a[u] = a[j];
                                 u++;
                             } else {
@@ -125,6 +120,10 @@ public:
                         }
                         std::copy(b.begin(), b.begin()+v, a.begin()+u);
                     } // Algorithm 1
+
+                    // WAH encode the sorted samples (next column)
+                    res[i].wah.push_back(wah_encode2<WAH_T>(sorted_samples));
+                    wah_words += res[i].wah.back().size(); // For statistics
                 } // Block loop
             } // k (variant) loop
 
