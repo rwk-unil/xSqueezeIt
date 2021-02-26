@@ -1,5 +1,6 @@
 #include <iostream>
 #include <filesystem>
+#include <thread>
 namespace fs = std::filesystem;
 
 #include "CLI11.hpp"
@@ -75,13 +76,20 @@ int main(int argc, const char *argv[]) {
         }
 
         std::string variant_file(ofname + "_var.bcf");
-        remove_samples(filename, variant_file);
+        auto variant_thread = std::thread([&]{
+            remove_samples(filename, variant_file);
+        });
+        auto compress_thread = std::thread([&]{
+            Compressor c;
+            c.compress_in_memory(filename);
+            std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
+            c.save_result_to_file(ofname);
+        });
 
+        variant_thread.join();
         std::cout << "Generated file " << variant_file << " containing variants only" << std::endl;
-        Compressor c;
-        c.compress_in_memory(filename);
-        std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
-        c.save_result_to_file(ofname);
+
+        compress_thread.join();
         std::cout << "File " << ofname << " written" << std::endl;
 
         if (verify) { // Slow (because requires decompression and verification)
