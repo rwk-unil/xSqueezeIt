@@ -274,7 +274,7 @@ bool matrices_differ(std::string f1, std::string f2) {
         std::cerr << "Different outer size" << std::endl;
         return true;
     } else {
-        std::cerr << "Outer sizes are the same : " << m1.size() << std::endl;
+        //std::cerr << "Outer sizes are the same : " << m1.size() << std::endl;
     }
 
     for (size_t i = 0; i < m1.size(); ++i) {
