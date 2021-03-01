@@ -137,10 +137,12 @@ public:
             //std::cout << "Number of variant sites visited : " << bcf_fri.var_count << std::endl;
             std::cout << "Number of samples : " << bcf_fri.n_samples * 2 << std::endl;
             this->num_samples = bcf_fri.n_samples * 2;
+            std::cout << "Number of variants : " << bcf_fri.var_count << std::endl;
             this->num_variants = bcf_fri.var_count;
             this->num_ssas = res.back().ssa.size(); // All the same size
             // samples x 2 x variants bits
             size_t raw_size = bcf_fri.n_samples * 2 * bcf_fri.var_count / (8 * 1024 * 1024);
+            std::cout << "GT Matrix bits : " << bcf_fri.n_samples * 2 * bcf_fri.var_count << std::endl;
             std::cout << "RAW size (GT bits, not input file) : " << raw_size << " MBytes" << std::endl;
             size_t compressed_size = wah_words * sizeof(WAH_T) / (1024 * 1024);
             std::cout << "Compressed size : " << compressed_size << " MBytes" << std::endl;
@@ -189,7 +191,11 @@ public:
         };
         s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
 
-        std::cout << "header " << s.tellp() << " bytes written" << std::endl;
+        size_t written_bytes = 0;
+        size_t total_bytes = 0;
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
 
         ///////////////////////
         // Write the indices //
@@ -212,7 +218,9 @@ public:
 
         s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices)::value_type));
 
-        std::cout << "indices " << s.tellp() << " total bytes written" << std::endl;
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         //////////////////////////////////
         // Write the permutation arrays //
@@ -223,7 +231,9 @@ public:
             }
         }
 
-        std::cout << "a's " << s.tellp() << " total bytes written" << std::endl;
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "ppa's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         ///////////////////////////////
         // Write the compressed data //
@@ -234,7 +244,9 @@ public:
             }
         }
 
-        std::cout << "wah's " << s.tellp() << " total bytes written" << std::endl;
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "wah's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         ////////////////////////////
         // Write the sample names //
@@ -242,6 +254,10 @@ public:
         for(const auto& sample : sample_list) {
             s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
         }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         s.close();
     }

@@ -232,17 +232,6 @@ size_t remove_samples(const std::string& ifname, const std::string& ofname) {
     return variants;
 }
 
-// Temporary class to hold metadata
-class MetaData {
-public:
-
-    std::string base_file_name;
-    size_t number_of_variants;
-    size_t number_of_samples;
-    const size_t PPA_RATE;
-    const size_t BLOCK_SIZE;
-};
-
 void create_index_file(std::string filename, int n_threads = 1) {
     int ret = bcf_index_build3(filename.c_str() /* input */,
                                NULL /* Output filename, or NULL to add .csi/.tbi */,
