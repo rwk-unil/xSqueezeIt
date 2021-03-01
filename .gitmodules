@@ -4,3 +4,6 @@
 [submodule "htslib"]
 	path = htslib
 	url = https://github.com/samtools/htslib.git
+[submodule "test/cukinia"]
+	path = test/cukinia
+	url = https://github.com/savoirfairelinux/cukinia
