@@ -179,14 +179,15 @@ public:
         }
 
         // Decompress and add the genotype data to the new file
+        // This is the main loop, where most of the time is spent
         int32_t* genotypes = new int32_t[header.hap_samples];
         for (size_t i = 0; i < header.num_variants; ++i) {
             if (bcf_next_line(bcf_fri)) {
-                bcf1_t *rec = bcf_dup(bcf_fri.line);
+                bcf1_t *rec = bcf_fri.line;
                 size_t _ = 0;
                 // Extract all blocks
                 for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
-                    dp_s[b].advance();
+                    dp_s[b].advance(); // 15% of time spent in here
                     auto& samples = dp_s[b].get_samples_at_position();
                     // The samples are sorted by id (natural order)
                     for (size_t j = 0; j < samples.size(); ++j) {
@@ -194,10 +195,9 @@ public:
                     }
                 }
 
-                bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */);
+                bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */); // 15% of time spent in here
 
-                ret = bcf_write1(fp, hdr, rec);
-                bcf_destroy(rec);
+                ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
             } else {
                 std::cerr << "Could not read variant line " << i << " in bcf" << std::endl;
                 throw "BCF read error";
