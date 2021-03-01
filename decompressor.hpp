@@ -112,11 +112,9 @@ public:
             throw "Number of samples doesn't match";
         }
 
-#define NEW_CODE 1
-#if NEW_CODE
-        size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
-        size_t BLOCK_SIZE = header.block_size ? header.block_size : header.hap_samples;
-        size_t BLOCK_REM = (header.hap_samples > header.block_size) ? (header.hap_samples % header.block_size) : header.hap_samples;
+        const size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
+        const size_t BLOCK_SIZE = header.block_size ? header.block_size : header.hap_samples;
+        const size_t BLOCK_REM = (header.hap_samples > header.block_size) ? (header.hap_samples % header.block_size) : header.hap_samples;
 
         // Pointers to the ssas for each block
         std::vector<uint16_t*> a_ps(NUMBER_OF_BLOCKS);
@@ -154,24 +152,7 @@ public:
 
             dp_s.emplace_back(DecompressPointer<uint16_t, uint16_t>(a_s[i], header.num_variants, wah_ps[i]));
         }
-#else
-        // OLD SINGLE BLOCK CODE
-        std::vector<uint16_t> a(header.hap_samples);
-        uint16_t* a_p = (uint16_t*)((uint8_t*)file_mmap + header.ssas_offset);
-        for (size_t i = 0; i < header.hap_samples; ++i) {
-            a[i] = a_p[i];
-        //    std::cout << i << " ";
-        }
-        //std::cout << std::endl;
-        //std::iota(a.begin(), a.end(), 0);
 
-        // Get pointer to the first encoded array
-        uint16_t* wah_p = (uint16_t*)((uint8_t*)file_mmap + header.wahs_offset);
-
-        // This can be done multithreaded
-        DecompressPointer<uint16_t, uint16_t> dp(a, header.num_variants, wah_p);
-        // END OLD CODE
-#endif
         // Read the bcf without the samples (variant info)
         initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
 
@@ -202,8 +183,6 @@ public:
         for (size_t i = 0; i < header.num_variants; ++i) {
             if (bcf_next_line(bcf_fri)) {
                 bcf1_t *rec = bcf_dup(bcf_fri.line);
-
-#if NEW_CODE
                 size_t _ = 0;
                 // Extract all blocks
                 for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
@@ -214,16 +193,6 @@ public:
                         genotypes[_++] = bcf_gt_phased(samples[j]);
                     }
                 }
-#else
-                // OLD SINGLE BLOCK CODE
-                dp.advance();
-                auto& samples = dp.get_samples_at_position(); // They are sorted in natural order (i.e., by id)
-                for (size_t j = 0; j < header.hap_samples; ++j) {
-                    /// @todo unphased
-                    genotypes[j] = bcf_gt_phased(samples[j]);
-                }
-                // END OLD CODE
-#endif
 
                 bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */);
 
