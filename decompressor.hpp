@@ -157,7 +157,8 @@ public:
         initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
 
         // Open the output file
-        htsFile *fp = hts_open(ofname.c_str(), "wb"); // "-" for stdout
+        std::cerr << "Output is stdout format will be binary uncompressed" << std::endl;
+        htsFile *fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wbu"); // "-" for stdout
         if (fp == NULL) {
             std::cerr << "Could not open " << bcf_nosamples << std::endl;
             throw "File open error";
