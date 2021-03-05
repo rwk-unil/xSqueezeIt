@@ -209,6 +209,73 @@ public:
         destroy_bcf_file_reader(bcf_fri);
     }
 
+    void fill_bit_matrix(std::vector<std::vector<bool> >& m) {
+        m.clear();
+        m.resize(header.num_variants, std::vector<bool> (header.hap_samples, 0));
+
+        // This being a template does not help ...
+        // Because decompression depends on file type
+        if (header.aet_bytes != 2) {
+            throw "TODO DIFFERENT AET size";
+        }
+        if (header.wah_bytes != 2) {
+            throw "TODO DIFFERENT WAH size";
+        }
+
+        const size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
+        const size_t BLOCK_SIZE = header.block_size ? header.block_size : header.hap_samples;
+        const size_t BLOCK_REM = (header.hap_samples > header.block_size) ? (header.hap_samples % header.block_size) : header.hap_samples;
+
+        // Pointers to the ssas for each block
+        std::vector<uint16_t*> a_ps(NUMBER_OF_BLOCKS);
+        // Base pointer for the first a vector
+        uint16_t* base = (uint16_t*)((uint8_t*)file_mmap + header.ssas_offset);
+        for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
+            /// @note it may be better to interleave the subsampled a's (ssas)
+            a_ps[i] = base + (i * BLOCK_SIZE * header.number_of_ssas);
+        }
+
+        // Per block permutation arrays
+        std::vector<std::vector<uint16_t> > a_s(NUMBER_OF_BLOCKS, std::vector<uint16_t>(BLOCK_SIZE));
+
+        a_s.back().resize(BLOCK_REM); // Last block is usually not full size
+
+        // Fill the permutation vectors from memory
+        for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
+            for (size_t j = 0; j < a_s[i].size(); ++j) {
+                a_s[i][j] = a_ps[i][j];
+            }
+        }
+
+        // Pointer to WAH data per block
+        std::vector<uint16_t*> wah_ps(NUMBER_OF_BLOCKS);
+        std::vector<DecompressPointer<uint16_t, uint16_t> > dp_s;
+        // Base pointer to WAH data
+        /*uint16_t* */ base = (uint16_t*)((uint8_t*)file_mmap + header.wahs_offset);
+        uint32_t* indices = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
+        for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
+            // Look up the index, because WAH data is non uniform in size
+            uint32_t index = *(indices + i * header.number_of_ssas); // An index is given for every subsampled a (to access corresponding WAH)
+            // The index is actually in bytes ! /// @todo Maybe change this ? There is no necessity to have this in bytes, it could depend on WAH_T, maybe
+            // The index is the offset in WAH_T relative to base of WAH
+            wah_ps[i] = base + (index / sizeof(uint16_t)); // Correct because index is in bytes
+
+            dp_s.emplace_back(DecompressPointer<uint16_t, uint16_t>(a_s[i], header.num_variants, wah_ps[i]));
+        }
+
+        for (size_t i = 0; i < header.num_variants; ++i) {
+            size_t _ = 0;
+            for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
+                dp_s[b].advance();
+                auto& samples = dp_s[b].get_samples_at_position();
+                // The samples are sorted by id (natural order)
+                for (size_t j = 0; j < samples.size(); ++j) {
+                    m[i][_++] = samples[j];
+                }
+            }
+        }
+    }
+
 protected:
     std::string filename;
     header_t header;
