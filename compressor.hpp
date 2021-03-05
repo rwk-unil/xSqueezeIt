@@ -239,7 +239,7 @@ public:
         // Write the compressed data //
         ///////////////////////////////
         for(const auto& b : result) {
-            for(const auto& w : b.wah) {
+            for(const auto& w : b.wah) { // Note that the data could be freed here
                 s.write(reinterpret_cast<const char*>(w.data()), w.size() * sizeof(decltype(w.back())));
             }
         }

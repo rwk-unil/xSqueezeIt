@@ -56,6 +56,70 @@ namespace wah {
         size_t counter = 0;
     } Wah2State_t;
 
+    // Note that bits should be padded to accomodate the last encoding (easiest is to add sizeof(T))
+    template<typename T = uint16_t>
+    inline void wah2_extract(T*& wah_p, std::vector<bool>& bits, size_t size) {
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
+        constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
+        constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
+
+        // TODO : Rewrite without resizing
+#define __RESIZING 0
+#if __RESIZING
+        bits.clear();
+        T word;
+        while(bits.size() < size) {
+            word = *wah_p;
+            if (word & WAH_HIGH_BIT) {
+                if (word & WAH_COUNT_1_BIT) {
+                    // Expand with ones
+                    bits.resize(bits.size() + (word & WAH_MAX_COUNTER)*WAH_BITS, 1);
+                } else {
+                    // Expand with zeroes
+                    bits.resize(bits.size() + (word & WAH_MAX_COUNTER)*WAH_BITS, 0);
+                }
+            } else {
+                // Expand with value
+                for (size_t j = 0; j < WAH_BITS; ++j) {
+                    bits.push_back(word & 1); // May not be the most effective way
+                    word >>= 1;
+                }
+            }
+            wah_p++;
+        }
+#else
+        T word;
+        size_t bit_position = 0;
+        while(bit_position < size) {
+            word = *wah_p;
+            if (word & WAH_HIGH_BIT) {
+                const size_t stop = bit_position + (word & WAH_MAX_COUNTER)*WAH_BITS;
+                if (word & WAH_COUNT_1_BIT) {
+                    // Expand with ones
+                    for (size_t _ = bit_position; _ < stop; ++_) {
+                        bits[_] = 1;
+                    }
+                } else {
+                    // Expand with zeroes
+                    for (size_t _ = bit_position; _ < stop; ++_) {
+                        bits[_] = 0;
+                    }
+                }
+                bit_position = stop;
+            } else {
+                // Expand with value
+                for (size_t _ = bit_position; _ < bit_position+WAH_BITS; ++_) {
+                    bits[_] = word & 1; // May not be the most effective way
+                    word >>= 1;
+                }
+                bit_position += WAH_BITS;
+            }
+            wah_p++;
+        }
+#endif
+    }
+
     // This is a stream based on the current wah pointer and state
     // If finished pulling and state is not none, it means the encoded vector is not
     // a multiple of WAH_BITS, just increment the pointer and set state to NONE to continue
@@ -128,6 +192,7 @@ namespace wah {
             a.resize(N);
             b.resize(N);
             samples_sorted = false;
+            y.resize(N+sizeof(AET));
             samples.resize(N);
             // This may be made copyless by passing a pointer for the first a
             std::copy(a_i.begin(), a_i.end(), a.begin());
@@ -150,25 +215,26 @@ namespace wah {
 
             AET u = 0;
             AET v = 0;
+            wah2_extract(wah_p, y, N);
             for (size_t i = 0; i < N; ++i) {
-                bool x = wah2_pull<WAH_T>(wah_p, state);
-                if (x == 0) {
+                //bool x = wah2_pull<WAH_T>(wah_p, state);
+                if (y[i] == 0) {
                     a[u++] = a[i];
                 } else {
                     b[v++] = a[i];
                 }
-                samples[a[i]] = x; // Samples sorted by id
+                samples[a[i]] = y[i]; // Samples sorted by id
             }
             std::copy(b.begin(), b.begin()+v, a.begin()+u);
             samples_sorted = true;
             position++;
 
             // This is an edge case because number of samples may not be a multiple of WAH_BITS
-            if (state.state != Wah2State::NONE) {
-                wah_p++;
-                state.counter = 0;
-                state.state = Wah2State::NONE;
-            }
+            //if (state.state != Wah2State::NONE) {
+            //    wah_p++;
+            //    state.counter = 0;
+            //    state.state = Wah2State::NONE;
+            //}
 
             return true;
         }
@@ -200,6 +266,7 @@ namespace wah {
         std::vector<AET> a;
         std::vector<AET> b;
         bool samples_sorted = false;
+        std::vector<bool> y;
         std::vector<bool> samples;
         WAH_T* wah_p;
         WAH_T* wah_origin;
