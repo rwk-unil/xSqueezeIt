@@ -353,7 +353,7 @@ I find_index(const std::string& filename, const P position) {
     I index = 0;
 
     while(bcf_next_line(bcf_fri)) {
-        if (bcf_fri.line->pos >= position) {
+        if (bcf_fri.line->pos+1 >= position) {
             destroy_bcf_file_reader(bcf_fri);
             return index;
         }
