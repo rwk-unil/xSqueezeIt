@@ -64,23 +64,51 @@ int main(int argc, const char *argv[]) {
     std::string variant_file(filename + "_var.bcf");
     create_index_file(variant_file);
     Decompressor d(filename, variant_file);
+    d.decompress_region("output/region.bcf", 100000, 200000);
+
+    return 0;
+
+    uint32_t position = 0;
+    auto idx = find_index(filename, position);
+    std::cout << "Index of " << position << " is " << idx << std::endl;
+    position = 65536;
+    idx = find_index(filename, position);
+    std::cout << "Index of " << position << " is " << idx << std::endl;
+    position = 1000000;
+    idx = find_index(filename, position);
+    std::cout << "Index of " << position << " is " << idx << std::endl;
+    position = 5000000;
+    idx = find_index(filename, position);
+    std::cout << "Index of " << position << " is " << idx << std::endl;
+    position = 10000000;
+    idx = find_index(filename, position);
+    std::cout << "Index of " << position << " is " << idx << std::endl;
+
+    //auto m = create_map(filename);
+    //std::cout << "Map has size : " << m.size() << std::endl;
+
+    return 0;
 
     std::chrono::steady_clock::time_point begin;
     std::chrono::steady_clock::time_point end;
-    if (1) {
-    std::vector<std::vector<bool> > bit_matrix;
+
+    std::vector<std::vector<bool> > bit_matrix_a;
     begin = std::chrono::steady_clock::now();
-    d.fill_bit_matrix(bit_matrix);
+    d.fill_bit_matrix(bit_matrix_a);
     end = std::chrono::steady_clock::now();
 
-    std::cout << "Loaded bit matrix of " << bit_matrix.size() << " times " << bit_matrix[0].size() << " bits in memory" << std::endl;
+    std::cout << "Loaded bit matrix of " << bit_matrix_a.size() << " times " << bit_matrix_a[0].size() << " bits in memory" << std::endl;
     printElapsedTime(begin, end);
-    }
+
     begin = std::chrono::steady_clock::now();
-    auto bit_matrix = extract_matrix("../../Data/pbwt/chr20_bi_allelic.bcf");
+    auto bit_matrix_b = extract_matrix("../../Data/pbwt/chr20_bi_allelic.bcf");
     end = std::chrono::steady_clock::now();
-    std::cout << "Loaded bit matrix of " << bit_matrix.size() << " times " << bit_matrix[0].size() << " bits in memory" << std::endl;
+    std::cout << "Loaded bit matrix of " << bit_matrix_b.size() << " times " << bit_matrix_b[0].size() << " bits in memory" << std::endl;
     printElapsedTime(begin, end);
+
+    if (matrices_differ(bit_matrix_a, bit_matrix_b)) {
+        std::cerr << "Matrices differ !" << std::endl;
+    }
 
     return 0;
 }
