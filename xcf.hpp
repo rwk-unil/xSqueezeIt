@@ -29,6 +29,7 @@
 #include <fstream>
 #include <string>
 #include <regex>
+#include <map>
 
 #include "vcf.h"
 #include "hts.h"
@@ -266,10 +267,9 @@ std::vector<std::vector<bool> > extract_matrix(std::string filename) {
     return matrix;
 }
 
-bool matrices_differ(std::string f1, std::string f2) {
-    auto m1 = extract_matrix(f1);
-    auto m2 = extract_matrix(f2);
 
+template <typename T>
+inline bool matrices_differ(std::vector<std::vector<T> >& m1, std::vector<std::vector<T> >& m2) {
     if (m1.size() != m2.size()) {
         std::cerr << "Different outer size" << std::endl;
         return true;
@@ -292,6 +292,77 @@ bool matrices_differ(std::string f1, std::string f2) {
     }
 
     return false;
+}
+
+bool matrices_differ(std::string f1, std::string f2) {
+    auto m1 = extract_matrix(f1);
+    auto m2 = extract_matrix(f2);
+
+    return matrices_differ(m1, m2);
+}
+
+template<typename P = uint32_t, typename I = uint32_t>
+std::map<P, I> create_map(const std::string& filename, const P threshold = 1000) {
+    std::map<P, I> map;
+
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+
+    int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
+    if (ret < 0) {
+        std::cerr << "Failed to set no samples in header for file " << filename << std::endl;
+        throw "Failed to remove samples";
+    }
+
+    P last_mapped_position = 0;
+    P position = 0;
+    I index = 0;
+
+    while(bcf_next_line(bcf_fri)) {
+        position = bcf_fri.line->pos;
+
+        if (last_mapped_position > position) {
+            std::cerr << "Failed to map file because it is unordered" << std::endl;
+            throw "Unordered input file";
+        }
+
+        if ((index == 0) or ((position - last_mapped_position) > threshold)) {
+            last_mapped_position = position;
+            map.insert({position, index});
+        }
+
+        index++;
+    }
+
+    destroy_bcf_file_reader(bcf_fri);
+
+    return map;
+}
+
+template<typename P = uint32_t, typename I = uint32_t>
+I find_index(const std::string& filename, const P position) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+
+    int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
+    if (ret < 0) {
+        std::cerr << "Failed to set no samples in header for file " << filename << std::endl;
+        throw "Failed to remove samples";
+    }
+
+    I index = 0;
+
+    while(bcf_next_line(bcf_fri)) {
+        if (bcf_fri.line->pos >= position) {
+            destroy_bcf_file_reader(bcf_fri);
+            return index;
+        }
+        index++;
+    }
+
+    destroy_bcf_file_reader(bcf_fri);
+    throw "Position not found";
+    return -1;
 }
 
 #endif /* __XCF_HPP__ */
