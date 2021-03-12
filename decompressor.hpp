@@ -48,8 +48,7 @@ public:
         // Read the header
         s.read((char *)(&(this->header)), sizeof(header_t));
 
-        //std::cout << "header num samples : " << header.hap_samples << std::endl;
-
+        // Check magic
         if ((header.first_magic != MAGIC) or (header.last_magic != MAGIC)) {
             std::cerr << "Bad magic" << std::endl;
             std::cerr << "Expected : " << MAGIC << " got : "  << header.first_magic << ", " << header.last_magic << std::endl;
@@ -71,7 +70,8 @@ public:
             std::cerr << "Failed to open file " << filename << std::endl;
             throw "Failed to open file";
         }
-        //std::cerr << "File size is : " << file_size << std::endl;
+
+        // Memory map the file
         file_mmap = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
         if (file_mmap == NULL) {
             std::cerr << "Failed to memory map file " << filename << std::endl;
@@ -300,77 +300,34 @@ public:
         destroy_bcf_file_reader(bcf_fri);
     }
 
-    void fill_bit_matrix(std::vector<std::vector<bool> >& m) {
+    void fill_bit_matrix(std::vector<std::vector<bool> >& m, const size_t n_threads = 4) {
         m.clear();
         m.resize(header.num_variants, std::vector<bool> (header.hap_samples, 0));
 
-        // This being a template does not help ...
-        // Because decompression depends on file type
-        if (header.aet_bytes != 2) {
-            throw "TODO DIFFERENT AET size";
-        }
-        if (header.wah_bytes != 2) {
-            throw "TODO DIFFERENT WAH size";
-        }
+        decompress_checks();
 
         const size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
-        const size_t BLOCK_SIZE = header.block_size ? header.block_size : header.hap_samples;
-        const size_t BLOCK_REM = (header.hap_samples > header.block_size) ? (header.hap_samples % header.block_size) : header.hap_samples;
 
-        constexpr size_t NUMBER_OF_THREADS = 4;
+        size_t number_of_threads = (n_threads < header.number_of_ssas) ?
+                                   n_threads :
+                                   header.number_of_ssas;
         std::vector<std::thread> threads;
-        size_t thread_ss_index = header.number_of_ssas / NUMBER_OF_THREADS;
+        size_t thread_ss_index = header.number_of_ssas / number_of_threads;
         size_t thread_id;
         std::mutex mut;
-        for(thread_id = 0; thread_id < NUMBER_OF_THREADS; ++thread_id) {
+        for(thread_id = 0; thread_id < number_of_threads; ++thread_id) {
             threads.push_back(std::thread([=, &m, &mut]{
-                // Pointers to the ssas for each block
-                std::vector<uint16_t*> a_ps(NUMBER_OF_BLOCKS);
-                // Base pointer for the first a vector
-                uint16_t* base = (uint16_t*)((uint8_t*)file_mmap + header.ssas_offset);
-                for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
-                    /// @note it may be better to interleave the subsampled a's (ssas)
-                    a_ps[i] = base + (i * BLOCK_SIZE * header.number_of_ssas);
-                }
-
-                // Per block permutation arrays
-                std::vector<std::vector<uint16_t> > a_s(NUMBER_OF_BLOCKS, std::vector<uint16_t>(BLOCK_SIZE));
-
-                a_s.back().resize(BLOCK_REM); // Last block is usually not full size
-
-                // Fill the permutation vectors from memory
-                for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
-                    // Correct the a_ps
-                    a_ps[i] += thread_id * thread_ss_index * a_s[i].size();
-                    for (size_t j = 0; j < a_s[i].size(); ++j) {
-                        a_s[i][j] = a_ps[i][j];
-                    }
-                }
-
-                // Pointer to WAH data per block
-                std::vector<uint16_t*> wah_ps(NUMBER_OF_BLOCKS);
-                std::vector<DecompressPointer<uint16_t, uint16_t> > dp_s;
-                // Base pointer to WAH data
-                /*uint16_t* */ base = (uint16_t*)((uint8_t*)file_mmap + header.wahs_offset);
-                uint32_t* indices = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
-                for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
-                    // Look up the index, because WAH data is non uniform in size
-                    uint32_t index = *(indices + i * header.number_of_ssas + thread_id * thread_ss_index); // An index is given for every subsampled a (to access corresponding WAH)
-                    // The index is actually in bytes ! /// @todo Maybe change this ? There is no necessity to have this in bytes, it could depend on WAH_T, maybe
-                    // The index is the offset in WAH_T relative to base of WAH
-                    wah_ps[i] = base + (index / sizeof(uint16_t)); // Correct because index is in bytes
-
-                    dp_s.emplace_back(DecompressPointer<uint16_t, uint16_t>(a_s[i], header.num_variants, wah_ps[i]));
-                }
-
-                size_t start_position = thread_id * thread_ss_index * header.ss_rate;
-                size_t stop_position = (thread_id == NUMBER_OF_THREADS-1) ?
+                const size_t start_position = thread_id * thread_ss_index * header.ss_rate;
+                const size_t stop_position = (thread_id == number_of_threads-1) ?
                     header.num_variants :
                     (thread_id + 1) * thread_ss_index * header.ss_rate;
                 {
                     std::lock_guard<std::mutex> lk(mut);
                     std::cout << "Thread " << thread_id << " start = " << start_position << " stop = " << stop_position << std::endl;
                 }
+
+                auto dp_s = generate_decompress_pointers(start_position);
+
                 for (size_t i = start_position; i < stop_position; ++i) {
                     size_t _ = 0;
                     for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {

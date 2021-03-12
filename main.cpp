@@ -64,7 +64,8 @@ int main(int argc, const char *argv[]) {
     std::string variant_file(filename + "_var.bcf");
     create_index_file(variant_file);
     Decompressor d(filename, variant_file);
-    d.decompress_region("output/region.bcf", 100000, 200000);
+#if 0
+    d.decompress_region("output/region.bcf", 1000000, 2000000);
 
     return 0;
 
@@ -88,13 +89,14 @@ int main(int argc, const char *argv[]) {
     //std::cout << "Map has size : " << m.size() << std::endl;
 
     return 0;
-
+#endif
     std::chrono::steady_clock::time_point begin;
     std::chrono::steady_clock::time_point end;
 
+    // Compile with -O3 for this test !
     std::vector<std::vector<bool> > bit_matrix_a;
     begin = std::chrono::steady_clock::now();
-    d.fill_bit_matrix(bit_matrix_a);
+    d.fill_bit_matrix(bit_matrix_a, 4);
     end = std::chrono::steady_clock::now();
 
     std::cout << "Loaded bit matrix of " << bit_matrix_a.size() << " times " << bit_matrix_a[0].size() << " bits in memory" << std::endl;
