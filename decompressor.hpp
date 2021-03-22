@@ -38,6 +38,12 @@
 class Decompressor {
 public:
 
+    /**
+     * @brief Constructor of the Decompressor class
+     *
+     * @param filename compressed genotype data file
+     * @param bcf_nosamples corresponding bcf file with variant info
+     * */
     Decompressor(std::string filename, std::string bcf_nosamples) : filename(filename), bcf_nosamples(bcf_nosamples) {
         std::fstream s(filename, s.binary | s.in);
         if (!s.is_open()) {
@@ -95,6 +101,9 @@ public:
         }
     }
 
+    /**
+     * @brief Destructor
+     * */
     ~Decompressor() {
         if (file_mmap != NULL) {
             munmap(file_mmap, file_size);
@@ -247,6 +256,11 @@ private:
     }
 public:
 
+    /**
+     * @brief Decompresses the loaded file into an output file
+     *
+     * @param ofname the output file name
+     * */
     void decompress(std::string ofname) {
         decompress_checks();
 
@@ -268,6 +282,13 @@ public:
         destroy_bcf_file_reader(bcf_fri);
     }
 
+    /**
+     * @brief Decompress the loaded file over a given region
+     *
+     * @param ofname The output file name
+     * @param start  start position in the chromosome
+     * @param stop   stop  position in the chromosome
+     * */
     void decompress_region(std::string ofname, size_t start, size_t stop) {
         decompress_checks();
 
@@ -300,6 +321,12 @@ public:
         destroy_bcf_file_reader(bcf_fri);
     }
 
+    /**
+     * @brief Decompresses the genotype matrix
+     *
+     * @param m reference to the matrix to be use to store the data
+     * @param n_threads number of threads to be used for decompression
+     * */
     void fill_bit_matrix(std::vector<std::vector<bool> >& m, const size_t n_threads = 4) {
         m.clear();
         m.resize(header.num_variants, std::vector<bool> (header.hap_samples, 0));

@@ -233,6 +233,12 @@ size_t remove_samples(const std::string& ifname, const std::string& ofname) {
     return variants;
 }
 
+/**
+ * @brief Creates tabix index for given file
+ *
+ * @param filename file to index
+ * @param n_threads optional parameters, number of threads for indexing, default 1
+ * */
 void create_index_file(std::string filename, int n_threads = 1) {
     int ret = bcf_index_build3(filename.c_str() /* input */,
                                NULL /* Output filename, or NULL to add .csi/.tbi */,
@@ -253,6 +259,12 @@ void create_index_file(std::string filename, int n_threads = 1) {
     }
 }
 
+/**
+ * @brief extract a matrix of bits for the genotype data, outer index is variant,
+ *        inner index is samples (two bits per diploid individual)
+ *
+ * @param filename The input VCF/BCF file
+ * */
 std::vector<std::vector<bool> > extract_matrix(std::string filename) {
     std::vector<std::vector<bool> > matrix(1);
 
@@ -267,7 +279,9 @@ std::vector<std::vector<bool> > extract_matrix(std::string filename) {
     return matrix;
 }
 
-
+/**
+ * @brief utility function to check if two matrices are the same
+ * */
 template <typename T>
 inline bool matrices_differ(std::vector<std::vector<T> >& m1, std::vector<std::vector<T> >& m2) {
     if (m1.size() != m2.size()) {
@@ -294,6 +308,10 @@ inline bool matrices_differ(std::vector<std::vector<T> >& m1, std::vector<std::v
     return false;
 }
 
+/**
+ * @brief utility function to check if two VCF/BCF files have the same genotype dat
+ *        matrix (only GT data checked, no variant, extra info etc.)
+ * */
 bool matrices_differ(std::string f1, std::string f2) {
     auto m1 = extract_matrix(f1);
     auto m2 = extract_matrix(f2);
