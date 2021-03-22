@@ -45,8 +45,8 @@ mkdir output
 
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -f output/chr20.bin -o output/chr20.bcf
-./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command
+./console_app -x -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
 ```
 
 ### Pipe into bcftools
