@@ -36,7 +36,7 @@ int main(int argc, const char *argv[]) {
     CLI::App app{"VCF/BCF Compressor"};
 
     std::string filename = "-";
-    app.add_option("-f,--file", filename, "A help string");
+    app.add_option("-f,--file", filename, "Input file name, default is stdio");
     std::string ofname = "-";
     app.add_option("-o,--output", ofname, "Output file name, default is stdio");
     //char O = 'u';
