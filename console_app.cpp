@@ -98,22 +98,39 @@ int main(int argc, const char *argv[]) {
             exit(app.exit(CLI::CallForHelp()));
         }
 
+        bool fail = false;
         std::string variant_file(ofname + "_var.bcf");
         auto variant_thread = std::thread([&]{
-            remove_samples(filename, variant_file);
+            try {
+                remove_samples(filename, variant_file);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                fail = true;
+            }
         });
         auto compress_thread = std::thread([&]{
             Compressor c;
-            c.compress_in_memory(filename);
-            std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
-            c.save_result_to_file(ofname);
+            try {
+                c.compress_in_memory(filename);
+                std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
+                c.save_result_to_file(ofname);
+            } catch (const char* e) {
+                std::cerr << e << std::endl;
+                fail = true;
+            }
         });
 
         variant_thread.join();
-        std::cout << "Generated file " << variant_file << " containing variants only" << std::endl;
-
+        if (!fail) {
+            std::cout << "Generated file " << variant_file << " containing variants only" << std::endl;
+        }
         compress_thread.join();
-        std::cout << "File " << ofname << " written" << std::endl;
+        if (!fail) {
+            std::cout << "File " << ofname << " written" << std::endl;
+        } else {
+            std::cerr << "Failure occurred, exiting..." << std::endl;
+            exit(-1);
+        }
 
         if (verify) { // Slow (because requires decompression and verification)
             create_index_file(variant_file);

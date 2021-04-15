@@ -56,7 +56,11 @@ void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::stri
     bcf_fri.sr->collapse = COLLAPSE_NONE;
     bcf_fri.sr->require_index = 1;
 
-    bcf_sr_add_reader(bcf_fri.sr, filename.c_str());
+    if(!bcf_sr_add_reader(bcf_fri.sr, filename.c_str())) {
+        std::cerr << "Failed to read file " << filename << std::endl;
+        std::cerr << "Reason : " << bcf_sr_strerror(bcf_fri.sr->errnum) << std::endl;
+        throw "bcf_synced_reader read error";
+    }
     bcf_fri.n_samples = bcf_hdr_nsamples(bcf_fri.sr->readers[0].header);
 
     bcf_fri.var_count = 0; // Already set by default
