@@ -301,7 +301,6 @@ public:
     }
 
     /**
-     * @todo Broken with multiple ALTs (because more than 1 var per line in vcf/bcf)
      * @brief Decompress the loaded file over a given region
      *
      * @param ofname The output file name
@@ -319,12 +318,12 @@ public:
 
         try {
             // Find which is the fist variant in the region
-            size_t offset = find_index(bcf_nosamples, start);
-            auto dp_s = generate_decompress_pointers(offset);
+            struct line_index_t<size_t> line_index = find_index(bcf_nosamples, start);
+            auto dp_s = generate_decompress_pointers(line_index.index);
 
             // This block could be incorporated in find_index()
-            for (size_t _ = 0; _ < offset; ++_) {
-                /// @todo This is broken with multi-allelic ALTs
+            // But would require to change the decompression based (bcf_fri handling)
+            for (size_t _ = 0; _ < line_index.line; ++_) {
                 bcf_next_line(bcf_fri);
             }
 

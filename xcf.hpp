@@ -378,10 +378,18 @@ std::map<P, I> create_map(const std::string& filename, const P threshold = 1000)
     return map;
 }
 
+template<typename I = size_t>
+struct line_index_t {
+    I line = 0; // Line in vcf/bcf file
+    I index = 0; // Index in bit matrix
+};
+
 /// @todo return line number and not only index (for region extraction)
 /// @todo this is not optimal anyways
-template<typename P = uint32_t, typename I = uint32_t>
-I find_index(const std::string& filename, const P position) {
+template<typename I = size_t, typename P = size_t>
+struct line_index_t<I> find_index(const std::string& filename, const P position) {
+    struct line_index_t<I> line_index = {0,0};
+
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, filename);
 
@@ -391,19 +399,18 @@ I find_index(const std::string& filename, const P position) {
         throw "Failed to remove samples";
     }
 
-    I index = 0;
-
     while(bcf_next_line(bcf_fri)) {
         if (bcf_fri.line->pos+1 >= position) {
             destroy_bcf_file_reader(bcf_fri);
-            return index;
+            return line_index;
         }
-        index += bcf_fri.line->n_allele-1;
+        line_index.index += bcf_fri.line->n_allele-1;
+        line_index.line++;
     }
 
     destroy_bcf_file_reader(bcf_fri);
     throw "Position not found";
-    return -1;
+    return {};
 }
 
 #endif /* __XCF_HPP__ */
