@@ -107,7 +107,6 @@ inline void extract_next_variant_and_update_bcf_sr(std::vector<bool>& samples, b
     }
 
     if (do_extract) {
-        size_t n_allele = bcf_fri.line->n_allele;
         const int alt_allele = bcf_fri.line_alt_alleles_extracted+1;
 
         if (bcf_fri.line_alt_alleles_extracted == 0) {
