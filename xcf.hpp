@@ -47,6 +47,7 @@ typedef struct bcf_file_reader_info_t {
     int* gt_arr = nullptr; /* Pointer on genotype data array */
     int ngt_arr = 0; /* Size of above array as given by bcf_get_genotypes() */
     bcf1_t* line = nullptr; /* Current line pointer */
+    int line_alt_alleles_extracted = 0; /* For multi ALT alleles */
 
 } bcf_file_reader_info_t;
 
@@ -62,6 +63,7 @@ void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::stri
     bcf_fri.gt_arr = nullptr; // Already set by default
     bcf_fri.ngt_arr = 0; // Already set by default
     bcf_fri.line = nullptr; // Already set by default
+    bcf_fri.line_alt_alleles_extracted = 0; // Already set by default
 }
 
 void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
@@ -76,44 +78,62 @@ void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
     bcf_fri.var_count = 0;
     bcf_fri.ngt_arr = 0;
     bcf_fri.line = nullptr; /// @todo check if should be freed, probably not
+    bcf_fri.line_alt_alleles_extracted = 0;
 }
 
 inline unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri) {
     unsigned int nset = bcf_sr_next_line(bcf_fri.sr);
-    bcf_fri.line = bcf_sr_get_line(bcf_fri.sr, 0 /* First file of possibly more in sr */);
+    if (nset) {
+        bcf_fri.line = bcf_sr_get_line(bcf_fri.sr, 0 /* First file of possibly more in sr */);
+        bcf_fri.line_alt_alleles_extracted = 0;
+    }
     return nset;
 }
 
 /// @todo check if better to return a std::vector or simply reuse one passed by reference
-template <typename T = bool>
-inline void extract_next_variant_and_update_bcf_sr(std::vector<T>& samples, bcf_file_reader_info_t& bcf_fri) {
+inline void extract_next_variant_and_update_bcf_sr(std::vector<bool>& samples, bcf_file_reader_info_t& bcf_fri) {
     // No checks are done on bcf_fri in this function because it is supposed to be called in large loops
     // Check the sanity of bcf_fri before calling this function
 
-    samples.resize(bcf_fri.n_samples * 2 /* two alleles */); /// @note could be removed if sure it is passed of correct size
-    unsigned int nset = 0;
-    if ((nset = bcf_next_line(bcf_fri))) {
-        if (bcf_fri.line->n_allele != 2) {
-            /// @todo Handle this case
-            std::cerr << "Number of alleles is different than 2" << std::endl;
-            samples.clear();
-        } else {
+    samples.resize(bcf_fri.n_samples * 2 /* Diploid */);
+    bool do_extract = true;
+
+    // If there is no current line or line has been fully extracted
+    if ((!bcf_fri.line) or (bcf_fri.line_alt_alleles_extracted+1 == bcf_fri.line->n_allele)) {
+        // Go to next line
+        if (bcf_next_line(bcf_fri) == 0) { // End of file
+            do_extract = false;
+        }
+    }
+
+    if (do_extract) {
+        size_t n_allele = bcf_fri.line->n_allele;
+        const int alt_allele = bcf_fri.line_alt_alleles_extracted+1;
+
+        if (bcf_fri.line_alt_alleles_extracted == 0) {
             bcf_unpack(bcf_fri.line, BCF_UN_STR);
             // Here info about the variant could be extracted
             int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
             int line_max_ploidy = ngt / bcf_fri.n_samples;
 
-            for (int i = 0; i < bcf_fri.n_samples; ++i) {
-                int32_t* ptr = (bcf_fri.gt_arr) + i * line_max_ploidy;
-                for (int j = 0; j < 2 /* ploidy, @todo check */; ++j) {
-                    bool a = (bcf_gt_allele(ptr[j]) == 1);
-                    samples[i*2+j] = a;
-                }
+            if (line_max_ploidy != 2) {
+                std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+                throw "BadPloidy";
+            }
+        } // Else is already unpacked (when multiple ALT alleles)
+
+        for (int i = 0; i < bcf_fri.n_samples; ++i) {
+            int32_t* ptr = (bcf_fri.gt_arr) + i * 2; /* line_max_ploidy */
+            for (int j = 0; j < 2 /* ploidy */; ++j) {
+                bool a = (bcf_gt_allele(ptr[j]) == alt_allele);
+                samples[i*2+j] = a;
             }
         }
+
+        bcf_fri.line_alt_alleles_extracted++;
         bcf_fri.var_count++;
     } else {
-        // No next line, indicate this by returning an empty vector
+        // No next line, indicate this by returning empty samples.
         samples.clear();
     }
 }
@@ -271,6 +291,8 @@ std::vector<std::vector<bool> > extract_matrix(std::string filename) {
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, filename);
 
+    std::vector<std::vector<bool> > line;
+
     extract_next_variant_and_update_bcf_sr(matrix.back(), bcf_fri);
     for(; !matrix.back().empty(); matrix.push_back(std::vector<bool>(matrix.back().size())), extract_next_variant_and_update_bcf_sr(matrix.back(), bcf_fri));
     matrix.pop_back();
@@ -349,7 +371,7 @@ std::map<P, I> create_map(const std::string& filename, const P threshold = 1000)
             map.insert({position, index});
         }
 
-        index++;
+        index += bcf_fri.line->n_allele-1;
     }
 
     destroy_bcf_file_reader(bcf_fri);
@@ -357,6 +379,8 @@ std::map<P, I> create_map(const std::string& filename, const P threshold = 1000)
     return map;
 }
 
+/// @todo return line number and not only index (for region extraction)
+/// @todo this is not optimal anyways
 template<typename P = uint32_t, typename I = uint32_t>
 I find_index(const std::string& filename, const P position) {
     bcf_file_reader_info_t bcf_fri;
@@ -375,7 +399,7 @@ I find_index(const std::string& filename, const P position) {
             destroy_bcf_file_reader(bcf_fri);
             return index;
         }
-        index++;
+        index += bcf_fri.line->n_allele-1;
     }
 
     destroy_bcf_file_reader(bcf_fri);

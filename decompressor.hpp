@@ -118,19 +118,36 @@ public:
 
 private:
     template<const bool POS_STOP = false>
-    inline void decompress_innner_loop(bcf_file_reader_info_t& bcf_fri, std::vector<DecompressPointer<uint16_t, uint16_t> >& dp_s, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
+    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, std::vector<DecompressPointer<uint16_t, uint16_t> >& dp_s, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
         const size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
-        for (size_t i = 0; i < header.num_variants; ++i) {
-            if (bcf_next_line(bcf_fri)) {
-
-                // Conditional conditional code, does not exist in non "POS_STOP" template
-                if constexpr (POS_STOP) {
-                    if (bcf_fri.line->pos > stop_pos) {
-                        return;
-                    }
+        //for (size_t i = 0; i < header.num_variants; ++i) {
+        // The number of variants does not equal the number of lines if multiple ALTs
+        size_t num_variants_extracted = 0;
+        while(bcf_next_line(bcf_fri)) {
+            // Conditional conditional code, does not exist in non "POS_STOP" template
+            if constexpr (POS_STOP) {
+                if (bcf_fri.line->pos > stop_pos) {
+                    return;
                 }
+            }
 
-                bcf1_t *rec = bcf_fri.line;
+            bcf1_t *rec = bcf_fri.line;
+
+            // Set REF / first ALT
+            size_t _ = 0;
+            // Extract all blocks
+            for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
+                dp_s[b].advance(); // 15% of time spent in here
+                auto& samples = dp_s[b].get_samples_at_position();
+                // The samples are sorted by id (natural order)
+                for (size_t j = 0; j < samples.size(); ++j) {
+                    genotypes[_++] = bcf_gt_phased(samples[j]);
+                }
+            }
+            num_variants_extracted++;
+
+            // If other ALTs (ALTs are 1 indexed, because 0 is REF)
+            for (int alt_allele = 2; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
                 size_t _ = 0;
                 // Extract all blocks
                 for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
@@ -138,17 +155,18 @@ private:
                     auto& samples = dp_s[b].get_samples_at_position();
                     // The samples are sorted by id (natural order)
                     for (size_t j = 0; j < samples.size(); ++j) {
-                        genotypes[_++] = bcf_gt_phased(samples[j]);
+                        if (samples[j]) { // If another ALT, otherwise leave old value (one-hot)
+                            genotypes[_] = bcf_gt_phased(alt_allele);
+                        }
+                        _++;
                     }
                 }
-
-                bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */); // 15% of time spent in here
-
-                int ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
-            } else {
-                std::cerr << "Could not read variant line " << i << " in bcf" << std::endl;
-                throw "BCF read error";
+                num_variants_extracted++;
             }
+
+            bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */); // 15% of time spent in here
+
+            int ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
         }
     }
 
@@ -275,7 +293,7 @@ public:
 
         // Decompress and add the genotype data to the new file
         // This is the main loop, where most of the time is spent
-        decompress_innner_loop(bcf_fri, dp_s, hdr, fp);
+        decompress_inner_loop(bcf_fri, dp_s, hdr, fp);
 
         hts_close(fp);
         bcf_hdr_destroy(hdr);
@@ -283,6 +301,7 @@ public:
     }
 
     /**
+     * @todo Broken with multiple ALTs (because more than 1 var per line in vcf/bcf)
      * @brief Decompress the loaded file over a given region
      *
      * @param ofname The output file name
@@ -305,12 +324,13 @@ public:
 
             // This block could be incorporated in find_index()
             for (size_t _ = 0; _ < offset; ++_) {
+                /// @todo This is broken with multi-allelic ALTs
                 bcf_next_line(bcf_fri);
             }
 
             // Decompress and add the genotype data to the new file
             // This is the main loop, where most of the time is spent
-            decompress_innner_loop<true>(bcf_fri, dp_s, hdr, fp, stop);
+            decompress_inner_loop<true>(bcf_fri, dp_s, hdr, fp, stop);
         } catch (const std::exception&) {
             // Idx not found
         }
