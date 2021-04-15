@@ -60,10 +60,10 @@ mkdir output
 
 ## Notes / TODO
 
-- Rename the compressor (now console_app ...)
-- Only supports phased data for the moment
-- Only supports bi-allelic sites for the moment
-    - Convert multi-allelic VCF/BCF to bi-allelic with bcftools :  
+- Rename the compressor (currently named console_app ...)
+- Only outputs data as phased for the moment
+- ~~Only supports bi-allelic sites for the moment~~ Done !
+    - (not needed anymore) Convert multi-allelic VCF/BCF to bi-allelic with bcftools :  
       ```shell
       bcftools norm -m any multi_allelic.bcf -o bi_allelic.bcf -O b
       ```
