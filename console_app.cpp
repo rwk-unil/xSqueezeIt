@@ -31,6 +31,8 @@ namespace fs = std::filesystem;
 #include "compressor.hpp"
 #include "decompressor.hpp"
 
+#include "time.hpp"
+
 int main(int argc, const char *argv[]) {
 
     CLI::App app{"VCF/BCF Compressor"};
@@ -51,6 +53,8 @@ int main(int argc, const char *argv[]) {
     app.add_flag("-i,--info", info, "Get info on file");
     app.add_flag("--wait", wait, "DEBUG - wait for int input");
     app.add_flag("--verify", verify, "DEBUG - verify");
+    bool count_xcf = false;
+    app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -58,6 +62,15 @@ int main(int argc, const char *argv[]) {
         // Wait for input
         int _;
         std::cin >> _;
+    }
+
+    if (count_xcf) {
+        auto begin = std::chrono::steady_clock::now();
+        size_t count = count_entries(filename);
+        auto end = std::chrono::steady_clock::now();
+        std::cerr << "INFO : Number of entries is : " << count << std::endl;
+        printElapsedTime(begin, end);
+        exit(0);
     }
 
     if (info) {

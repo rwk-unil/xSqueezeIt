@@ -213,7 +213,7 @@ std::vector<std::string> extract_samples(const std::string& fname) {
  * @brief remove_samples Removes all the samples from a VCF / BCF file and saves the result in a VCF / BCF file
  * @param ifname Input file name
  * @param ofname Output file name
- * @return The number of variants
+ * @return The number of lines (entries)
  * */
 size_t remove_samples(const std::string& ifname, const std::string& ofname) {
     // Input file
@@ -239,13 +239,13 @@ size_t remove_samples(const std::string& ifname, const std::string& ofname) {
     }
 
     // Write the variants
-    size_t variants = 0;
+    size_t lines = 0;
     while (bcf_next_line(bcf_fri)) {
         /// @note this could maybe be improved by removing the dup / destroy
         bcf1_t *rec = bcf_dup(bcf_fri.line);
         ret = bcf_write1(fp, hdr, rec);
         bcf_destroy(rec);
-        variants++;
+        lines++;
     }
 
     // Close everything
@@ -253,7 +253,36 @@ size_t remove_samples(const std::string& ifname, const std::string& ofname) {
     bcf_hdr_destroy(hdr);
     destroy_bcf_file_reader(bcf_fri);
 
-    return variants;
+    return lines;
+}
+
+/**
+ * @brief counts the number of entries (lines) in VCF / BCF file
+ * @param ifname Input file name
+ * @return number of entries
+ * */
+size_t count_entries(const std::string& ifname) {
+    // Input file
+    bcf_file_reader_info_t bcf_fri;
+
+    initialize_bcf_file_reader(bcf_fri, ifname);
+    bcf_fri.sr->max_unpack = BCF_UN_STR; // Minimal, but does not really impact perf
+
+    /* The bottleneck of VCF reading is parsing of genotype fields. If the reader knows in advance that only subset of samples is needed (possibly no samples at all), the performance of bcf_read() can be significantly improved by calling bcf_hdr_set_samples after bcf_hdr_read(). */
+    int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
+    if (ret < 0) {
+        std::cerr << "Failed to set no samples in header for file " << ifname << std::endl;
+        throw "Failed to count entries";
+    }
+
+    size_t lines = 0;
+    while (bcf_next_line(bcf_fri)) {
+        lines++;
+    }
+
+    destroy_bcf_file_reader(bcf_fri);
+
+    return lines;
 }
 
 /**
