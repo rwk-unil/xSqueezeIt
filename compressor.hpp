@@ -126,8 +126,10 @@ public:
                     wah_words += res[i].wah.back().size(); // For statistics
                 } // Block loop
             } // k (variant) loop
+            num_entries = bcf_fri.line_num;
 
             // Some summary statistics for debug
+            std::cout << "Number of entries extracted from " << filename << " : " << num_entries << std::endl;
             std::cout << "Block size : " << args.samples_block_size << std::endl;
             this->block_size = args.samples_block_size;
             std::cout << "Number of blocks : " << NUMBER_OF_BLOCKS << std::endl;
@@ -184,6 +186,7 @@ public:
             .ssas_offset = (uint32_t)offsets.ssas,
             .wahs_offset = (uint32_t)offsets.wahs,
             .samples_offset = (uint32_t)offsets.samples,
+            .xcf_entries = (uint64_t)num_entries,
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,
@@ -270,6 +273,7 @@ public:
     size_t num_blocks = 0;
     size_t ss_rate = 0;
     size_t num_ssas = 0;
+    size_t num_entries = 0;
 
     std::vector<struct block_result_data_structs_t<WAH_T, AET> > compression_result_per_block = {};
 

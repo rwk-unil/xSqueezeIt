@@ -47,6 +47,7 @@ typedef struct bcf_file_reader_info_t {
     int* gt_arr = nullptr; /* Pointer on genotype data array */
     int ngt_arr = 0; /* Size of above array as given by bcf_get_genotypes() */
     bcf1_t* line = nullptr; /* Current line pointer */
+    size_t line_num = 0; /* Current line number */
     int line_alt_alleles_extracted = 0; /* For multi ALT alleles */
 
 } bcf_file_reader_info_t;
@@ -67,6 +68,7 @@ void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::stri
     bcf_fri.gt_arr = nullptr; // Already set by default
     bcf_fri.ngt_arr = 0; // Already set by default
     bcf_fri.line = nullptr; // Already set by default
+    bcf_fri.line_num = 0;
     bcf_fri.line_alt_alleles_extracted = 0; // Already set by default
 }
 
@@ -82,12 +84,14 @@ void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
     bcf_fri.var_count = 0;
     bcf_fri.ngt_arr = 0;
     bcf_fri.line = nullptr; /// @todo check if should be freed, probably not
+    bcf_fri.line_num = 0;
     bcf_fri.line_alt_alleles_extracted = 0;
 }
 
 inline unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri) {
     unsigned int nset = bcf_sr_next_line(bcf_fri.sr);
     if (nset) {
+        bcf_fri.line_num++;
         bcf_fri.line = bcf_sr_get_line(bcf_fri.sr, 0 /* First file of possibly more in sr */);
         bcf_fri.line_alt_alleles_extracted = 0;
     }

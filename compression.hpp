@@ -142,7 +142,8 @@ struct header_s {
     uint32_t ssas_offset = 0;
     uint32_t wahs_offset = 0;
     uint32_t samples_offset = 0;
-    uint8_t  rsvd_2b[16] = {0,};
+    uint64_t xcf_entries = 0;
+    uint8_t  rsvd_2b[8] = {0,};
 
     // 128 bytes
     uint8_t rsvd_3[128] = {0,};
