@@ -520,6 +520,128 @@ namespace wah {
 
         return bits;
     }
-}
+
+    template <typename T = uint16_t>
+    inline void process_wah_word(T& word, T& all_set_counter, T& not_set_counter, std::vector<T>& wah) {
+        // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        // 0b1000'0000 for 8b
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
+        // 0b0011'1111 for 8b
+        constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
+        constexpr T WAH_ALL_BITS_SET = T(~T(0)) & ~WAH_HIGH_BIT;
+        constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
+        constexpr T WAH_MAX_ENCODE_0 = ~T(0) & ~WAH_COUNT_1_BIT;
+        constexpr T WAH_MAX_ENCODE_1 = ~T(0);
+
+        // If no bits in word increment block counter
+        if (word == (T)(0)) {
+            // Encode the number of previous blocks of WAH_BITS set bits
+            if (all_set_counter) {
+                wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
+                all_set_counter = 0;
+            }
+            // Handle possible counter overflow (unlikely)
+            if (not_set_counter == WAH_MAX_COUNTER) {
+                wah.push_back(WAH_MAX_ENCODE_0);
+                not_set_counter = 0;
+            }
+            // Increment counter
+            not_set_counter++;
+        // If all bits are set in word increment block counter
+        } else if (word == WAH_ALL_BITS_SET) {
+            // Encode the number of previous blocks of WAH_BITS null bits
+            if (not_set_counter) {
+                wah.push_back(WAH_HIGH_BIT | not_set_counter);
+                not_set_counter = 0;
+            }
+            // Handle possible counter overflow (unlikely)
+            if (all_set_counter == WAH_MAX_COUNTER) {
+                wah.push_back(WAH_MAX_ENCODE_1);
+                all_set_counter = 0;
+            }
+            // Increment counter
+            all_set_counter++;
+        } else {
+            if (all_set_counter) {
+                wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
+                all_set_counter = 0;
+            }
+            // Encode the number of previous blocks of WAH_BITS null bits
+            if (not_set_counter) {
+                wah.push_back(WAH_HIGH_BIT | not_set_counter);
+                not_set_counter = 0;
+            }
+            wah.push_back(word);
+        }
+    }
+
+    /**
+     * @brief Copy-less reordering wah encoder
+     * */
+    template <typename T = uint16_t, typename A = uint16_t>
+    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& minor_allele_count) {
+        // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        // 0b1000'0000 for 8b
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
+        constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
+
+        // Resize to have no problems accessing in the loop below (removes conditionals from loop)
+        size_t BITS_WAH_SIZE = a.size() / WAH_BITS;
+        const size_t BITS_REM = a.size() % WAH_BITS; // Hope compiler combines the divide above and this mod
+        //const size_t ORIGINAL_SIZE = a.size();
+        if (BITS_REM) {
+            //BITS_WAH_SIZE += 1;
+            //bits.resize(bits.size() + (WAH_BITS-BITS_REM), 0);
+        }
+
+        std::vector<T> wah; // Output
+
+        T not_set_counter = 0;
+        T all_set_counter = 0;
+        size_t b = 0; // b = i*WAH_BITS+j // but counter reduces number of ops
+        size_t alt_allele_counter = 0;
+        for (size_t i = 0; i < BITS_WAH_SIZE; ++i) { // Process loop
+            T word = 0;
+
+            // Scan WAH-BITS in bits (e.g., 7 for uint8_t, 31 for uint32_t)
+            for (size_t j = 0; j < WAH_BITS; ++j) { // WAH word loop
+                if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
+                    word |= WAH_HIGH_BIT;
+                    alt_allele_counter++;
+                }
+                word >>= 1;
+            }
+
+            process_wah_word(word, all_set_counter, not_set_counter, wah);
+        }
+
+        // Edge case of remaining bits (pad with 0's) // Is separate from above to avoid the check in the main loop
+        if (BITS_REM) {
+            T word = 0;
+            for (size_t j = 0; j < WAH_BITS; ++j) {
+                if ((j < BITS_REM) and (bcf_gt_allele(gt_array[a[b++]]) == alt_allele)) {
+                    word |= WAH_HIGH_BIT;
+                    alt_allele_counter++;
+                }
+                word >>= 1;
+            }
+            process_wah_word(word, all_set_counter, not_set_counter, wah);
+        }
+
+        // Push counters (they should be mutually exclusive, they cannot both be non zero)
+        if (not_set_counter) {
+            wah.push_back(WAH_HIGH_BIT | not_set_counter);
+        }
+        if (all_set_counter) {
+            wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
+        }
+
+        minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_counter, alt_allele_counter);
+        return wah;
+    }
+
+} /* namespace wah */
 
 #endif /* __WAH_HPP__ */

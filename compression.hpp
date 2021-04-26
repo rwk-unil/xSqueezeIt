@@ -64,6 +64,40 @@ typedef struct file_offsets_t {
 } file_offsets_t;
 
 template<typename WAH_T, typename AET>
+file_offsets_t get_file_offsets(const std::vector<std::vector<WAH_T> >& wahs, const std::vector<std::vector<AET> >& ssas) {
+    /// @todo define somewhere else
+    const size_t HEADER_SIZE = 256;
+    // Is the result vector size
+    const size_t NUMBER_OF_BLOCKS = 1;
+    // Any subsampled a will have this size
+    size_t NUMBER_OF_SAMPLES = ssas.front().size();
+
+    // The number of subsampled a's (same for all blocks)
+    const size_t NUMBER_OF_SSAS = ssas.size();
+
+    // Indexes for WAH's (indexes for a's can be deduced)
+    // uint32_t should be enough, but this has to be checked
+    /// @todo check if output file is less than 4GBytes otherwhise error because of this
+    const size_t INDICES_SIZE = NUMBER_OF_BLOCKS * NUMBER_OF_SSAS * sizeof(uint32_t);
+
+    // Number of samples time number of subsampled a's
+    const size_t SSAS_SIZE = NUMBER_OF_SAMPLES * NUMBER_OF_SSAS * sizeof(AET);
+
+    size_t WAH_SIZE = 0;
+    for (const auto& wah : wahs) { // For all WAH's
+        WAH_SIZE += wah.size();
+    }
+
+    WAH_SIZE *= sizeof(WAH_T);
+
+    return {.indices   = HEADER_SIZE,
+            .ssas      = HEADER_SIZE + INDICES_SIZE,
+            .wahs      = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE,
+            .samples   = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE + WAH_SIZE,
+            .wahs_size = WAH_SIZE};
+}
+
+template<typename WAH_T, typename AET>
 file_offsets_t get_file_offsets(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result) {
     /// @todo define somewhere else
     const size_t HEADER_SIZE = 256;
@@ -143,7 +177,8 @@ struct header_s {
     uint32_t wahs_offset = 0;
     uint32_t samples_offset = 0;
     uint64_t xcf_entries = 0;
-    uint8_t  rsvd_2b[8] = {0,};
+    uint32_t rearrangement_track_offset = 0;
+    uint8_t  rsvd_2b[4] = {0,};
 
     // 128 bytes
     uint8_t rsvd_3[128] = {0,};

@@ -59,7 +59,7 @@ public:
         // Check magic
         if ((header.first_magic != MAGIC) or (header.last_magic != MAGIC)) {
             std::cerr << "Bad magic" << std::endl;
-            std::cerr << "Expected : " << MAGIC << " got : "  << header.first_magic << ", " << header.last_magic << std::endl;
+            std::cerr << "Expected : " << MAGIC << " got : " << header.first_magic << ", " << header.last_magic << std::endl;
             throw "Bad magic";
         }
 
@@ -67,7 +67,7 @@ public:
         sample_list.clear();
         s.seekg(header.samples_offset);
         std::string str;
-        while(std::getline(s, str, '\0').good()) {
+        while(std::getline(s, str, '\0').good() and (sample_list.size() < (header.hap_samples/header.ploidy))) {
             sample_list.push_back(str);
         }
         s.close();
@@ -100,7 +100,13 @@ public:
             genotypes = NULL;
         } else {
             genotypes = new int32_t[header.hap_samples];
+            N_HAPS = header.hap_samples;
         }
+
+        // Rearrangement track decompression
+        rearrangement_track.resize(header.num_variants + header.wah_bytes*8);
+        uint16_t* rt_p = (uint16_t*)((uint8_t*)file_mmap + header.rearrangement_track_offset);
+        wah2_extract<uint16_t>(rt_p, rearrangement_track, header.num_variants);
     }
 
     /**
@@ -119,10 +125,98 @@ public:
     }
 
 private:
-    template<const bool POS_STOP = false>
-    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, std::vector<DecompressPointer<uint16_t, uint16_t> >& dp_s, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
-        const size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
-        //for (size_t i = 0; i < header.num_variants; ++i) {
+    template <typename A_T = uint32_t, typename WAH_T = uint16_t>
+    class DecompressPointer {
+    private:
+        void seek_sampled_arrangement(const size_t num = 0) {
+            A_T* arr_p = arrangements_p + (num * N_HAPS);
+            for (size_t i = 0; i < N_HAPS; ++i) {
+                a[i] = arr_p[i];
+            }
+            wah_p = wah_origin_p + (indices_p[num]); // Pointer arithmetic handles sizeof(WAH_T)
+            wah2_extract(wah_p, y, N_HAPS); // Extract current values
+            current_position = arrangement_sample_rate * num;
+        }
+
+    public:
+        // Decompress Pointer from memory mapped compressed file
+        DecompressPointer(const size_t N_SITES, const size_t N_HAPS, WAH_T* wah_origin_p, uint32_t* indices_p, A_T* arrangements_p, const size_t arrangement_sample_rate, const std::vector<bool>& rearrangement_track):
+            N_SITES(N_SITES), N_HAPS(N_HAPS), wah_origin_p(wah_origin_p), indices_p(indices_p), arrangements_p(arrangements_p), arrangement_sample_rate(arrangement_sample_rate), rearrangement_track(rearrangement_track) {
+            a.resize(N_HAPS);
+            b.resize(N_HAPS);
+            y.resize(N_HAPS + sizeof(WAH_T)*8, 0); // Get some extra space
+            // Fill with original arrangement
+            seek_sampled_arrangement();
+        }
+
+        // Seek out a given position
+        void seek(const size_t position) {
+            size_t advance_steps = 0;
+            if ((position > current_position) and ((position - current_position) < arrangement_sample_rate)) {
+                advance_steps = position - current_position;
+            } else {
+                size_t previous_arrangement = position / arrangement_sample_rate;
+                advance_steps = position % arrangement_sample_rate;
+
+                seek_sampled_arrangement(previous_arrangement);
+            }
+
+            for (size_t i = 0; i < advance_steps; ++i) {
+                advance();
+            }
+        }
+
+        // Advance and update inner data structures
+        void advance() {
+            if (current_position >= N_SITES) {
+                std::cerr << "Advance called but already at end" << std::endl;
+                return;
+            }
+
+            A_T u = 0;
+            A_T v = 0;
+
+            if (rearrangement_track[current_position]) {
+                for (size_t i = 0; i < N_HAPS; ++i) {
+                    if (y[i] == 0) {
+                        a[u++] = a[i];
+                    } else {
+                        b[v++] = a[i];
+                    }
+                }
+                std::copy(b.begin(), b.begin()+v, a.begin()+u);
+            }
+
+            wah2_extract(wah_p, y, N_HAPS);
+            current_position++;
+        }
+
+        const std::vector<A_T>& get_ref_on_a() const {return a;}
+        const std::vector<bool>& get_ref_on_y() const {return y;}
+
+    protected:
+        // Constants, referencing memory mapped file
+        const size_t N_SITES;
+        const size_t N_HAPS;
+        WAH_T* const wah_origin_p;
+        uint32_t* const indices_p;
+        A_T* const arrangements_p;
+        const size_t arrangement_sample_rate;
+
+        WAH_T* wah_p; // Gets updated by wah2_extract
+        size_t current_position = 0;
+        std::vector<A_T> a;
+        std::vector<A_T> b;
+
+        std::vector<bool> y; // Values as arranged by a, can be larger than N_HAPS
+        // Because WAH_T encodes values with multiples of sizeof(WAH_T)-1 bits
+
+        // Binary track that informs us where rearrangements were performed
+        const std::vector<bool>& rearrangement_track;
+    };
+
+    template<const bool POS_STOP = false, typename A_T, typename WAH_T>
+    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, DecompressPointer<A_T, WAH_T>& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
         while(bcf_next_line(bcf_fri)) {
@@ -136,100 +230,48 @@ private:
             bcf1_t *rec = bcf_fri.line;
 
             // Set REF / first ALT
-            size_t _ = 0;
-            // Extract all blocks
-            for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
-                dp_s[b].advance(); // 15% of time spent in here
-                auto& samples = dp_s[b].get_samples_at_position();
-                // The samples are sorted by id (natural order)
-                for (size_t j = 0; j < samples.size(); ++j) {
-                    genotypes[_++] = bcf_gt_phased(samples[j]);
-                }
+            const auto& a = dp.get_ref_on_a();
+            const auto& y = dp.get_ref_on_y();
+
+            for (size_t i = 0; i < N_HAPS; ++i) {
+                genotypes[a[i]] = bcf_gt_phased(y[i]); /// @todo Phase
             }
+            dp.advance();
+            // Since a and y are refs they should already be updated
             num_variants_extracted++;
 
             // If other ALTs (ALTs are 1 indexed, because 0 is REF)
             for (int alt_allele = 2; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-                size_t _ = 0;
-                // Extract all blocks
-                for (size_t b = 0; b < NUMBER_OF_BLOCKS; ++b) {
-                    dp_s[b].advance(); // 15% of time spent in here
-                    auto& samples = dp_s[b].get_samples_at_position();
-                    // The samples are sorted by id (natural order)
-                    for (size_t j = 0; j < samples.size(); ++j) {
-                        if (samples[j]) { // If another ALT, otherwise leave old value (one-hot)
-                            genotypes[_] = bcf_gt_phased(alt_allele);
-                        }
-                        _++;
+                for (size_t i = 0; i < N_HAPS; ++i) {
+                    if (y[i]) {
+                        genotypes[a[i]] = bcf_gt_phased(alt_allele); /// @todo Phase
                     }
                 }
+                dp.advance();
                 num_variants_extracted++;
             }
 
-            bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr)*2 /* ploidy */); // 15% of time spent in here
+            bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * PLOIDY); // 15% of time spent in here
 
             int ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
         }
     }
 
-    inline std::vector<DecompressPointer<uint16_t, uint16_t> > generate_decompress_pointers(size_t offset = 0) {
-        const size_t NUMBER_OF_BLOCKS = header.number_of_blocks;
-        const size_t BLOCK_SIZE = header.block_size ? header.block_size : header.hap_samples;
-        const size_t BLOCK_REM = (header.hap_samples > header.block_size) ? (header.hap_samples % header.block_size) : header.hap_samples;
+    template <typename A_T, typename WAH_T>
+    inline DecompressPointer<A_T, WAH_T> generate_decompress_pointer(size_t offset = 0) {
+        const size_t N_SITES = header.num_variants;
+        const size_t N_HAPS = header.hap_samples;
 
-        // This is a seek optimisation (checkpoint)
-        size_t ss_offset = offset / header.ss_rate; // Checkpoint
-        size_t advance_steps = offset % header.ss_rate; // Steps to advance from checkpoint
+        WAH_T* wah_origin_p = (WAH_T*)((uint8_t*)file_mmap + header.wahs_offset);
+        uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
+        A_T* arrangements_p = (A_T*)((uint8_t*)file_mmap + header.ssas_offset);
 
-        // Per block permutation arrays
-        std::vector<std::vector<uint16_t> > a_s(NUMBER_OF_BLOCKS, std::vector<uint16_t>(BLOCK_SIZE));
-        a_s.back().resize(BLOCK_REM); // Last block is usually not full size
+        const size_t arrangements_sample_rate = header.ss_rate;
 
-        // Pointers to the ssas for each block
-        std::vector<uint16_t*> a_ps(NUMBER_OF_BLOCKS);
-        // Base pointer for the first a vector
-        uint16_t* base = (uint16_t*)((uint8_t*)file_mmap + header.ssas_offset);
+        DecompressPointer dp(N_SITES, N_HAPS, wah_origin_p, indices_p, arrangements_p, arrangements_sample_rate, rearrangement_track);
+        dp.seek(offset);
 
-        // Per block pointers
-        for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
-            /// @note it may be better to interleave the subsampled a's (ssas)
-            a_ps[i] = base +
-                      (i * BLOCK_SIZE * header.number_of_ssas) + // For each block
-                      a_s[i].size() * ss_offset; // Inside the block a's
-        }
-
-        // Fill the permutation vectors from memory
-        for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
-            for (size_t j = 0; j < a_s[i].size(); ++j) {
-                a_s[i][j] = a_ps[i][j];
-            }
-        }
-
-        // Pointer to WAH data per block
-        std::vector<uint16_t*> wah_ps(NUMBER_OF_BLOCKS);
-        std::vector<DecompressPointer<uint16_t, uint16_t> > dp_s;
-        // Base pointer to WAH data
-        /*uint16_t* */ base = (uint16_t*)((uint8_t*)file_mmap + header.wahs_offset);
-        uint32_t* indices = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
-
-        // Per block pointers
-        for (size_t i = 0; i < NUMBER_OF_BLOCKS; ++i) {
-            // Look up the index, because WAH data is non uniform in size
-            uint32_t index = *(indices + i * header.number_of_ssas + ss_offset); // An index is given for every subsampled a (to access corresponding WAH)
-            // The index is actually in bytes ! /// @todo Maybe change this ? There is no necessity to have this in bytes, it could depend on WAH_T, maybe
-            // The index is the offset in WAH_T relative to base of WAH
-            wah_ps[i] = base + (index / sizeof(uint16_t)); // Correct because index is in bytes
-
-            dp_s.emplace_back(DecompressPointer<uint16_t, uint16_t>(a_s[i], header.num_variants, wah_ps[i]));
-        }
-
-        for (auto& dp : dp_s) {
-            for (size_t i = 0; i < advance_steps; ++i) {
-                dp.advance(); // Go to exact position from last checkpoint
-            }
-        }
-
-        return dp_s;
+        return dp;
     }
 
     // Throws
@@ -284,7 +326,7 @@ public:
     void decompress(std::string ofname) {
         decompress_checks();
 
-        auto dp_s = generate_decompress_pointers();
+        auto dp = generate_decompress_pointer<uint16_t, uint16_t>(); /// @todo Types
 
         // Read the bcf without the samples (variant info)
         initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
@@ -295,13 +337,14 @@ public:
 
         // Decompress and add the genotype data to the new file
         // This is the main loop, where most of the time is spent
-        decompress_inner_loop(bcf_fri, dp_s, hdr, fp);
+        decompress_inner_loop(bcf_fri, dp, hdr, fp);
 
         hts_close(fp);
         bcf_hdr_destroy(hdr);
         destroy_bcf_file_reader(bcf_fri);
     }
 
+#if 0 /* old stuff */
     /**
      * @brief Decompress the loaded file over a given region
      *
@@ -397,6 +440,7 @@ public:
             t.join();
         }
     }
+#endif
 
 protected:
     std::string filename;
@@ -405,12 +449,17 @@ protected:
     int fd;
     void* file_mmap = NULL;
 
+    const size_t PLOIDY = 2;
+    size_t N_HAPS;
+
     std::string bcf_nosamples;
     bcf_file_reader_info_t bcf_fri;
 
     std::vector<std::string> sample_list;
 
     int32_t* genotypes{NULL};
+
+    std::vector<bool> rearrangement_track;
 };
 
 #endif /* __DECOMPRESSOR_HPP__ */

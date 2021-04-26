@@ -28,8 +28,8 @@ namespace fs = std::filesystem;
 
 #include "CLI11.hpp"
 
-#include "compressor.hpp"
-#include "decompressor.hpp"
+#include "gt_compressor.hpp"
+#include "gt_decompressor.hpp"
 
 #include "time.hpp"
 
