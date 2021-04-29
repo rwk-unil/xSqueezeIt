@@ -230,8 +230,8 @@ private:
             bcf1_t *rec = bcf_fri.line;
 
             // Set REF / first ALT
-            const auto& a = dp.get_ref_on_a();
-            const auto& y = dp.get_ref_on_y();
+            auto& a = dp.get_ref_on_a();
+            auto& y = dp.get_ref_on_y();
 
             for (size_t i = 0; i < N_HAPS; ++i) {
                 genotypes[a[i]] = bcf_gt_phased(y[i]); /// @todo Phase
@@ -242,6 +242,8 @@ private:
 
             // If other ALTs (ALTs are 1 indexed, because 0 is REF)
             for (int alt_allele = 2; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+                auto& a = dp.get_ref_on_a();
+                auto& y = dp.get_ref_on_y();
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     if (y[i]) {
                         genotypes[a[i]] = bcf_gt_phased(alt_allele); /// @todo Phase

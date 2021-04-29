@@ -104,7 +104,7 @@ private:
                     for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
 
                         // Allocate more size to the rearrangement track if needed
-                        if (variant_counter > rearrangement_track.size()) {
+                        if (variant_counter >= rearrangement_track.size()) {
                             rearrangement_track.resize(rearrangement_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
                         }
 
