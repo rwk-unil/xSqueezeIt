@@ -388,45 +388,6 @@ public:
     }
 
 #if 0 /* old stuff */
-    /**
-     * @brief Decompress the loaded file over a given region
-     *
-     * @param ofname The output file name
-     * @param start  start position in the chromosome
-     * @param stop   stop  position in the chromosome
-     * */
-    void decompress_region(std::string ofname, size_t start, size_t stop) {
-        decompress_checks();
-
-        // Read the bcf without the samples (variant info)
-        initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
-        htsFile* fp = NULL;
-        bcf_hdr_t* hdr = NULL;
-        create_output_file(ofname, fp, hdr);
-
-        try {
-            // Find which is the fist variant in the region
-            struct line_index_t<size_t> line_index = find_index(bcf_nosamples, start);
-            auto dp_s = generate_decompress_pointers(line_index.index);
-
-            // This block could be incorporated in find_index()
-            // But would require to change the decompression based (bcf_fri handling)
-            for (size_t _ = 0; _ < line_index.line; ++_) {
-                bcf_next_line(bcf_fri);
-            }
-
-            // Decompress and add the genotype data to the new file
-            // This is the main loop, where most of the time is spent
-            decompress_inner_loop<true>(bcf_fri, dp_s, hdr, fp, stop);
-        } catch (const std::exception&) {
-            // Idx not found
-        }
-
-        // Finally
-        hts_close(fp);
-        bcf_hdr_destroy(hdr);
-        destroy_bcf_file_reader(bcf_fri);
-    }
 
     /**
      * @brief Decompresses the genotype matrix
