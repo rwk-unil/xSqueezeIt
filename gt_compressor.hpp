@@ -30,6 +30,11 @@
 #include "xcf.hpp"
 #include "wah.hpp"
 
+#include <algorithm>
+#include <numeric>
+#include <sstream>
+#include <string>
+
 class Compressor {
 public:
     void compress_in_memory(std::string filename) {

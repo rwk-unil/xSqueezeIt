@@ -26,8 +26,6 @@
 #include <thread>
 namespace fs = std::filesystem;
 
-#include "CLI11.hpp"
-
 #include "gt_compressor.hpp"
 #include "gt_decompressor.hpp"
 
@@ -38,62 +36,23 @@ namespace fs = std::filesystem;
 #include "data_mining.hpp"
 #include "bitmap.hpp"
 
+#include "console_app.hpp"
+GlobalAppOptions global_app_options;
+
 int main(int argc, const char *argv[]) {
-
-    CLI::App app{"VCF/BCF Compressor"};
-
-    std::string filename = "-";
-    app.add_option("-f,--file", filename, "Input file name, default is stdio");
-    std::string ofname = "-";
-    app.add_option("-o,--output", ofname, "Output file name, default is stdio");
-    //char O = 'u';
-    //app.add_option("-O, --output-type", O, "output type b|u|z|v");
-    bool compress = false;
-    bool decompress = false;
-    bool info = false;
-    bool wait = false;
-    bool verify = false;
-    app.add_flag("-c,--compress", compress, "Compress");
-    app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
-    app.add_flag("-i,--info", info, "Get info on file");
-    app.add_flag("--wait", wait, "DEBUG - wait for int input");
-    app.add_flag("--verify", verify, "DEBUG - verify");
-    bool count_xcf = false;
-    app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
-    bool create_map = false;
-    app.add_flag("--create-map", create_map, "DEBUG - create map");
-    bool unphase = false;
-    app.add_flag("--unphase", unphase, "Removes phasing and reorders alleles in natural order e.g., 1|0 => 0/1");
-    bool bitmap = false;
-    app.add_flag("--bitmap", bitmap, "DEBUG - creates bitmap");
-    bool bitmap_pbwt = false;
-    app.add_flag("--bitmap_pbwt", bitmap_pbwt, "BEBUG - apply PBWT in bitmap");
-    bool color_bitmap16 = false;
-    app.add_flag("--color_bitmap16", color_bitmap16, "DEBUG - creates bitmap");
-    bool sorted_bitmap = false;
-    app.add_flag("--sorted_bitmap", sorted_bitmap, "DEBUG - creates sorted bitmap");
-    bool block_sorted_bitmap = false;
-    uint32_t block_size = 32;
-    app.add_flag("--block_sorted_bitmap", block_sorted_bitmap, "DEBUG - creates block sorted bitmap");
-    app.add_option("--bblock", block_size, "DEBUG - block size for block sorted bitmap");
-    bool histogram_info = false;
-    app.add_flag("--histogram_info", histogram_info, "DEBUG - some histogram info");
-    bool partial_pbwt = false;
-    app.add_flag("--partial_pbwt", partial_pbwt, "DEBUG - creates partial tree like pbwt bitmap");
-    bool replace_pseudo = false;
-    app.add_flag("--replace_pseudo", replace_pseudo, "DEBUG - creates a bcf with pseudo sample");
-
+    CLI::App& app = global_app_options.app;
+    GlobalAppOptions& opt = global_app_options;
     CLI11_PARSE(app, argc, argv);
 
-    if (wait) {
+    if (opt.wait) {
         // Wait for input
         int _;
         std::cin >> _;
     }
 
-    if (replace_pseudo) {
+    if (opt.replace_pseudo) {
         try {
-            replace_samples_by_pos_in_binary_matrix(filename, ofname);
+            replace_samples_by_pos_in_binary_matrix(opt.filename, opt.ofname);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -101,9 +60,9 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (partial_pbwt) {
+    if (opt.partial_pbwt) {
         try {
-            extract_common_to_file_tree_sorted(filename, ofname);
+            extract_common_to_file_tree_sorted(opt.filename, opt.ofname);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -111,10 +70,10 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (histogram_info) {
+    if (opt.histogram_info) {
         try {
             //auto m = extract_matrix(filename);
-            auto m = extract_common_to_matrix(filename);
+            auto m = extract_common_to_matrix(opt.filename);
             std::vector<std::vector<uint8_t> > m8 = matrixGroupAsT<uint8_t>(m);
             std::vector<std::vector<uint16_t> > m16 = matrixGroupAsT<uint16_t>(m);
             std::vector<std::vector<uint32_t> > m32 = matrixGroupAsT<uint32_t>(m);
@@ -140,9 +99,9 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (block_sorted_bitmap) {
+    if (opt.block_sorted_bitmap) {
         try {
-            extract_common_to_file_block_sorted(filename, ofname, block_size, true);
+            extract_common_to_file_block_sorted(opt.filename, opt.ofname, opt.block_size, true);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -150,9 +109,9 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (sorted_bitmap) {
+    if (opt.sorted_bitmap) {
         try {
-            extract_common_to_file_sorted(filename, ofname);
+            extract_common_to_file_sorted(opt.filename, opt.ofname);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -160,9 +119,9 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (color_bitmap16) {
+    if (opt.color_bitmap16) {
         try {
-            extract_common_to_file_pbwt_color(filename, ofname);
+            extract_common_to_file_pbwt_color(opt.filename, opt.ofname);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -170,9 +129,9 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (bitmap) {
+    if (opt.bitmap) {
         try {
-            extract_common_to_file(filename, ofname, bitmap_pbwt);
+            extract_common_to_file(opt.filename, opt.ofname, opt.bitmap_pbwt);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -180,9 +139,9 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (unphase) {
+    if (opt.unphase) {
         try {
-            unphase_xcf(filename, ofname);
+            unphase_xcf(opt.filename, opt.ofname);
         } catch (const char *e) {
             std::cerr << e << std::endl;
             exit(-1);
@@ -190,25 +149,28 @@ int main(int argc, const char *argv[]) {
         exit(0);
     }
 
-    if (create_map) {
+    if (opt.create_map) {
         auto begin = std::chrono::steady_clock::now();
-        auto map = create_variant_map(filename);
+        auto map = create_variant_map(opt.filename);
         auto end = std::chrono::steady_clock::now();
         printElapsedTime(begin, end);
         std::cerr << "INFO : Map number of entries is : " << map.size() << std::endl;
         exit(0);
     }
 
-    if (count_xcf) {
+    if (opt.count_xcf) {
         auto begin = std::chrono::steady_clock::now();
-        size_t count = count_entries(filename);
+        size_t count = count_entries(opt.filename);
         auto end = std::chrono::steady_clock::now();
         std::cerr << "INFO : Number of entries is : " << count << std::endl;
         printElapsedTime(begin, end);
         exit(0);
     }
 
-    if (info) {
+    auto& filename = opt.filename;
+    auto& ofname = opt.ofname;
+
+    if (opt.info) {
         if (filename.compare("-") == 0) {
             std::cerr << "INFO : Input is stdin" << std::endl;
         } else {
@@ -231,10 +193,10 @@ int main(int argc, const char *argv[]) {
         std::cerr << std::endl;
     }
 
-    if (compress && decompress) {
+    if (opt.compress && opt.decompress) {
         std::cerr << "Cannot both compress and decompress, choose one" << std::endl << std::endl;
         exit(app.exit(CLI::CallForHelp()));
-    } else if (compress) {
+    } else if (opt.compress) {
         /// @todo query overwrites
 
         if(filename.compare("-") and !fs::exists(filename)) {
@@ -281,7 +243,7 @@ int main(int argc, const char *argv[]) {
             exit(-1);
         }
 
-        if (verify) { // Slow (because requires decompression and verification)
+        if (opt.verify) { // Slow (because requires decompression and verification)
             create_index_file(variant_file);
             Decompressor d(ofname, variant_file);
             std::string verify_file(ofname + "_verify.bcf");
@@ -299,7 +261,7 @@ int main(int argc, const char *argv[]) {
             }
         }
 
-    } else if (decompress) {
+    } else if (opt.decompress) {
         /// @todo query overwrites
 
         if(filename.compare("-") == 0) {

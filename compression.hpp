@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <fstream>
 
 typedef struct compress_file_arg_t {
     size_t      samples_block_size   = 10000;
