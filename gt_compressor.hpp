@@ -59,6 +59,124 @@ public:
 private:
     template<typename T = uint32_t>
     class GtCompressor {
+    private:
+        inline bool is_het(int32_t* gt_array, const T& index) {
+            return bcf_gt_allele(gt_array[index]) ^ bcf_gt_allele(gt_array[index^1]);
+        }
+
+        T count_het(int32_t* gt_array, const T size) {
+            T counter = 0;
+            for (T i = 0; i < size; i+=2) {
+                if (is_het(gt_array, i)) {counter++;}
+            }
+            return counter;
+        }
+
+        // This supposes there are no missing data /// @todo handle missing
+        void rephase_bi_allelic(int32_t* gt_array, const std::vector<T>& a) {
+            // Reverse of a (bijection)
+            std::vector<T> ra(a.size());
+
+            // All non hom sites are phased
+            std::vector<bool> phased(a.size());
+            for (T i = 0; i < a.size(); ++i) {
+                if (!is_het(gt_array, a[i])) {
+                    phased[i] = true;
+                }
+            }
+
+            // Reverse a (could be kept one layer above to save recomputing)
+            for (T i = 0; i < a.size(); ++i) {
+                ra[a[i]] = i;
+            }
+
+            bool het_to_phase = true;
+            bool at_least_one_pair_got_phased = false;
+            while (het_to_phase) {
+                het_to_phase = false; // Suppose we are done
+                at_least_one_pair_got_phased = false;
+                for (T i = 0; i < a.size(); ++i) { // Go over all haplotypes
+                    const auto hap_1_pos_in_a = i;
+                    const auto hap_1_index = a[i];
+                    // If the first haplotype (we do both haps at once, this test ensures we don't do twice)
+                    if ((hap_1_index & 1) == 0) {
+                        // If the current haplotype is  unphased
+                        if (!phased[i]) {
+                            // Get the position of the second hap in a
+                            const auto hap_2_pos_in_a = ra[hap_1_index+1];
+
+                            // Special case (no prior hap)
+                            if (hap_1_pos_in_a == 0 or hap_2_pos_in_a == 0) {
+                                if (hap_1_pos_in_a == 0) {
+                                    if (phased[hap_2_pos_in_a-1]) {
+                                        auto allele_before_hap_2 = bcf_gt_allele(gt_array[a[hap_2_pos_in_a-1]]);
+                                        // Phase accordingly
+                                        // Hap 1
+                                        gt_array[hap_1_index] = bcf_gt_phased(allele_before_hap_2 ? 0 : 1);
+                                        // Hap 2
+                                        gt_array[hap_1_index+1] = bcf_gt_phased(allele_before_hap_2);
+                                        phased[i] = true;
+                                        phased[hap_2_pos_in_a] = true;
+                                        at_least_one_pair_got_phased = true;
+                                    } else { // We could not phase
+                                        het_to_phase = true;
+                                    }
+                                } else {
+                                    if (phased[hap_1_pos_in_a-1]) {
+                                        auto allele_before_hap_1 = bcf_gt_allele(gt_array[a[hap_1_pos_in_a-1]]);
+                                        // Phase accordingly
+                                        // Hap 1
+                                        gt_array[hap_1_index] = bcf_gt_phased(allele_before_hap_1);
+                                        // Hap 2
+                                        gt_array[hap_1_index+1] = bcf_gt_phased(allele_before_hap_1 ? 0 : 1);
+                                        phased[i] = true;
+                                        phased[hap_2_pos_in_a] = true;
+                                        at_least_one_pair_got_phased = true;
+                                    } else { // We could not phase
+                                        het_to_phase = true;
+                                    }
+                                }
+                            } else {
+                                // If the haplotypes just before are phased
+                                if (phased[hap_1_pos_in_a-1] and phased[hap_2_pos_in_a-1]) {
+                                    // Get alleles just before
+                                    auto allele_before_hap_1 = bcf_gt_allele(gt_array[a[hap_1_pos_in_a-1]]);
+                                    auto allele_before_hap_2 = bcf_gt_allele(gt_array[a[hap_2_pos_in_a-1]]);
+
+                                    // If the alleles differ we can phase
+                                    if (allele_before_hap_1 != allele_before_hap_2) {
+                                        // Hap 1
+                                        gt_array[hap_1_index] = bcf_gt_phased(allele_before_hap_1);
+                                        // Hap 2
+                                        gt_array[hap_1_index+1] = bcf_gt_phased(allele_before_hap_2);
+                                        phased[i] = true;
+                                        phased[hap_2_pos_in_a] = true;
+                                        at_least_one_pair_got_phased = true;
+                                        // Also the very first hap is not handled (because no other hap before)
+                                    } else { // For the moment just phase them as 0|1
+                                        // Hap 1
+                                        gt_array[hap_1_index] = bcf_gt_phased(0); // REF
+                                        // Hap 2
+                                        gt_array[hap_1_index+1] = bcf_gt_phased(1); // ALT
+                                        phased[i] = true;
+                                        phased[hap_2_pos_in_a] = true;
+                                        at_least_one_pair_got_phased = true;
+                                    }
+                                } else {
+                                    het_to_phase = true; // We still have unphased haplotypes
+                                }
+                            }
+                        }
+                    }
+                }
+                // Here it is possible that the algorithm above could not phase anything but there were still haps to phase
+                // Because it is possible to have an interlocking case where the phasing of pair A depends on pair B and B on A
+                // For the moment we don't phase those pairs, just break
+                // Later we could add phasing for those
+                if (!at_least_one_pair_got_phased) break;
+            }
+        }
+
     public:
 
         void compress_in_memory(std::string filename) {
@@ -81,10 +199,15 @@ private:
 
                 this->ss_rate = ARRANGEMENT_SAMPLE_RATE;
                 size_t wah_words = 0;
+                size_t rare_wah_words = 0;
+                size_t common_wah_words = 0;
                 wahs.clear();
                 rearrangement_track.clear();
                 rearrangement_track.resize(REARRANGEMENT_TRACK_CHUNK, false);
 
+                size_t rephase_counter = 0;
+
+                //std::cout << "het counts : ";
                 // While the BCF has lines
                 while(bcf_next_line(bcf_fri)) {
                     uint32_t minor_allele_count = 0;
@@ -100,9 +223,32 @@ private:
                         exit(-1); // Change this
                     }
 
+                    //if (bcf_fri.line->n_allele == 2) {
+                    //    bool missing = false;
+                    //    bool unphased = false;
+                    //    bool totally_unphased = true;
+                    //    bool has_het = false;
+                    //    for (size_t j = 0; j < N_HAPS; ++j) {
+                    //        //auto index = j;
+                    //        auto index = a[j];
+                    //        missing |= (bcf_fri.gt_arr[index] == bcf_gt_missing);
+                    //        unphased |= (index&1) & !bcf_gt_is_phased(bcf_fri.gt_arr[index]);
+                    //        totally_unphased &= !bcf_gt_is_phased(bcf_fri.gt_arr[index]);
+                    //        has_het |= (bcf_gt_allele(bcf_fri.gt_arr[index]) != bcf_gt_allele(bcf_fri.gt_arr[index^1]));
+                    //    }
+                    //    //if (missing) std::cout << "Missing values found" << std::endl;
+                    //    //if (unphased) std::cout << "Some data is unphased" << std::endl;
+                    //    if (totally_unphased and has_het and variant_counter > 5000) {
+                    //        // Bi-Allelic context based rephasing
+                    //        //rephase_counter++;
+                    //        //rephase_bi_allelic(bcf_fri.gt_arr, a);
+                    //        //int _;
+                    //        //std::cin >> _;
+                    //    }
+                    //}
+
                     // For each alternative allele (can be multiple)
                     for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-
                         // Allocate more size to the rearrangement track if needed
                         if (variant_counter >= rearrangement_track.size()) {
                             rearrangement_track.resize(rearrangement_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
@@ -118,6 +264,11 @@ private:
                         // Encode the current alternative allele track given the arrangement in a and update minor allele count
                         wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, minor_allele_count));
                         wah_words += wahs.back().size();
+                        if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
+                            common_wah_words += wahs.back().size();
+                        } else {
+                            rare_wah_words += wahs.back().size();
+                        }
 
                         // Only sort if minor allele count is high enough (better compression, faster)
                         if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
@@ -129,6 +280,7 @@ private:
                                 size_t u = 0;
                                 size_t v = 0;
 
+                                //std::cout << count_het(bcf_fri.gt_arr, a.size()) << ",";
                                 rearrangement_counter++;
                                 for (size_t j = 0; j < N_HAPS; ++j) {
                                     if (bcf_gt_allele(bcf_fri.gt_arr[a[j]]) != alt_allele) { // If non alt allele
@@ -149,10 +301,15 @@ private:
                 num_entries = bcf_fri.line_num;
                 num_variants = variant_counter;
 
+                std::cout << "Rephased " << rephase_counter << " variant sites" << std::endl;
+                std::cout << "Rearrangements : " << rearrangement_counter << std::endl;
+
                 // Some summary statistics for debug
                 std::cout << "Number of entries extracted from " << filename << " : " << num_entries << std::endl;
                 std::cout << "Number of variants : " << variant_counter << std::endl;
                 std::cout << "Total number of WAH words : " << wah_words << " " << sizeof(uint16_t)*8 << "-bits" << std::endl;
+                std::cout << "Rare wah words : " << rare_wah_words << std::endl;
+                std::cout << "Common wah words : " << common_wah_words << std::endl;
                 std::cout << "Number of haplotype samples : " << bcf_fri.n_samples * 2 << std::endl;
                 this->num_samples = bcf_fri.n_samples * 2;
                 //std::cout << "Number of variants : " << bcf_fri.var_count << std::endl; // This is outdated

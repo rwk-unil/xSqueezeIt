@@ -33,6 +33,11 @@ namespace fs = std::filesystem;
 
 #include "time.hpp"
 
+// Getting some insights (remove for release)
+#include "transforms.hpp"
+#include "data_mining.hpp"
+#include "bitmap.hpp"
+
 int main(int argc, const char *argv[]) {
 
     CLI::App app{"VCF/BCF Compressor"};
@@ -55,6 +60,28 @@ int main(int argc, const char *argv[]) {
     app.add_flag("--verify", verify, "DEBUG - verify");
     bool count_xcf = false;
     app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
+    bool create_map = false;
+    app.add_flag("--create-map", create_map, "DEBUG - create map");
+    bool unphase = false;
+    app.add_flag("--unphase", unphase, "Removes phasing and reorders alleles in natural order e.g., 1|0 => 0/1");
+    bool bitmap = false;
+    app.add_flag("--bitmap", bitmap, "DEBUG - creates bitmap");
+    bool bitmap_pbwt = false;
+    app.add_flag("--bitmap_pbwt", bitmap_pbwt, "BEBUG - apply PBWT in bitmap");
+    bool color_bitmap16 = false;
+    app.add_flag("--color_bitmap16", color_bitmap16, "DEBUG - creates bitmap");
+    bool sorted_bitmap = false;
+    app.add_flag("--sorted_bitmap", sorted_bitmap, "DEBUG - creates sorted bitmap");
+    bool block_sorted_bitmap = false;
+    uint32_t block_size = 32;
+    app.add_flag("--block_sorted_bitmap", block_sorted_bitmap, "DEBUG - creates block sorted bitmap");
+    app.add_option("--bblock", block_size, "DEBUG - block size for block sorted bitmap");
+    bool histogram_info = false;
+    app.add_flag("--histogram_info", histogram_info, "DEBUG - some histogram info");
+    bool partial_pbwt = false;
+    app.add_flag("--partial_pbwt", partial_pbwt, "DEBUG - creates partial tree like pbwt bitmap");
+    bool replace_pseudo = false;
+    app.add_flag("--replace_pseudo", replace_pseudo, "DEBUG - creates a bcf with pseudo sample");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -62,6 +89,114 @@ int main(int argc, const char *argv[]) {
         // Wait for input
         int _;
         std::cin >> _;
+    }
+
+    if (replace_pseudo) {
+        try {
+            replace_samples_by_pos_in_binary_matrix(filename, ofname);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (partial_pbwt) {
+        try {
+            extract_common_to_file_tree_sorted(filename, ofname);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (histogram_info) {
+        try {
+            //auto m = extract_matrix(filename);
+            auto m = extract_common_to_matrix(filename);
+            std::vector<std::vector<uint8_t> > m8 = matrixGroupAsT<uint8_t>(m);
+            std::vector<std::vector<uint16_t> > m16 = matrixGroupAsT<uint16_t>(m);
+            std::vector<std::vector<uint32_t> > m32 = matrixGroupAsT<uint32_t>(m);
+            std::vector<std::vector<uint64_t> > m64 = matrixGroupAsT<uint64_t>(m);
+
+            auto h8s = extract_histograms(m8);
+            auto h16s = extract_histograms(m16);
+            auto h32s = extract_histograms(m32);
+            auto h64s = extract_histograms(m64);
+
+            for (size_t i = 0; i < 30; ++i) {
+                print_histogram(h32s[i]);
+            }
+
+            print_basic_stats(extract_histogram_widths(h8s), "m8");
+            print_basic_stats(extract_histogram_widths(h16s), "m16");
+            print_basic_stats(extract_histogram_widths(h32s), "m32");
+            print_basic_stats(extract_histogram_widths(h64s), "m64");
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (block_sorted_bitmap) {
+        try {
+            extract_common_to_file_block_sorted(filename, ofname, block_size, true);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (sorted_bitmap) {
+        try {
+            extract_common_to_file_sorted(filename, ofname);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (color_bitmap16) {
+        try {
+            extract_common_to_file_pbwt_color(filename, ofname);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (bitmap) {
+        try {
+            extract_common_to_file(filename, ofname, bitmap_pbwt);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (unphase) {
+        try {
+            unphase_xcf(filename, ofname);
+        } catch (const char *e) {
+            std::cerr << e << std::endl;
+            exit(-1);
+        }
+        exit(0);
+    }
+
+    if (create_map) {
+        auto begin = std::chrono::steady_clock::now();
+        auto map = create_variant_map(filename);
+        auto end = std::chrono::steady_clock::now();
+        printElapsedTime(begin, end);
+        std::cerr << "INFO : Map number of entries is : " << map.size() << std::endl;
+        exit(0);
     }
 
     if (count_xcf) {
@@ -115,7 +250,8 @@ int main(int argc, const char *argv[]) {
         std::string variant_file(ofname + "_var.bcf");
         auto variant_thread = std::thread([&]{
             try {
-                remove_samples(filename, variant_file);
+                //remove_samples(filename, variant_file);
+                replace_samples_by_pos_in_binary_matrix(filename, variant_file);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 fail = true;

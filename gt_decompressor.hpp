@@ -228,6 +228,8 @@ private:
             }
 
             bcf1_t *rec = bcf_fri.line;
+            // Remove the "BM" format /// @todo remove all possible junk
+            bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
             // Set REF / first ALT
             auto& a = dp.get_ref_on_a();
@@ -253,9 +255,18 @@ private:
                 num_variants_extracted++;
             }
 
-            bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * PLOIDY); // 15% of time spent in here
+            //std::cerr << "Number of samples : " << bcf_hdr_nsamples(hdr) << std::endl;
+            int ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * PLOIDY); // 15% of time spent in here
+            if (ret) {
+                std::cerr << "Failed to update genotypes" << std::endl;
+                throw "Failed to update genotypes";
+            }
 
-            int ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
+            ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
+            if (ret) {
+                std::cerr << "Failed to write record" << std::endl;
+                throw "Failed to write record";
+            }
         }
     }
 
@@ -307,9 +318,13 @@ private:
         hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
 
         // Add the samples to the header
+        bcf_hdr_set_samples(hdr, NULL, 0);
         for (const auto& sample : sample_list) {
             bcf_hdr_add_sample(hdr, sample.c_str());
         }
+        bcf_hdr_add_sample(hdr, NULL); // to update internal structures
+        // see : https://github.com/samtools/htslib/blob/develop/test/test-vcf-api.c
+        bcf_hdr_sync(hdr);
 
         // Write the header to the new file
         int ret = bcf_hdr_write(fp, hdr);
@@ -332,6 +347,7 @@ public:
 
         // Read the bcf without the samples (variant info)
         initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
+        bcf_hdr_remove(bcf_fri.sr->readers[0].header, BCF_HL_FMT, "BM");
 
         htsFile* fp = NULL;
         bcf_hdr_t* hdr = NULL;

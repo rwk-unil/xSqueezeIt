@@ -450,4 +450,210 @@ struct line_index_t<I> find_index(const std::string& filename, const P position)
     return {};
 }
 
+std::string unique_id(bcf1_t* bcf_entry_p) {
+    std::stringstream ss;
+    ss << bcf_entry_p->rid << "_"; // CHROM
+    ss << bcf_entry_p->pos << "_"; // POS
+    for (size_t i = 0; i < bcf_entry_p->n_allele; ++i) { // REF ALTs
+        ss << bcf_entry_p->d.allele[i] << "_";
+    }
+    return ss.str();
+}
+
+#include <unordered_map>
+
+template <typename T = size_t>
+std::unordered_map<std::string, line_index_t<T> > create_variant_map(std::string ifname) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+    std::unordered_map<std::string, line_index_t<T> > map;
+    bcf_fri.sr->max_unpack = BCF_UN_STR; // Minimal, but does not really impact perf because of header without samples below
+
+    int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
+    if (ret < 0) {
+        std::cerr << "Failed to set no samples in header for file " << ifname << std::endl;
+        throw "Failed to set samples";
+    }
+
+    T lines = 0;
+    T matrix_pos = 0;
+
+    while (bcf_next_line(bcf_fri)) {
+        auto id = unique_id(bcf_fri.line);
+
+        //std::cout << bcf_fri.line->d.id << std::endl;
+        if (map.find(id) != map.end()) {
+            std::cerr << "Duplicate ID : " << id << " at lines : " << map.find(id)->second.line << " and " << lines << std::endl;
+        }
+        map.insert({id, {lines, matrix_pos}});
+        lines++;
+        matrix_pos += bcf_fri.line->n_allele-1;
+    }
+
+    destroy_bcf_file_reader(bcf_fri);
+    return map;
+}
+
+void unphase_xcf(const std::string& ifname, const std::string& ofname) {
+    bcf_file_reader_info_t bcf_fri;
+    htsFile* fp = NULL;
+    bcf_hdr_t* hdr = NULL;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wbu"); // "-" for stdout
+    if (fp == NULL) {
+        std::cerr << "Could not open " << ofname << std::endl;
+        throw "File open error";
+    }
+
+    // Duplicate the header from the input bcf
+    hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
+
+    // Write the header to the new file
+    int ret = bcf_hdr_write(fp, hdr);
+
+    while(bcf_next_line(bcf_fri)) {
+        const int32_t PLOIDY = 2;
+        bcf1_t *rec = bcf_fri.line;
+
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        // Check ploidy, only support diploid for the moment
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+            exit(-1); // Change this
+        }
+
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            int32_t allele_0 = bcf_gt_allele(bcf_fri.gt_arr[i*2]);
+            int32_t allele_1 = bcf_gt_allele(bcf_fri.gt_arr[i*2+1]);
+            bcf_fri.gt_arr[i*2] = bcf_gt_unphased(std::min(allele_0, allele_1));
+            bcf_fri.gt_arr[i*2+1] = bcf_gt_unphased(std::max(allele_0, allele_1));
+        }
+
+        // Should be unnecessary because record is directly modified above
+        bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
+
+        ret = bcf_write1(fp, hdr, rec);
+    }
+
+    // Close / Release ressources
+    hts_close(fp);
+    bcf_hdr_destroy(hdr);
+    destroy_bcf_file_reader(bcf_fri);
+}
+
+std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifname) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    const int32_t PLOIDY = 2;
+    const size_t N_HAPS = bcf_fri.n_samples*PLOIDY;
+
+    std::vector<std::vector<bool> > output;
+
+    size_t extraction_counter = 0;
+    while(bcf_next_line(bcf_fri)) {
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        // Check ploidy, only support diploid for the moment
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+            exit(-1); // Change this
+        }
+
+        for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+            uint32_t alt_allele_counter = 0;
+            for (size_t i = 0; i < N_HAPS; ++i) {
+                if (bcf_gt_allele(bcf_fri.gt_arr[i]) == alt_allele) {
+                    alt_allele_counter++;
+                }
+            }
+            uint32_t minor_allele_count = std::min((uint32_t)bcf_fri.n_samples - alt_allele_counter, alt_allele_counter);
+
+            if (minor_allele_count > N_HAPS*0.01) {
+                extraction_counter++;
+                output.push_back(std::vector<bool>(N_HAPS, false));
+
+                for (size_t i = 0; i < N_HAPS; ++i) {
+                    if (bcf_gt_allele(bcf_fri.gt_arr[i]) == alt_allele) {
+                        output.back()[i] = true;
+                    } else {
+                        // default is false
+                    }
+                }
+            }
+        }
+    }
+
+    // Close / Release ressources
+    destroy_bcf_file_reader(bcf_fri);
+
+    return output;
+}
+
+/**
+ * @brief This function replaces the samples by a single sample that represent the
+ *        position of the now missing samples data in the binary matrix. This is allows
+ *        to make a link between the vcf entry and the binary matrix where the sample
+ *        data is actually stored. This allows to tabix/csi index the variant file and
+ *        execute region queries on it. The resulting records then point to a position
+ *        in the matrix, which can be used to decompress the missing data.
+ *
+ * */
+size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname) {
+    // Input file
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    // Output file
+    htsFile *fp = hts_open(ofname.c_str(), "wb"); /// @todo wb wz or other
+
+    /* The bottleneck of VCF reading is parsing of genotype fields. If the reader knows in advance that only subset of samples is needed (possibly no samples at all), the performance of bcf_read() can be significantly improved by calling bcf_hdr_set_samples after bcf_hdr_read(). */
+    int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
+    if (ret < 0) {
+        std::cerr << "Failed to set pseudo sample in header for file " << ifname << std::endl;
+        throw "Failed to remove samples";
+    }
+    bcf_hdr_t *hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
+    bcf_hdr_add_sample(hdr, "BIN_MATRIX_POS");
+    bcf_hdr_append(hdr, "##FORMAT=<ID=BM,Number=1,Type=Integer,Description=\"Position in GT Binary Matrix\">");
+    bcf_hdr_sync(hdr);
+
+    // Write the header
+    ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header to file " << ofname << std::endl;
+        throw "Failed to remove samples";
+    }
+
+    // Write the variants
+    size_t pos = 0;
+    while (bcf_next_line(bcf_fri)) {
+        /// @note this could maybe be improved by removing the dup / destroy
+        bcf1_t *rec = bcf_dup(bcf_fri.line);
+        bcf_unpack(rec, BCF_UN_STR);
+        rec->n_sample = 1;
+        bcf_update_format_int32(hdr, rec, "BM", &pos, 1);
+        ret = bcf_write1(fp, hdr, rec);
+        bcf_destroy(rec);
+        if (bcf_fri.line->n_allele) {
+            pos += bcf_fri.line->n_allele-1;
+        }
+    }
+
+    // Close everything
+    hts_close(fp);
+    bcf_hdr_destroy(hdr);
+    destroy_bcf_file_reader(bcf_fri);
+
+    return pos;
+}
+
 #endif /* __XCF_HPP__ */
