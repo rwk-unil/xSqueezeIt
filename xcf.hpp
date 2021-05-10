@@ -53,11 +53,7 @@ typedef struct bcf_file_reader_info_t {
 
 } bcf_file_reader_info_t;
 
-void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::string& filename) {
-    bcf_fri.sr = bcf_sr_init();
-    bcf_fri.sr->collapse = COLLAPSE_NONE;
-    bcf_fri.sr->require_index = 1;
-
+static void initialize_bcf_file_reader_common(bcf_file_reader_info_t& bcf_fri, const std::string& filename) {
     if(!bcf_sr_add_reader(bcf_fri.sr, filename.c_str())) {
         std::cerr << "Failed to read file " << filename << std::endl;
         std::cerr << "Reason : " << bcf_sr_strerror(bcf_fri.sr->errnum) << std::endl;
@@ -71,6 +67,23 @@ void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::stri
     bcf_fri.line = nullptr; // Already set by default
     bcf_fri.line_num = 0;
     bcf_fri.line_alt_alleles_extracted = 0; // Already set by default
+}
+
+void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::string& filename) {
+    bcf_fri.sr = bcf_sr_init();
+    bcf_fri.sr->collapse = COLLAPSE_NONE;
+    bcf_fri.sr->require_index = 1;
+
+    initialize_bcf_file_reader_common(bcf_fri, filename);
+}
+
+void initialize_bcf_file_reader_with_region(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file = 0) {
+    bcf_fri.sr = bcf_sr_init();
+    bcf_fri.sr->collapse = COLLAPSE_NONE;
+    bcf_fri.sr->require_index = 1;
+    bcf_sr_set_regions(bcf_fri.sr, region.c_str(), is_file);
+
+    initialize_bcf_file_reader_common(bcf_fri, filename);
 }
 
 void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {

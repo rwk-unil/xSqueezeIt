@@ -23,6 +23,9 @@
 #ifndef __DECOMPRESSOR_HPP__
 #define __DECOMPRESSOR_HPP__
 
+#include "console_app.hpp"
+extern GlobalAppOptions global_app_options;
+
 #include "compression.hpp"
 #include "xcf.hpp"
 
@@ -151,6 +154,7 @@ private:
 
         // Seek out a given position
         void seek(const size_t position) {
+            if (position == current_position) { return; }
             size_t advance_steps = 0;
             if ((position > current_position) and ((position - current_position) < arrangement_sample_rate)) {
                 advance_steps = position - current_position;
@@ -194,6 +198,8 @@ private:
         const std::vector<A_T>& get_ref_on_a() const {return a;}
         const std::vector<bool>& get_ref_on_y() const {return y;}
 
+        size_t get_current_position() const {return current_position;}
+
     protected:
         // Constants, referencing memory mapped file
         const size_t N_SITES;
@@ -215,19 +221,27 @@ private:
         const std::vector<bool>& rearrangement_track;
     };
 
-    template<const bool POS_STOP = false, typename A_T, typename WAH_T>
+    template<const bool RECORD_NONLINEAR = false, typename A_T, typename WAH_T>
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, DecompressPointer<A_T, WAH_T>& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
+        int *values = NULL;
+        int count = 0;
+
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
         while(bcf_next_line(bcf_fri)) {
-            // Conditional conditional code, does not exist in non "POS_STOP" template
-            if constexpr (POS_STOP) {
-                if (bcf_fri.line->pos > stop_pos) {
-                    return;
+            bcf1_t *rec = bcf_fri.line;
+
+            if constexpr (RECORD_NONLINEAR) {
+                bcf_unpack(rec, BCF_UN_ALL);
+                int ngt = bcf_get_format_int32(bcf_fri.sr->readers[0].header, rec, "BM", &values, &count);
+                if (ngt < 1) {
+                    std::cerr << "Failed to retrieve binary matrix index position (BM key)" << std::endl;
+                    throw "BM key value not found";
                 }
+                // Non linear access (returns immediately if dp is already at correct position)
+                dp.seek(values[0]);
             }
 
-            bcf1_t *rec = bcf_fri.line;
             // Remove the "BM" format /// @todo remove all possible junk
             bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
@@ -268,6 +282,7 @@ private:
                 throw "Failed to write record";
             }
         }
+        if (values) { free(values); }
     }
 
     template <typename A_T, typename WAH_T>
@@ -316,6 +331,7 @@ private:
 
         // Duplicate the header from the bcf with the variant info
         hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
+        bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");
 
         // Add the samples to the header
         bcf_hdr_set_samples(hdr, NULL, 0);
@@ -341,21 +357,30 @@ public:
      * @param ofname the output file name
      * */
     void decompress(std::string ofname) {
+        htsFile* fp = NULL;
+        bcf_hdr_t* hdr = NULL;
+
         decompress_checks();
 
         auto dp = generate_decompress_pointer<uint16_t, uint16_t>(); /// @todo Types
 
-        // Read the bcf without the samples (variant info)
-        initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
-        bcf_hdr_remove(bcf_fri.sr->readers[0].header, BCF_HL_FMT, "BM");
+        if (global_app_options.regions != "") {
+            std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
+            initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions);
 
-        htsFile* fp = NULL;
-        bcf_hdr_t* hdr = NULL;
-        create_output_file(ofname, fp, hdr);
+            create_output_file(ofname, fp, hdr);
 
-        // Decompress and add the genotype data to the new file
-        // This is the main loop, where most of the time is spent
-        decompress_inner_loop(bcf_fri, dp, hdr, fp);
+            decompress_inner_loop<true /* Non linear access */>(bcf_fri, dp, hdr, fp);
+        } else {
+            // Read the bcf without the samples (variant info)
+            initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
+
+            create_output_file(ofname, fp, hdr);
+
+            // Decompress and add the genotype data to the new file
+            // This is the main loop, where most of the time is spent
+            decompress_inner_loop(bcf_fri, dp, hdr, fp);
+        }
 
         hts_close(fp);
         bcf_hdr_destroy(hdr);
