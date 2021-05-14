@@ -1,3 +1,4 @@
+# File types to ignore
 *.csv
 *.bin
 *.csi
@@ -7,3 +8,18 @@
 *.macs
 *.txt
 *.xlsx
+*.png
+
+# Ignore folders that start with
+tmp*/**
+temp*/**
+
+# Ignore these executables
+console_app
+main
+
+# Mac OS index files
+.DS_Store
+
+# vscode
+.vscode
