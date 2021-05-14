@@ -49,6 +49,15 @@ mkdir output
 ./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
 ```
 
+#### Region extraction
+```shell
+# Extraction (requires both files generated above) :
+./console_app -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./console_app -x -f "20:200000-200100" output/chr20.bin | bcftools view # Pipes uncompressed BCF
+# The above command is much faster than decompressing and using -r in bcftools
+# because only the chosen regions are decompressed, both generate the same result
+```
+
 ### Pipe into bcftools
 
 ```shell
@@ -73,4 +82,4 @@ mkdir output
 - Extraction
 - Filtering
 - Based on the block compression scheme for faster access
-- Based on permutation sub sampling for faster / parallel access
+- ~~Based on permutation sub sampling for faster / parallel access~~ Done !
