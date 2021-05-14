@@ -3,7 +3,8 @@
 
 #include "CLI11.hpp"
 
-class GlobalAppOptions {
+class GlobalAppOptions
+{
 public:
     GlobalAppOptions() {
         app.add_option("-f,--file", filename, "Input file name, default is stdio");
@@ -14,6 +15,8 @@ public:
         app.add_flag("-i,--info", info, "Get info on file");
         app.add_flag("--wait", wait, "DEBUG - wait for int input");
         app.add_flag("--verify", verify, "DEBUG - verify");
+
+        app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
         app.add_flag("--create-map", create_map, "DEBUG - create map");
         app.add_flag("--unphase", unphase, "Removes phasing and reorders alleles in natural order e.g., 1|0 => 0/1");
@@ -44,6 +47,7 @@ public:
     bool wait = false;
     bool verify = false;
     bool count_xcf = false;
+    bool sandbox = false;
     bool create_map = false;
     bool unphase = false;
     bool bitmap = false;

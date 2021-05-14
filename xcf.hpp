@@ -77,15 +77,6 @@ void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::stri
     initialize_bcf_file_reader_common(bcf_fri, filename);
 }
 
-void initialize_bcf_file_reader_with_region(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file = 0) {
-    bcf_fri.sr = bcf_sr_init();
-    bcf_fri.sr->collapse = COLLAPSE_NONE;
-    bcf_fri.sr->require_index = 1;
-    bcf_sr_set_regions(bcf_fri.sr, region.c_str(), is_file);
-
-    initialize_bcf_file_reader_common(bcf_fri, filename);
-}
-
 void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
     if (bcf_fri.gt_arr != nullptr) {
         free(bcf_fri.gt_arr); // C allocation from realloc() inside htslib
@@ -100,6 +91,19 @@ void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri) {
     bcf_fri.line = nullptr; /// @todo check if should be freed, probably not
     bcf_fri.line_num = 0;
     bcf_fri.line_alt_alleles_extracted = 0;
+}
+
+void initialize_bcf_file_reader_with_region(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file = 0) {
+    bcf_fri.sr = bcf_sr_init();
+    bcf_fri.sr->collapse = COLLAPSE_NONE;
+    bcf_fri.sr->require_index = 1;
+    if (bcf_sr_set_regions(bcf_fri.sr, region.c_str(), is_file) < 0) {
+        std::cerr << "Failed to read the regions : " << region << std::endl;
+        destroy_bcf_file_reader(bcf_fri);
+        throw "Failed to read the regions";
+    }
+
+    initialize_bcf_file_reader_common(bcf_fri, filename);
 }
 
 inline unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri) {
@@ -627,7 +631,7 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
     initialize_bcf_file_reader(bcf_fri, ifname);
 
     // Output file
-    htsFile *fp = hts_open(ofname.c_str(), "wb"); /// @todo wb wz or other
+    htsFile *fp = hts_open(ofname.c_str(), "wz"); /// @todo wb wz or other
 
     /* The bottleneck of VCF reading is parsing of genotype fields. If the reader knows in advance that only subset of samples is needed (possibly no samples at all), the performance of bcf_read() can be significantly improved by calling bcf_hdr_set_samples after bcf_hdr_read(). */
     int ret = bcf_hdr_set_samples(bcf_fri.sr->readers[0].header, NULL, 0 /* 0 is file 1 is list */); // All samples is "-", NULL is none
@@ -638,7 +642,9 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
     bcf_hdr_t *hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
     bcf_hdr_add_sample(hdr, "BIN_MATRIX_POS");
     bcf_hdr_append(hdr, "##FORMAT=<ID=BM,Number=1,Type=Integer,Description=\"Position in GT Binary Matrix\">");
-    bcf_hdr_sync(hdr);
+    if (bcf_hdr_sync(hdr) < 0) {
+        std::cerr << "bcf_hdr_sync() failed ... oh well" << std::endl;
+    }
 
     // Write the header
     ret = bcf_hdr_write(fp, hdr);

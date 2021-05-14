@@ -3,6 +3,8 @@
 
 #include "xcf.hpp"
 
+#define UNUSED(expr) do { (void)(expr); } while (0)
+
 void extract_common_to_file(const std::string& ifname, const std::string& ofname, bool pbwt = false) {
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
@@ -272,7 +274,7 @@ void extract_common_to_file_sorted(const std::string& ifname, const std::string&
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        UNUSED(bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr)));
 
         for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
             uint32_t alt_allele_counter = 0;
@@ -465,7 +467,7 @@ void extract_common_to_file_block_sorted(const std::string& ifname, const std::s
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        UNUSED(bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr)));
 
         for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
             uint32_t alt_allele_counter = 0;

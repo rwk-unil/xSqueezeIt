@@ -112,6 +112,48 @@ public:
         wah2_extract<uint16_t>(rt_p, rearrangement_track, header.num_variants);
     }
 
+    public:
+
+    /**
+     * @brief Decompresses the loaded file into an output file
+     *
+     * @param ofname the output file name
+     * */
+    void decompress(std::string ofname) {
+        htsFile* fp = NULL;
+        bcf_hdr_t* hdr = NULL;
+
+        decompress_checks();
+
+        auto dp = generate_decompress_pointer<uint16_t, uint16_t>(); /// @todo Types
+
+        if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
+            if (global_app_options.regions != "") {
+                std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
+                initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions);
+            } else {
+                initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions_file, true /*is file*/);
+            }
+
+            create_output_file(ofname, fp, hdr);
+
+            decompress_inner_loop<true /* Non linear access */>(bcf_fri, dp, hdr, fp);
+        } else {
+            // Read the bcf without the samples (variant info)
+            initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
+
+            create_output_file(ofname, fp, hdr);
+
+            // Decompress and add the genotype data to the new file
+            // This is the main loop, where most of the time is spent
+            decompress_inner_loop(bcf_fri, dp, hdr, fp);
+        }
+
+        hts_close(fp);
+        bcf_hdr_destroy(hdr);
+        destroy_bcf_file_reader(bcf_fri);
+    }
+
     /**
      * @brief Destructor
      * */
@@ -334,57 +376,24 @@ private:
         bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");
 
         // Add the samples to the header
-        bcf_hdr_set_samples(hdr, NULL, 0);
+        if(bcf_hdr_set_samples(hdr, NULL, 0) < 0) {
+            std::cerr << "Failed to remove samples from header for" << ofname << std::endl;
+            throw "Failed to remove samples";
+        }
         for (const auto& sample : sample_list) {
             bcf_hdr_add_sample(hdr, sample.c_str());
         }
         bcf_hdr_add_sample(hdr, NULL); // to update internal structures
         // see : https://github.com/samtools/htslib/blob/develop/test/test-vcf-api.c
-        bcf_hdr_sync(hdr);
+        if (bcf_hdr_sync(hdr) < 0) {
+            std::cerr << "bcf_hdr_sync() failed ..." << std::endl;
+        }
 
         // Write the header to the new file
-        int ret = bcf_hdr_write(fp, hdr);
-        if (ret < 0) {
+        if (bcf_hdr_write(fp, hdr) < 0) {
             std::cerr << "Could not write header to file " << ofname << std::endl;
             throw "Failed to write file";
         }
-    }
-public:
-
-    /**
-     * @brief Decompresses the loaded file into an output file
-     *
-     * @param ofname the output file name
-     * */
-    void decompress(std::string ofname) {
-        htsFile* fp = NULL;
-        bcf_hdr_t* hdr = NULL;
-
-        decompress_checks();
-
-        auto dp = generate_decompress_pointer<uint16_t, uint16_t>(); /// @todo Types
-
-        if (global_app_options.regions != "") {
-            std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
-            initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions);
-
-            create_output_file(ofname, fp, hdr);
-
-            decompress_inner_loop<true /* Non linear access */>(bcf_fri, dp, hdr, fp);
-        } else {
-            // Read the bcf without the samples (variant info)
-            initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
-
-            create_output_file(ofname, fp, hdr);
-
-            // Decompress and add the genotype data to the new file
-            // This is the main loop, where most of the time is spent
-            decompress_inner_loop(bcf_fri, dp, hdr, fp);
-        }
-
-        hts_close(fp);
-        bcf_hdr_destroy(hdr);
-        destroy_bcf_file_reader(bcf_fri);
     }
 
 #if 0 /* old stuff */
