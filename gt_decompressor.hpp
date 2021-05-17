@@ -74,6 +74,8 @@ public:
             sample_list.push_back(str);
         }
         s.close();
+        samples_to_use.resize(sample_list.size());
+        std::iota(samples_to_use.begin(), samples_to_use.end(), 0);
 
         file_size = std::filesystem::file_size(filename); // Thank you C++17
         fd = open(filename.c_str(), O_RDONLY, 0);
@@ -101,8 +103,10 @@ public:
             std::cerr << "No samples" << std::endl;
             // Can still be used to "extract" the variant BCF (i.e. loop through the variant BCF and copy it to output... which is useless but ok)
             genotypes = NULL;
+            selected_genotypes = NULL;
         } else {
             genotypes = new int32_t[header.hap_samples];
+            selected_genotypes = new int32_t[header.hap_samples];
             N_HAPS = header.hap_samples;
         }
 
@@ -122,6 +126,10 @@ public:
     void decompress(std::string ofname) {
         htsFile* fp = NULL;
         bcf_hdr_t* hdr = NULL;
+
+        if (global_app_options.samples != "") {
+            enable_select_samples(global_app_options.samples);
+        }
 
         decompress_checks();
 
@@ -166,6 +174,9 @@ public:
         }
         if (genotypes) {
             delete[] genotypes;
+        }
+        if (selected_genotypes) {
+            delete[] selected_genotypes;
         }
     }
 
@@ -267,6 +278,8 @@ private:
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, DecompressPointer<A_T, WAH_T>& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
         int *values = NULL;
         int count = 0;
+        const int32_t an = samples_to_use.size() * PLOIDY;
+        std::vector<int32_t> ac_s;
 
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
@@ -287,12 +300,16 @@ private:
             // Remove the "BM" format /// @todo remove all possible junk
             bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
+            //ac_s.clear();
+            //ac_s.resize(bcf_fri.line->n_allele-1, 0);
+
             // Set REF / first ALT
             auto& a = dp.get_ref_on_a();
             auto& y = dp.get_ref_on_y();
 
             for (size_t i = 0; i < N_HAPS; ++i) {
                 genotypes[a[i]] = bcf_gt_phased(y[i]); /// @todo Phase
+                //ac_s[0] += y[i];
             }
             dp.advance();
             // Since a and y are refs they should already be updated
@@ -305,14 +322,33 @@ private:
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     if (y[i]) {
                         genotypes[a[i]] = bcf_gt_phased(alt_allele); /// @todo Phase
+                        //ac_s[alt_allele-1]++;
                     }
                 }
                 dp.advance();
                 num_variants_extracted++;
             }
 
-            //std::cerr << "Number of samples : " << bcf_hdr_nsamples(hdr) << std::endl;
-            int ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * PLOIDY); // 15% of time spent in here
+            int ret = 0;
+            if (select_samples) {
+                ac_s.clear();
+                ac_s.resize(bcf_fri.line->n_allele-1, 0);
+                for (size_t i = 0; i < samples_to_use.size(); ++i) {
+                    selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
+                    selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
+                    for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+                        ac_s[alt_allele] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
+                        ac_s[alt_allele] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
+                    }
+                }
+                ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * PLOIDY);
+                // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
+                // Note that --no-update in bcftools disables this recomputation /// @todo this
+                bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
+                bcf_update_info_int32(hdr, rec, "AN", &an, 1);
+            } else {
+                ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * PLOIDY); // 15% of time spent in here
+            }
             if (ret) {
                 std::cerr << "Failed to update genotypes" << std::endl;
                 throw "Failed to update genotypes";
@@ -344,14 +380,48 @@ private:
         return dp;
     }
 
+    void enable_select_samples(const std::string& samples_option) {
+        std::istringstream iss(samples_option);
+        std::string sample;
+        std::vector<std::string> samples_in_option;
+        std::vector<std::string> existing_samples(sample_list);
+        samples_to_use.clear();
+        char inverse = 0;
+
+        // Check if negation
+        if (samples_option[0] == '^') {
+            // Negation
+            iss >> inverse; // Consume the '^'
+        }
+
+        // Extract samples
+        while (getline(iss, sample, ',')) {
+            samples_in_option.push_back(sample);
+        }
+
+        /// @todo bcftools has samples in order of option
+        /// @todo bcftools complains when sample in list is not in header
+        for (size_t i = 0; i < sample_list.size(); ++i) {
+            auto it = std::find(samples_in_option.begin(), samples_in_option.end(), sample_list[i]);
+            bool found = (it != samples_in_option.end());
+            bool use = inverse ^ found;
+            if (use) {
+                samples_to_use.push_back(i);
+            }
+        }
+        select_samples = true;
+    }
+
     // Throws
     void decompress_checks() {
         // This being a template does not help ...
         // Because decompression depends on file type
         if (header.aet_bytes != 2) {
+            /// @todo
             throw "TODO DIFFERENT AET size";
         }
         if (header.wah_bytes != 2) {
+            /// @todo
             throw "TODO DIFFERENT WAH size";
         }
 
@@ -361,11 +431,16 @@ private:
             std::cerr << "Compressed file header has " << header.hap_samples / 2 << " samples" << std::endl;
             throw "Number of samples doesn't match";
         }
+
+        if (samples_to_use.size() == 0) {
+            std::cerr << "No samples selected" << std::endl;
+            throw "No samples selected";
+        }
     }
 
     inline void create_output_file(const std::string& ofname, htsFile* &fp, bcf_hdr_t* &hdr) {
         // Open the output file
-        fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wbu"); // "-" for stdout
+        fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wu"); // "-" for stdout
         if (fp == NULL) {
             std::cerr << "Could not open " << bcf_nosamples << std::endl;
             throw "File open error";
@@ -380,8 +455,15 @@ private:
             std::cerr << "Failed to remove samples from header for" << ofname << std::endl;
             throw "Failed to remove samples";
         }
-        for (const auto& sample : sample_list) {
-            bcf_hdr_add_sample(hdr, sample.c_str());
+
+        if (select_samples) {
+            for (const auto& sample_index : samples_to_use) {
+                bcf_hdr_add_sample(hdr, sample_list[sample_index].c_str());
+            }
+        } else {
+            for (const auto& sample : sample_list) {
+                bcf_hdr_add_sample(hdr, sample.c_str());
+            }
         }
         bcf_hdr_add_sample(hdr, NULL); // to update internal structures
         // see : https://github.com/samtools/htslib/blob/develop/test/test-vcf-api.c
@@ -469,8 +551,11 @@ protected:
     bcf_file_reader_info_t bcf_fri;
 
     std::vector<std::string> sample_list;
+    std::vector<size_t> samples_to_use;
+    bool select_samples = false;
 
     int32_t* genotypes{NULL};
+    int32_t* selected_genotypes{NULL};
 
     std::vector<bool> rearrangement_track;
 };
