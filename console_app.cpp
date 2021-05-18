@@ -80,6 +80,7 @@ int main(int argc, const char *argv[]) {
             header_t hdr;
             int ret = fill_header_from_file(filename, hdr);
             if (ret == 0) {
+                print_header_info(hdr);
                 std::cerr << "INFO : Header is\t\t\t" << sizeof(header_t) << " bytes" << std::endl;
                 std::cerr << "INFO : Indices is\t\t\t" << hdr.ssas_offset - hdr.indices_offset << " bytes" << std::endl;
                 std::cerr << "INFO : Subsampled permutation arrays is\t" << hdr.wahs_offset - hdr.ssas_offset << " bytes" << std::endl;
@@ -88,6 +89,7 @@ int main(int argc, const char *argv[]) {
             }
         }
         std::cerr << std::endl;
+        exit(0);
     }
 
     if (opt.compress && opt.decompress) {
