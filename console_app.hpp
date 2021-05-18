@@ -20,6 +20,7 @@ public:
         app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
         app.add_flag("--create-map", create_map, "DEBUG - create map");
         app.add_flag("--unphase", unphase, "Removes phasing and reorders alleles in natural order e.g., 1|0 => 0/1");
+        app.add_flag("--sprinkle_missing", sprinkle_missing, "Sprinkles missing values randomly with 1% chance");
         app.add_flag("--bitmap", bitmap, "DEBUG - creates bitmap");
         app.add_flag("--bitmap_pbwt", bitmap_pbwt, "BEBUG - apply PBWT in bitmap");
         app.add_flag("--color_bitmap16", color_bitmap16, "DEBUG - creates bitmap");
@@ -52,6 +53,7 @@ public:
     bool sandbox = false;
     bool create_map = false;
     bool unphase = false;
+    bool sprinkle_missing = false;
     bool bitmap = false;
     bool bitmap_pbwt = false;
     bool color_bitmap16 = false;

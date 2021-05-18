@@ -518,7 +518,7 @@ void unphase_xcf(const std::string& ifname, const std::string& ofname) {
     bcf_hdr_t* hdr = NULL;
     initialize_bcf_file_reader(bcf_fri, ifname);
 
-    fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wbu"); // "-" for stdout
+    fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wu"); // "-" for stdout
     if (fp == NULL) {
         std::cerr << "Could not open " << ofname << std::endl;
         throw "File open error";
@@ -551,8 +551,63 @@ void unphase_xcf(const std::string& ifname, const std::string& ofname) {
             bcf_fri.gt_arr[i*2] = bcf_gt_unphased(std::min(allele_0, allele_1));
             bcf_fri.gt_arr[i*2+1] = bcf_gt_unphased(std::max(allele_0, allele_1));
         }
+        bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
 
-        // Should be unnecessary because record is directly modified above
+        ret = bcf_write1(fp, hdr, rec);
+    }
+
+    // Close / Release ressources
+    hts_close(fp);
+    bcf_hdr_destroy(hdr);
+    destroy_bcf_file_reader(bcf_fri);
+}
+
+#include <random>
+void sprinkle_missing_xcf(const std::string& ifname, const std::string& ofname) {
+    bcf_file_reader_info_t bcf_fri;
+    htsFile* fp = NULL;
+    bcf_hdr_t* hdr = NULL;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wu"); // "-" for stdout
+    if (fp == NULL) {
+        std::cerr << "Could not open " << ofname << std::endl;
+        throw "File open error";
+    }
+
+    // Duplicate the header from the input bcf
+    hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
+
+    // Write the header to the new file
+    int ret = bcf_hdr_write(fp, hdr);
+
+    std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    std::uniform_int_distribution<> distrib(1, 100);
+
+    while(bcf_next_line(bcf_fri)) {
+        const int32_t PLOIDY = 2;
+        bcf1_t *rec = bcf_fri.line;
+
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        // Check ploidy, only support diploid for the moment
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+            exit(-1); // Change this
+        }
+
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            if (distrib(gen) == 1) { // 1% chance to happen
+                bcf_fri.gt_arr[i*2] = bcf_gt_missing;
+            }
+            if (distrib(gen) == 1) { // 1% chance to happen
+                bcf_fri.gt_arr[i*2+1] = bcf_gt_missing;
+            }
+        }
         bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
 
         ret = bcf_write1(fp, hdr, rec);

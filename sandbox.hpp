@@ -113,6 +113,16 @@ public:
             exit(0);
         }
 
+        if (opt.sprinkle_missing) {
+            try {
+                sprinkle_missing_xcf(opt.filename, opt.ofname);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
+            exit(0);
+        }
+
         if (opt.create_map) {
             auto begin = std::chrono::steady_clock::now();
             auto map = create_variant_map(opt.filename);
