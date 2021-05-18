@@ -155,6 +155,12 @@ constexpr uint32_t MAGIC = 0xfeed1767;
 constexpr uint32_t VERSION = 1;
 constexpr uint8_t PLOIDY_DEFAULT = 2;
 
+// typedef struct special_bits_t {
+//     bool has_missing : 1;
+//     bool non_uniform_phasing : 1;
+//     uint8_t rsvd : 6;
+// } special_bits_t;
+
 struct header_s {
     // 32 bytes
     uint32_t endianness = ENDIANNESS;
@@ -164,7 +170,16 @@ struct header_s {
     uint8_t  ind_bytes = 0;
     uint8_t  aet_bytes = 0;
     uint8_t  wah_bytes = 0;
-    uint32_t rsvd_1[4] = {0,};
+    union {
+        uint8_t special_bitset = 0;
+        struct {
+            bool has_missing : 1;
+            bool non_uniform_phasing : 1;
+            uint8_t rsvd : 6;
+        };
+    };
+    uint8_t  rsvd_bs[3] = {0,};
+    uint32_t rsvd_1[3] = {0,};
 
     // 64 bytes
     uint64_t hap_samples = 0;
@@ -201,6 +216,9 @@ void print_header_info(const header_t& header) {
     std::cerr << "Indice bytes : " << (size_t)header.ind_bytes << std::endl;
     std::cerr << "Sample id bytes : " << (size_t)header.aet_bytes << std::endl;
     std::cerr << "WAH bytes : " << (size_t)header.wah_bytes << std::endl;
+    std::cerr << "--" << std::endl;
+    std::cerr << "Has missing : " << (header.has_missing ? "yes" : "no") << std::endl;
+    std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;
     std::cerr << "--" << std::endl;
     std::cerr << "Haplotype samples  : " << header.hap_samples << std::endl;
     std::cerr << "Number of variants : " << header.num_variants << std::endl;
