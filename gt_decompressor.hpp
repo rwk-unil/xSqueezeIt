@@ -420,16 +420,25 @@ private:
             samples_in_option.push_back(sample);
         }
 
-        /// @todo bcftools has samples in order of option
-        /// @todo bcftools complains when sample in list is not in header
-        for (size_t i = 0; i < sample_list.size(); ++i) {
-            auto it = std::find(samples_in_option.begin(), samples_in_option.end(), sample_list[i]);
-            bool found = (it != samples_in_option.end());
-            bool use = inverse ^ found;
-            if (use) {
-                samples_to_use.push_back(i);
+        /// @todo bcftools complains when sample in list is not in header, we don't
+        if (inverse) {
+            for (size_t i = 0; i < sample_list.size(); ++i) {
+                auto it = std::find(samples_in_option.begin(), samples_in_option.end(), sample_list[i]);
+                bool excluded = (it != samples_in_option.end());
+                if (!excluded) {
+                    samples_to_use.push_back(i);
+                }
+            }
+        } else { /// bcftools has samples in order of option
+            for (const auto& sample : samples_in_option) {
+                auto it = std::find(sample_list.begin(), sample_list.end(), sample);
+                bool found = (it != sample_list.end());
+                if (found) {
+                    samples_to_use.push_back(it - sample_list.begin());
+                }
             }
         }
+
         select_samples = true;
     }
 
