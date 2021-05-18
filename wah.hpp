@@ -31,6 +31,75 @@ void print_vector_(const std::vector<T>& v) {
     std::cout << std::endl;
 }
 
+/*
+ * Word Aligned Hybrid (WAH)
+ * If you have no idea about WAH check out :
+ * https://www.youtube.com/watch?v=BsZJ51JoYU0
+ *
+ * It is very similar to Run Length Encoding (RLE) as it also encodes runs of
+ * repeating symbols but is much more flexible when the symbols wiggle (change
+ * with high frequency). Also the words are always aligned to processor words
+ * e.g., 8, 16, 32 bits etc. This allows for very efficient implementations of
+ * operations see : Notes on design and implementation of compressed bit vectors
+ * https://escholarship.org/uc/item/9zz3r6k7
+ *
+ *
+ * The Word Aligned Hybrid (WAH) format used here is as follows :
+ *
+ * NOT USED ANYMORE BECAUSE WAH2 (see below) IS BETTER SUITED
+ *
+ * - The MSB bit indicates if the other bits represent a pattern or a counter
+ * - - If 0 we have a pattern, copy the remaining bits
+ * - - If 1 we have a counter, the remaning bits are the counter,
+ *                             copy (#bits-1 * counter) zeroes
+ *
+ * E.g., for 8-bit WAH word :
+ * WAH 0b0110'1010 (8 bits) => Decoded 0b110'1010 (7 bits)
+ *        ^^^ ^^^^ pattern
+ * WAH 0b1000'0011 (8 bits) => Decoded 0b000'0000 000'0000 000'0000 (21 bits)
+ *        ^^^ ^^^^ counter
+ *
+ * MAX counter = 0b_111'1111 (127) which encodes 127*15 = 1905 consecutive zeroes
+ *                 ^
+ *                 |
+ *                 +-- Bit that indicates a counter for repeating value
+ *
+ *
+ *
+ *
+ *
+ * The Word Aligned Hybrid 2 (WAH2) format used here is as follows :
+ *
+ * - The MSB bit indicates if the others bits represent a pattern or a counter
+ * - - If 0 we have a pattern, copy the remaining bits
+ * - - If 1 we have a counter, check the next bit, the remaining bits are the counter
+ * - - - If it is 0, copy (#bits-1 * counter) zeroes
+ * - - - If it is 1, copy (#bits-1 * counter) ones
+ *
+ * E.g., for 8-bit WAH2 word :
+ * WAH 0b0110'1010 (8 bits) => Decoded 0b110'1010 (7 bits)
+ *       |^^^ ^^^^ pattern
+ * WAH 0b1000'0011 (8 bits) => Decoded 0b000'0000 000'0000 000'0000 (21 bits)
+ *       ||^^ ^^^^ counter
+ * WAH 0b1100'0011 (8 bits) => Decoded 0b111'1111 111'1111 111'1111 (21 bits)
+ *       ||^^ ^^^^ counter
+ *       |+-- Bit that indicates the repeating value
+ *       |
+ *       +--- Bit that indicates a counter
+ *
+ * MAX counter = 0b__11'1111 = (63) which encodes 63*15 = 945 repeating values
+ *                 ^^
+ *                 ||
+ *                 |+-- Bit that indicates the repeating value
+ *                 |
+ *                 +--- Bit that indicates a counter
+ *
+ * Note : Since the values 0 is never used for a counter (you never encode a
+ *        stretch of 0 times repeating values) the effective value of the counter
+ *        could be taken as +1 (i.e., a 0 counter means 1 and 41 counter means 42)
+ *        but it was chosen not to because this doesn't make much of a difference
+ *        and makes the encoding more confusing.
+ */
 namespace wah {
 
     template<typename T>
@@ -598,7 +667,7 @@ namespace wah {
      * @brief Copy-less reordering wah encoder
      * */
     template <typename T = uint16_t, typename A = uint16_t>
-    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& minor_allele_count) {
+    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& minor_allele_count, bool& has_missing) {
         // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         // 0b1000'0000 for 8b
@@ -608,11 +677,6 @@ namespace wah {
         // Resize to have no problems accessing in the loop below (removes conditionals from loop)
         size_t BITS_WAH_SIZE = a.size() / WAH_BITS;
         const size_t BITS_REM = a.size() % WAH_BITS; // Hope compiler combines the divide above and this mod
-        //const size_t ORIGINAL_SIZE = a.size();
-        if (BITS_REM) {
-            //BITS_WAH_SIZE += 1;
-            //bits.resize(bits.size() + (WAH_BITS-BITS_REM), 0);
-        }
 
         std::vector<T> wah; // Output
 
@@ -625,9 +689,11 @@ namespace wah {
 
             // Scan WAH-BITS in bits (e.g., 7 for uint8_t, 31 for uint32_t)
             for (size_t j = 0; j < WAH_BITS; ++j) { // WAH word loop
-                //if (gt_array[a[b]] == bcf_gt_missing) {
-                //    std::cout << "Missing value found" << std::endl;
-                //}
+                // Check if missing value is found, note that bcf_gt_missing is unphased missing !
+                if (bcf_gt_allele(gt_array[a[b]]) == -1 /*bcf_gt_missing*/) {
+                    //std::cout << "Missing value found" << std::endl;
+                    has_missing = true;
+                }
                 if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
                     word |= WAH_HIGH_BIT;
                     alt_allele_counter++;
@@ -642,9 +708,10 @@ namespace wah {
         if (BITS_REM) {
             T word = 0;
             for (size_t j = 0; j < WAH_BITS; ++j) {
-                //if (gt_array[a[b]] == bcf_gt_missing) {
-                //    std::cout << "Missing value found" << std::endl;
-                //}
+                if (bcf_gt_allele(gt_array[a[b]]) == -1 /*bcf_gt_missing*/) {
+                    //std::cout << "Missing value found" << std::endl;
+                    has_missing = true;
+                }
                 if ((j < BITS_REM) and (bcf_gt_allele(gt_array[a[b++]]) == alt_allele)) {
                     word |= WAH_HIGH_BIT;
                     alt_allele_counter++;
@@ -663,6 +730,43 @@ namespace wah {
         }
 
         minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_counter, alt_allele_counter);
+        return wah;
+    }
+
+    /**
+     * @brief Encodes a number of values the are all the same as WAH
+     * */
+    template <typename T = uint16_t>
+    inline std::vector<T> wah_encode2_all_same_value(size_t number, bool value) {
+        // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        // 0b1000'0000 for 8b
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
+        constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
+        constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
+
+        std::vector<T> wah; // Output
+
+        // Compute the number of WAH words needed for the output
+        size_t WAH_WORDS = number / WAH_BITS;
+        const size_t BITS_REM = number % WAH_BITS;
+        if (BITS_REM) {
+            WAH_WORDS++;
+        }
+
+        // Compute the number of full counters required
+        const T FULL_COUNTER = WAH_HIGH_BIT | (value ? WAH_COUNT_1_BIT : 0) | WAH_MAX_COUNTER;
+        const size_t NUMBER_OF_FULL_COUNTERS = WAH_WORDS / WAH_MAX_COUNTER;
+        const size_t LAST_COUNTER = WAH_WORDS % WAH_MAX_COUNTER;
+
+        // Add the full counters
+        for (size_t i = 0; i < NUMBER_OF_FULL_COUNTERS; ++i) {
+            wah.push_back(FULL_COUNTER);
+        }
+
+        // Add the last counter of WAH words
+        wah.push_back(WAH_HIGH_BIT | LAST_COUNTER);
+
         return wah;
     }
 
