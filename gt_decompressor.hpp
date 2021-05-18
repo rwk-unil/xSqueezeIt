@@ -116,50 +116,18 @@ public:
         wah2_extract<uint16_t>(rt_p, rearrangement_track, header.num_variants);
     }
 
-    public:
-
     /**
      * @brief Decompresses the loaded file into an output file
      *
      * @param ofname the output file name
      * */
     void decompress(std::string ofname) {
-        htsFile* fp = NULL;
-        bcf_hdr_t* hdr = NULL;
-
-        if (global_app_options.samples != "") {
-            enable_select_samples(global_app_options.samples);
-        }
-
         decompress_checks();
-
-        auto dp = generate_decompress_pointer<uint16_t, uint16_t>(); /// @todo Types
-
-        if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
-            if (global_app_options.regions != "") {
-                std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
-                initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions);
-            } else {
-                initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions_file, true /*is file*/);
-            }
-
-            create_output_file(ofname, fp, hdr);
-
-            decompress_inner_loop<true /* Non linear access */>(bcf_fri, dp, hdr, fp);
-        } else {
-            // Read the bcf without the samples (variant info)
-            initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
-
-            create_output_file(ofname, fp, hdr);
-
-            // Decompress and add the genotype data to the new file
-            // This is the main loop, where most of the time is spent
-            decompress_inner_loop(bcf_fri, dp, hdr, fp);
+        if (header.aet_bytes == 2) {
+            decompress_core<uint16_t>(ofname);
+        } else if (header.aet_bytes == 4) {
+            decompress_core<uint32_t>(ofname);
         }
-
-        hts_close(fp);
-        bcf_hdr_destroy(hdr);
-        destroy_bcf_file_reader(bcf_fri);
     }
 
     /**
@@ -178,6 +146,10 @@ public:
         if (selected_genotypes) {
             delete[] selected_genotypes;
         }
+    }
+
+    void print_info() {
+        print_header_info(header);
     }
 
 private:
@@ -274,6 +246,44 @@ private:
         const std::vector<bool>& rearrangement_track;
     };
 
+    template<typename A_T, typename WAH_T = uint16_t>
+    void decompress_core(const std::string& ofname) {
+        htsFile* fp = NULL;
+        bcf_hdr_t* hdr = NULL;
+
+        if (global_app_options.samples != "") {
+            enable_select_samples(global_app_options.samples);
+        }
+
+        auto dp = generate_decompress_pointer<A_T, WAH_T>(); /// @todo Types
+
+        if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
+            if (global_app_options.regions != "") {
+                std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
+                initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions);
+            } else {
+                initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions_file, true /*is file*/);
+            }
+
+            create_output_file(ofname, fp, hdr);
+
+            decompress_inner_loop<true /* Non linear access */>(bcf_fri, dp, hdr, fp);
+        } else {
+            // Read the bcf without the samples (variant info)
+            initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
+
+            create_output_file(ofname, fp, hdr);
+
+            // Decompress and add the genotype data to the new file
+            // This is the main loop, where most of the time is spent
+            decompress_inner_loop(bcf_fri, dp, hdr, fp);
+        }
+
+        hts_close(fp);
+        bcf_hdr_destroy(hdr);
+        destroy_bcf_file_reader(bcf_fri);
+    }
+
     template<const bool RECORD_NONLINEAR = false, typename A_T, typename WAH_T>
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, DecompressPointer<A_T, WAH_T>& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
         int *values = NULL;
@@ -337,8 +347,8 @@ private:
                     selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
                     selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
                     for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-                        ac_s[alt_allele] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
-                        ac_s[alt_allele] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
+                        ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
+                        ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
                     }
                 }
                 ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * PLOIDY);
@@ -416,13 +426,13 @@ private:
     void decompress_checks() {
         // This being a template does not help ...
         // Because decompression depends on file type
-        if (header.aet_bytes != 2) {
+        if (header.aet_bytes != 2 && header.aet_bytes != 4) {
             /// @todo
-            throw "TODO DIFFERENT AET size";
+            throw "Unsupported AET size";
         }
         if (header.wah_bytes != 2) {
             /// @todo
-            throw "TODO DIFFERENT WAH size";
+            throw "Unsupported WAH size";
         }
 
         if (sample_list.size() != (header.hap_samples / 2)) {
