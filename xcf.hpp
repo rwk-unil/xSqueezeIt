@@ -602,11 +602,16 @@ void sprinkle_missing_xcf(const std::string& ifname, const std::string& ofname) 
 
         for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
             if (distrib(gen) == 1) { // 1% chance to happen
-                bcf_fri.gt_arr[i*2] = bcf_gt_missing;
+                bcf_fri.gt_arr[i*2] = bcf_gt_is_phased(bcf_fri.gt_arr[i*2]) ?
+                                      bcf_gt_phased(-1) :
+                                      bcf_gt_unphased(-1);
             }
             if (distrib(gen) == 1) { // 1% chance to happen
-                bcf_fri.gt_arr[i*2+1] = bcf_gt_missing;
+                bcf_fri.gt_arr[i*2+1] = bcf_gt_is_phased(bcf_fri.gt_arr[i*2+1]) ?
+                                        bcf_gt_phased(-1) :
+                                        bcf_gt_unphased(-1);
             }
+            // Note : "#define bcf_gt_missing 0" is the unphased version, therefore we use the -1 idx instead
         }
         bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
 
