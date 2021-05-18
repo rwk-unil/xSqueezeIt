@@ -270,7 +270,7 @@ private:
 
         if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
             if (global_app_options.regions != "") {
-                std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
+                //std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
                 initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions);
             } else {
                 initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions_file, true /*is file*/);
