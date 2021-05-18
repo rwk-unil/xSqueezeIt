@@ -211,6 +211,7 @@ private:
                 rearrangement_track.resize(REARRANGEMENT_TRACK_CHUNK, false);
 
                 size_t rephase_counter = 0;
+                has_missing_in_file = false;
 
                 //std::cout << "het counts : ";
                 // While the BCF has lines
@@ -267,12 +268,22 @@ private:
                         }
 
                         // Encode the current alternative allele track given the arrangement in a and update minor allele count
-                        wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, minor_allele_count));
+                        bool has_missing = false;
+                        wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, minor_allele_count, has_missing));
                         wah_words += wahs.back().size();
                         if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
                             common_wah_words += wahs.back().size();
                         } else {
                             rare_wah_words += wahs.back().size();
+                        }
+
+                        // Encode the missing values
+                        if (has_missing) {
+                            has_missing_in_file = true;
+                            missing_wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, -1 /* missing allele */, a, minor_allele_count, has_missing));
+                        } else {
+                            // Optimisation, since we know there are no missing, use this function
+                            missing_wahs.push_back(wah::wah_encode2_all_same_value(N_HAPS, 0));
                         }
 
                         // Only sort if minor allele count is high enough (better compression, faster)
@@ -457,6 +468,8 @@ private:
         const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
 
         std::vector<std::vector<uint16_t> > wahs;
+        std::vector<std::vector<uint16_t> > missing_wahs;
+        bool has_missing_in_file = false;
         std::vector<bool> rearrangement_track;
         std::vector<std::vector<T> > sampled_arrangements;
 
