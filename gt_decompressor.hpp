@@ -190,13 +190,24 @@ private:
                 seek_sampled_arrangement(previous_arrangement);
             }
 
-            for (size_t i = 0; i < advance_steps; ++i) {
-                advance();
+            for (size_t i = 1; i < advance_steps; ++i) {
+                private_advance(false);
             }
+            advance(); // equiv to private_advance(true)
         }
 
         // Advance and update inner data structures
         void advance() {
+            private_advance();
+        }
+
+        const std::vector<A_T>& get_ref_on_a() const {return a;}
+        const std::vector<bool>& get_ref_on_y() const {return y;}
+
+        size_t get_current_position() const {return current_position;}
+
+    protected:
+        inline void private_advance(bool extract = true) {
             if (current_position >= N_SITES) {
                 std::cerr << "Advance called but already at end" << std::endl;
                 return;
@@ -216,16 +227,16 @@ private:
                 std::copy(b.begin(), b.begin()+v, a.begin()+u);
             }
 
-            wah2_extract(wah_p, y, N_HAPS);
+            if (extract or rearrangement_track[current_position+1]) {
+                // Optimisation : Only extract if chosen or if needed to advance further
+                wah2_extract(wah_p, y, N_HAPS);
+            } else {
+                // Otherwise only advance the WAH pointer
+                wah2_advance_pointer(wah_p, N_HAPS);
+            }
             current_position++;
         }
 
-        const std::vector<A_T>& get_ref_on_a() const {return a;}
-        const std::vector<bool>& get_ref_on_y() const {return y;}
-
-        size_t get_current_position() const {return current_position;}
-
-    protected:
         // Constants, referencing memory mapped file
         const size_t N_SITES;
         const size_t N_HAPS;

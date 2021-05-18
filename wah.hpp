@@ -56,6 +56,24 @@ namespace wah {
         size_t counter = 0;
     } Wah2State_t;
 
+    template<typename T = uint16_t>
+    inline void wah2_advance_pointer(T*& wah_p, size_t size) {
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
+        constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
+        T word;
+        size_t bit_position = 0;
+        while(bit_position < size) {
+            word = *wah_p;
+            if (word & WAH_HIGH_BIT) {
+                bit_position += (word & WAH_MAX_COUNTER)*WAH_BITS;
+            } else {
+                bit_position += WAH_BITS;
+            }
+            wah_p++;
+        }
+    }
+
     // Note that bits should be padded to accomodate the last encoding (easiest is to add sizeof(T))
     template<typename T = uint16_t>
     inline void wah2_extract(T*& wah_p, std::vector<bool>& bits, size_t size) {
@@ -607,6 +625,9 @@ namespace wah {
 
             // Scan WAH-BITS in bits (e.g., 7 for uint8_t, 31 for uint32_t)
             for (size_t j = 0; j < WAH_BITS; ++j) { // WAH word loop
+                //if (gt_array[a[b]] == bcf_gt_missing) {
+                //    std::cout << "Missing value found" << std::endl;
+                //}
                 if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
                     word |= WAH_HIGH_BIT;
                     alt_allele_counter++;
@@ -621,6 +642,9 @@ namespace wah {
         if (BITS_REM) {
             T word = 0;
             for (size_t j = 0; j < WAH_BITS; ++j) {
+                //if (gt_array[a[b]] == bcf_gt_missing) {
+                //    std::cout << "Missing value found" << std::endl;
+                //}
                 if ((j < BITS_REM) and (bcf_gt_allele(gt_array[a[b++]]) == alt_allele)) {
                     word |= WAH_HIGH_BIT;
                     alt_allele_counter++;
