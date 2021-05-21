@@ -708,13 +708,15 @@ namespace wah {
         if (BITS_REM) {
             T word = 0;
             for (size_t j = 0; j < WAH_BITS; ++j) {
-                if (bcf_gt_allele(gt_array[a[b]]) == -1 /*bcf_gt_missing*/) {
-                    //std::cout << "Missing value found" << std::endl;
-                    has_missing = true;
-                }
-                if ((j < BITS_REM) and (bcf_gt_allele(gt_array[a[b++]]) == alt_allele)) {
-                    word |= WAH_HIGH_BIT;
-                    alt_allele_counter++;
+                if (j < BITS_REM) {
+                    if (bcf_gt_allele(gt_array[a[b]]) == -1 /*bcf_gt_missing*/) {
+                        //std::cout << "Missing value found" << std::endl;
+                        has_missing = true;
+                    }
+                    if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
+                        word |= WAH_HIGH_BIT;
+                        alt_allele_counter++;
+                    }
                 }
                 word >>= 1;
             }

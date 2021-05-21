@@ -61,6 +61,11 @@ public:
         }
     }
 
+    void set_ppa_use(bool use) {
+        compressor16b.set_ppa_use(use);
+        compressor32b.set_ppa_use(use);
+    }
+
 private:
     template<typename T = uint32_t>
     class GtCompressor {
@@ -184,6 +189,10 @@ private:
 
     public:
 
+        void set_ppa_use(bool use) {
+            use_ppas = use;
+        }
+
         void compress_in_memory(std::string filename) {
             if (has_extension(filename, ".bcf") or has_extension(filename, ".vcf.gz") or has_extension(filename, ".vcf")) {
                 bcf_file_reader_info_t bcf_fri;
@@ -260,11 +269,16 @@ private:
                             rearrangement_track.resize(rearrangement_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
                         }
 
-                        // Sample arrangement every so ofter
+                        // Sample arrangement every so often
                         // Also sample the first one, because we could change it, for example
                         // by seeking a better arrangement before encoding
                         if ((variant_counter % ARRANGEMENT_SAMPLE_RATE) == 0) {
-                            sampled_arrangements.push_back(a);
+                            if (use_ppas) {
+                                sampled_arrangements.push_back(a);
+                            } else {
+                                // Restart from natural order
+                                std::iota(a.begin(), a.end(), 0);
+                            }
                         }
 
                         // Encode the current alternative allele track given the arrangement in a and update minor allele count
@@ -355,7 +369,8 @@ private:
                 throw "Failed to open file";
             }
 
-            const auto& offsets = get_file_offsets(wahs, sampled_arrangements);
+            const auto& offsets = use_ppas ? get_file_offsets(wahs, sampled_arrangements) :
+                                             get_file_offsets(wahs, num_samples, (num_variants+ARRANGEMENT_SAMPLE_RATE-1)/ARRANGEMENT_SAMPLE_RATE); /// @todo this is dirty
             size_t rearrangement_track_offset = offsets.samples;
             for (const auto& s : sample_list) {
                 rearrangement_track_offset += s.length()+1; // +1 because 0 ending string
@@ -370,7 +385,7 @@ private:
                 .wah_bytes = sizeof(uint16_t), // Should never change
                 .hap_samples = (uint64_t)this->num_samples,
                 .num_variants = (uint64_t)this->num_variants,
-                .block_size = (uint32_t)this->sampled_arrangements.front().size(),
+                .block_size = (uint32_t)this->num_samples, //(uint32_t)this->sampled_arrangements.front().size(),
                 .number_of_blocks = (uint32_t)1, // This version is single block
                 .ss_rate = (uint32_t)this->ss_rate,
                 .number_of_ssas = (uint32_t)this->num_ssas,
@@ -385,6 +400,7 @@ private:
                 .data_chksum = 0 /* TODO */,
                 .header_chksum = 0 /* TODO */
             };
+            header.iota_ppa = !use_ppas,
             s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
 
             size_t written_bytes = 0;
@@ -466,6 +482,8 @@ private:
         const double MAF = 0.01;
         const uint32_t ARRANGEMENT_SAMPLE_RATE = 8192;
         const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
+
+        bool use_ppas = true;
 
         std::vector<std::vector<uint16_t> > wahs;
         std::vector<std::vector<uint16_t> > missing_wahs;

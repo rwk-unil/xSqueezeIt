@@ -98,6 +98,35 @@ file_offsets_t get_file_offsets(const std::vector<std::vector<WAH_T> >& wahs, co
             .wahs_size = WAH_SIZE};
 }
 
+template<typename WAH_T>
+file_offsets_t get_file_offsets(const std::vector<std::vector<WAH_T> >& wahs, const size_t NUMBER_OF_SAMPLES, const size_t NUMBER_OF_SSAS) {
+    /// @todo define somewhere else
+    const size_t HEADER_SIZE = 256;
+    // Is the result vector size
+    const size_t NUMBER_OF_BLOCKS = 1;
+
+    // Indexes for WAH's (indexes for a's can be deduced)
+    // uint32_t should be enough, but this has to be checked
+    /// @todo check if output file is less than 4GBytes otherwhise error because of this
+    const size_t INDICES_SIZE = NUMBER_OF_BLOCKS * NUMBER_OF_SSAS * sizeof(uint32_t);
+
+    // Number of samples time number of subsampled a's
+    const size_t SSAS_SIZE = 0;
+
+    size_t WAH_SIZE = 0;
+    for (const auto& wah : wahs) { // For all WAH's
+        WAH_SIZE += wah.size();
+    }
+
+    WAH_SIZE *= sizeof(WAH_T);
+
+    return {.indices   = HEADER_SIZE,
+            .ssas      = HEADER_SIZE + INDICES_SIZE,
+            .wahs      = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE,
+            .samples   = HEADER_SIZE + INDICES_SIZE + SSAS_SIZE + WAH_SIZE,
+            .wahs_size = WAH_SIZE};
+}
+
 template<typename WAH_T, typename AET>
 file_offsets_t get_file_offsets(const std::vector<struct block_result_data_structs_t<WAH_T, AET> >& result) {
     /// @todo define somewhere else
@@ -175,10 +204,17 @@ struct header_s {
         struct {
             bool has_missing : 1;
             bool non_uniform_phasing : 1;
-            uint8_t rsvd : 6;
+            uint8_t rsvd__1 : 6;
         };
     };
-    uint8_t  rsvd_bs[3] = {0,};
+    union {
+        uint8_t specific_bitset = 0;
+        struct {
+            bool iota_ppa : 1;
+            uint8_t rsvd__2 : 7;
+        };
+    };
+    uint8_t  rsvd_bs[2] = {0,};
     uint32_t rsvd_1[3] = {0,};
 
     // 64 bytes
@@ -219,6 +255,7 @@ void print_header_info(const header_t& header) {
     std::cerr << "--" << std::endl;
     std::cerr << "Has missing : " << (header.has_missing ? "yes" : "no") << std::endl;
     std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;
+    std::cerr << "Uses PPA's : " << (header.iota_ppa ? "no" : "yes" ) << std::endl;
     std::cerr << "--" << std::endl;
     std::cerr << "Haplotype samples  : " << header.hap_samples << std::endl;
     std::cerr << "Number of variants : " << header.num_variants << std::endl;

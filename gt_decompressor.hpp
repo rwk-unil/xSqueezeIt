@@ -114,6 +114,8 @@ public:
         rearrangement_track.resize(header.num_variants + header.wah_bytes*8);
         uint16_t* rt_p = (uint16_t*)((uint8_t*)file_mmap + header.rearrangement_track_offset);
         wah2_extract<uint16_t>(rt_p, rearrangement_track, header.num_variants);
+
+        use_ppas = !header.iota_ppa;
     }
 
     /**
@@ -157,9 +159,13 @@ private:
     class DecompressPointer {
     private:
         void seek_sampled_arrangement(const size_t num = 0) {
-            A_T* arr_p = arrangements_p + (num * N_HAPS);
-            for (size_t i = 0; i < N_HAPS; ++i) {
-                a[i] = arr_p[i];
+            if (use_ppas) {
+                A_T* arr_p = arrangements_p + (num * N_HAPS);
+                for (size_t i = 0; i < N_HAPS; ++i) {
+                    a[i] = arr_p[i];
+                }
+            } else {
+                std::iota(a.begin(), a.end(), 0);
             }
             wah_p = wah_origin_p + (indices_p[num]); // Pointer arithmetic handles sizeof(WAH_T)
             wah2_extract(wah_p, y, N_HAPS); // Extract current values
@@ -168,8 +174,8 @@ private:
 
     public:
         // Decompress Pointer from memory mapped compressed file
-        DecompressPointer(const size_t N_SITES, const size_t N_HAPS, WAH_T* wah_origin_p, uint32_t* indices_p, A_T* arrangements_p, const size_t arrangement_sample_rate, const std::vector<bool>& rearrangement_track):
-            N_SITES(N_SITES), N_HAPS(N_HAPS), wah_origin_p(wah_origin_p), indices_p(indices_p), arrangements_p(arrangements_p), arrangement_sample_rate(arrangement_sample_rate), rearrangement_track(rearrangement_track) {
+        DecompressPointer(const size_t N_SITES, const size_t N_HAPS, WAH_T* wah_origin_p, uint32_t* indices_p, A_T* arrangements_p, const size_t arrangement_sample_rate, const std::vector<bool>& rearrangement_track, bool use_ppas = true):
+            N_SITES(N_SITES), N_HAPS(N_HAPS), wah_origin_p(wah_origin_p), indices_p(indices_p), arrangements_p(arrangements_p), arrangement_sample_rate(arrangement_sample_rate), rearrangement_track(rearrangement_track), use_ppas(use_ppas) {
             a.resize(N_HAPS);
             b.resize(N_HAPS);
             y.resize(N_HAPS + sizeof(WAH_T)*8, 0); // Get some extra space
@@ -216,15 +222,20 @@ private:
             A_T u = 0;
             A_T v = 0;
 
-            if (rearrangement_track[current_position]) {
-                for (size_t i = 0; i < N_HAPS; ++i) {
-                    if (y[i] == 0) {
-                        a[u++] = a[i];
-                    } else {
-                        b[v++] = a[i];
+            // Edge case
+            if (!use_ppas and (((current_position+1) % arrangement_sample_rate) == 0)) {
+                std::iota(a.begin(), a.end(), 0);
+            } else {
+                if (rearrangement_track[current_position]) {
+                    for (size_t i = 0; i < N_HAPS; ++i) {
+                        if (y[i] == 0) {
+                            a[u++] = a[i];
+                        } else {
+                            b[v++] = a[i];
+                        }
                     }
+                    std::copy(b.begin(), b.begin()+v, a.begin()+u);
                 }
-                std::copy(b.begin(), b.begin()+v, a.begin()+u);
             }
 
             if (extract or rearrangement_track[current_position+1]) {
@@ -255,6 +266,8 @@ private:
 
         // Binary track that informs us where rearrangements were performed
         const std::vector<bool>& rearrangement_track;
+
+        bool use_ppas = true;
     };
 
     template<typename A_T, typename WAH_T = uint16_t>
@@ -266,7 +279,7 @@ private:
             enable_select_samples(global_app_options.samples);
         }
 
-        auto dp = generate_decompress_pointer<A_T, WAH_T>(); /// @todo Types
+        auto dp = generate_decompress_pointer<A_T, WAH_T>();
 
         if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
             if (global_app_options.regions != "") {
@@ -395,7 +408,7 @@ private:
 
         const size_t arrangements_sample_rate = header.ss_rate;
 
-        DecompressPointer dp(N_SITES, N_HAPS, wah_origin_p, indices_p, arrangements_p, arrangements_sample_rate, rearrangement_track);
+        DecompressPointer dp(N_SITES, N_HAPS, wah_origin_p, indices_p, arrangements_p, arrangements_sample_rate, rearrangement_track, use_ppas);
         dp.seek(offset);
 
         return dp;
@@ -588,6 +601,8 @@ protected:
     int32_t* selected_genotypes{NULL};
 
     std::vector<bool> rearrangement_track;
+
+    bool use_ppas = true;
 };
 
 #endif /* __DECOMPRESSOR_HPP__ */

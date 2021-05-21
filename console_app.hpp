@@ -16,6 +16,8 @@ public:
         app.add_flag("--wait", wait, "DEBUG - wait for int input");
         app.add_flag("--verify", verify, "DEBUG - verify");
 
+        app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
+
         app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         app.add_flag("--compute-phase-switch-errors", compute_phase_switch_errors, "Compute phase switch errors between input and output file");
         app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
@@ -52,6 +54,7 @@ public:
     bool info = false;
     bool wait = false;
     bool verify = false;
+    bool iota = false;
     bool count_xcf = false;
     bool sandbox = false;
     bool compute_phase_switch_errors = false;
