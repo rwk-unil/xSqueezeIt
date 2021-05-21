@@ -563,6 +563,65 @@ void unphase_xcf(const std::string& ifname, const std::string& ofname) {
 }
 
 #include <random>
+void unphase_xcf_random(const std::string& ifname, const std::string& ofname) {
+    bcf_file_reader_info_t bcf_fri;
+    htsFile* fp = NULL;
+    bcf_hdr_t* hdr = NULL;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    std::random_device rd;  // Will be used to obtain a seed for the random number engine
+    std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    std::uniform_int_distribution<> distrib(1, 2);
+
+    fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wu"); // "-" for stdout
+    if (fp == NULL) {
+        std::cerr << "Could not open " << ofname << std::endl;
+        throw "File open error";
+    }
+
+    // Duplicate the header from the input bcf
+    hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
+
+    // Write the header to the new file
+    int ret = bcf_hdr_write(fp, hdr);
+
+    while(bcf_next_line(bcf_fri)) {
+        const int32_t PLOIDY = 2;
+        bcf1_t *rec = bcf_fri.line;
+
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        // Check ploidy, only support diploid for the moment
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+            exit(-1); // Change this
+        }
+
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            int32_t allele_0 = bcf_gt_allele(bcf_fri.gt_arr[i*2]);
+            int32_t allele_1 = bcf_gt_allele(bcf_fri.gt_arr[i*2+1]);
+            if (distrib(gen) == 1) {
+                bcf_fri.gt_arr[i*2] = bcf_gt_unphased(allele_0);
+                bcf_fri.gt_arr[i*2+1] = bcf_gt_unphased(allele_1);
+            } else {
+                bcf_fri.gt_arr[i*2] = bcf_gt_unphased(allele_1);
+                bcf_fri.gt_arr[i*2+1] = bcf_gt_unphased(allele_0);
+            }
+        }
+        bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
+
+        ret = bcf_write1(fp, hdr, rec);
+    }
+
+    // Close / Release ressources
+    hts_close(fp);
+    bcf_hdr_destroy(hdr);
+    destroy_bcf_file_reader(bcf_fri);
+}
+
 void sprinkle_missing_xcf(const std::string& ifname, const std::string& ofname) {
     bcf_file_reader_info_t bcf_fri;
     htsFile* fp = NULL;
@@ -734,6 +793,85 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
     destroy_bcf_file_reader(bcf_fri);
 
     return pos;
+}
+
+std::vector<std::vector<bool> > extract_phase_vectors(const std::string& ifname) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    const int32_t PLOIDY = 2;
+
+    std::vector<std::vector<bool> > phase_vectors(bcf_fri.n_samples);
+
+    while(bcf_next_line(bcf_fri)) {
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        // Check ploidy, only support diploid for the moment
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+            exit(-1); // Change this
+        }
+
+        for (size_t sample_index = 0; sample_index < bcf_fri.n_samples; ++sample_index) {
+            int difference = bcf_gt_allele(bcf_fri.gt_arr[sample_index*2+1]) - bcf_gt_allele(bcf_fri.gt_arr[sample_index*2]);
+            if (difference > 0) {
+                phase_vectors[sample_index].push_back(1);
+            } else if (difference < 0) {
+                phase_vectors[sample_index].push_back(0);
+            }
+        }
+    }
+
+    // Close / Release ressources
+    destroy_bcf_file_reader(bcf_fri);
+
+    return phase_vectors;
+}
+
+size_t compute_phase_switch_errors(const std::vector<bool>& testseq, const std::vector<bool>& refseq) {
+    if (testseq.size() != refseq.size()) {
+        std::cerr << "Seqs are not the same size, cannot compute" << std::endl;
+        throw "Size problem";
+    }
+
+    size_t phase_switch_error_counter = 0;
+    for (size_t i = 1; i < testseq.size(); ++i) {
+        if (testseq[i-1] xor testseq[i] xor refseq[i-1] xor refseq[i]) {
+            phase_switch_error_counter++;
+        }
+    }
+    return phase_switch_error_counter;
+}
+
+void compute_phase_switch_errors(const std::string& testFile, const std::string& refFile) {
+    auto test = extract_phase_vectors(testFile);
+    auto ref  = extract_phase_vectors(refFile);
+    // This array is if we want some more statistics and per sample info
+    std::vector<size_t> phase_switch_errors(test.size(), 0);
+
+    if (test.size() != ref.size()) {
+        std::cerr << "Results are not the same size, cannot compute" << std::endl;
+        throw "Size problem";
+    }
+
+    size_t total_errors = 0;
+    size_t total_switches = 0;
+    for (size_t sample_index = 0; sample_index < test.size(); sample_index++) {
+        phase_switch_errors[sample_index] = compute_phase_switch_errors(test[sample_index], ref[sample_index]);
+        if (sample_index < 1000) {
+            std::cerr << "Sample " << sample_index << " : " << phase_switch_errors[sample_index]
+                      << " errors on " << test[sample_index].size() << " sites" << std::endl;
+        }
+        total_errors += phase_switch_errors[sample_index];
+        total_switches += test[sample_index].size() ? test[sample_index].size()-1 : 0;
+    }
+
+    double percentage = (double)total_errors / (double)total_switches * 100.0;
+
+    std::cerr << "The error percentage is : " << percentage << " %" << std::endl;
 }
 
 #endif /* __XCF_HPP__ */
