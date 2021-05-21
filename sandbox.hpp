@@ -14,6 +14,17 @@ class Sandbox
 public:
     void run() {
         auto& opt = global_app_options;
+
+        if (opt.compute_phase_switch_errors) {
+            try {
+                compute_phase_switch_errors(opt.filename, opt.ofname);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
+            exit(0);
+        }
+
         if (opt.replace_pseudo) {
             try {
                 replace_samples_by_pos_in_binary_matrix(opt.filename, opt.ofname);
@@ -56,6 +67,16 @@ public:
                 print_basic_stats(extract_histogram_widths(h16s), "m16");
                 print_basic_stats(extract_histogram_widths(h32s), "m32");
                 print_basic_stats(extract_histogram_widths(h64s), "m64");
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
+            exit(0);
+        }
+
+        if (opt.het_bitmap) {
+            try {
+                extract_common_to_file_het_info(opt.filename, opt.ofname, opt.bitmap_pbwt);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 exit(-1);
@@ -106,6 +127,16 @@ public:
         if (opt.unphase) {
             try {
                 unphase_xcf(opt.filename, opt.ofname);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
+            exit(0);
+        }
+
+        if (opt.unphase_random) {
+            try {
+                unphase_xcf_random(opt.filename, opt.ofname);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 exit(-1);

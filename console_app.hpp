@@ -17,12 +17,15 @@ public:
         app.add_flag("--verify", verify, "DEBUG - verify");
 
         app.add_flag("--sandbox", sandbox, "DEBUG - ...");
+        app.add_flag("--compute-phase-switch-errors", compute_phase_switch_errors, "Compute phase switch errors between input and output file");
         app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
         app.add_flag("--create-map", create_map, "DEBUG - create map");
         app.add_flag("--unphase", unphase, "Removes phasing and reorders alleles in natural order e.g., 1|0 => 0/1");
+        app.add_flag("--unphase-random", unphase_random, "Removes phasing and reorders alleles randomly");
         app.add_flag("--sprinkle_missing", sprinkle_missing, "Sprinkles missing values randomly with 1% chance");
         app.add_flag("--bitmap", bitmap, "DEBUG - creates bitmap");
         app.add_flag("--bitmap_pbwt", bitmap_pbwt, "BEBUG - apply PBWT in bitmap");
+        app.add_flag("--bitmap_het", het_bitmap, "DEBUG - HET Bitmap, possible PBWT option");
         app.add_flag("--color_bitmap16", color_bitmap16, "DEBUG - creates bitmap");
         app.add_flag("--sorted_bitmap", sorted_bitmap, "DEBUG - creates sorted bitmap");
         app.add_flag("--block_sorted_bitmap", block_sorted_bitmap, "DEBUG - creates block sorted bitmap");
@@ -51,11 +54,14 @@ public:
     bool verify = false;
     bool count_xcf = false;
     bool sandbox = false;
+    bool compute_phase_switch_errors = false;
     bool create_map = false;
     bool unphase = false;
+    bool unphase_random = false;
     bool sprinkle_missing = false;
     bool bitmap = false;
     bool bitmap_pbwt = false;
+    bool het_bitmap = false;
     bool color_bitmap16 = false;
     bool sorted_bitmap = false;
     bool block_sorted_bitmap = false;
