@@ -7,6 +7,7 @@
 #include "transforms.hpp"
 #include "data_mining.hpp"
 #include "bitmap.hpp"
+#include "phasing.hpp"
 extern GlobalAppOptions global_app_options;
 
 class Sandbox
@@ -14,6 +15,16 @@ class Sandbox
 public:
     void run() {
         auto& opt = global_app_options;
+
+        if (opt.phase) {
+            try {
+                phase_xcf(opt.filename, opt.ofname);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
+            exit(0);
+        }
 
         if (opt.compute_phase_switch_errors) {
             try {

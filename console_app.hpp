@@ -19,6 +19,7 @@ public:
         app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
 
         app.add_flag("--sandbox", sandbox, "DEBUG - ...");
+        app.add_flag("--phase", phase, "DEBUG - phases the file according to PBWT sort");
         app.add_flag("--compute-phase-switch-errors", compute_phase_switch_errors, "Compute phase switch errors between input and output file");
         app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
         app.add_flag("--create-map", create_map, "DEBUG - create map");
@@ -59,6 +60,7 @@ public:
     bool sandbox = false;
     bool compute_phase_switch_errors = false;
     bool create_map = false;
+    bool phase = false;
     bool unphase = false;
     bool unphase_random = false;
     bool sprinkle_missing = false;
