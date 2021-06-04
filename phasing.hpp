@@ -316,17 +316,21 @@ public:
     bool almost_phased_by(T hap_1, T hap_2) const {
         T other_het_template = hap_1 xor hap_2;
 
+        // Difference of het sites
         T template_diff = other_het_template xor het_template;
         T het_sites_differences = count_ones(template_diff);
 
+        // Homozygous sites
         T other_hom = hap_1 & (~het_template);
         T hom = hap_A & (~het_template);
+
+        // Our het site(s) that are extra to the combination of hap_1 and hap_2
+        T het_site = het_template & template_diff;
 
         // The sample can almost be expressed as a combination of hap_1 and hap_2
         // The sample has at most one more heterozygous site, so all other sites
         // can be phased according to hap_1 and hap_2 except one
-        //return (het_sites_differences < 2) and (other_hom == hom);
-        return false;
+        return (het_site != 0) and (het_sites_differences == 1) and (other_hom == hom);
     }
 
     // Only apply when is almost phased by hap_1 and hap_2
@@ -397,7 +401,7 @@ protected:
         // If new haplotypes are generated do direct phasing again
         bool try_one = true;
         while (unphased_samples.size()) {
-            if (try_one) {
+            if (0 and try_one) {
                 // Try first order new haplotype generation
                 phase_a_sample_with_one_arbitrary_site();
                 /**
