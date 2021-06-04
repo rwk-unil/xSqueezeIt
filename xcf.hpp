@@ -683,7 +683,7 @@ void sprinkle_missing_xcf(const std::string& ifname, const std::string& ofname) 
     destroy_bcf_file_reader(bcf_fri);
 }
 
-std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifname) {
+std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifname, const double MAF = 0.01) {
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
 
@@ -714,7 +714,7 @@ std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifna
             }
             uint32_t minor_allele_count = std::min((uint32_t)bcf_fri.n_samples - alt_allele_counter, alt_allele_counter);
 
-            if (minor_allele_count > N_HAPS*0.01) {
+            if (minor_allele_count > N_HAPS*MAF) {
                 extraction_counter++;
                 output.push_back(std::vector<bool>(N_HAPS, false));
 

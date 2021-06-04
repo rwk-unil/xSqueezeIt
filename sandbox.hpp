@@ -10,11 +10,31 @@
 #include "phasing.hpp"
 extern GlobalAppOptions global_app_options;
 
+#include <cstdlib>
+
 class Sandbox
 {
 public:
     void run() {
         auto& opt = global_app_options;
+
+        if (opt.het_info) {
+            auto phase_vectors = extract_phase_vectors(opt.filename);
+            for (size_t i = 0; i < phase_vectors.size(); ++i) {
+                std::cerr << "Sample : " << i << " has " << phase_vectors[i].size() << " het sites" << std::endl;
+            }
+            exit(0);
+        }
+
+        if (opt.phase_2) {
+            try {
+                new_phase_xcf<uint32_t>(opt.filename, opt.ofname);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
+            exit(0);
+        }
 
         if (opt.phase) {
             try {
@@ -87,7 +107,8 @@ public:
 
         if (opt.het_bitmap) {
             try {
-                extract_common_to_file_het_info(opt.filename, opt.ofname, opt.bitmap_pbwt);
+                auto res = extract_common_to_file_het_info(opt.filename, opt.ofname, opt.bitmap_pbwt);
+                std::system((std::string("convert -size ") + std::to_string(res.first) + "x" + std::to_string(res.second) + " -depth 8 gray:" + opt.ofname + " " + opt.ofname + ".png").c_str());
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 exit(-1);

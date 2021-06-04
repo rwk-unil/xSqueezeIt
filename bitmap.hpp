@@ -90,7 +90,7 @@ static inline bool is_het(int32_t* gt_array, const size_t& index) {
     return bcf_gt_allele(gt_array[index]) ^ bcf_gt_allele(gt_array[index^1]);
 }
 
-void extract_common_to_file_het_info(const std::string& ifname, const std::string& ofname, bool pbwt = false) {
+std::pair<size_t, size_t> extract_common_to_file_het_info(const std::string& ifname, const std::string& ofname, bool pbwt = false) {
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
 
@@ -170,6 +170,8 @@ void extract_common_to_file_het_info(const std::string& ifname, const std::strin
 
     // Close / Release ressources
     destroy_bcf_file_reader(bcf_fri);
+
+    return std::pair<size_t, size_t>(bcf_fri.n_samples*2, extraction_counter);
 }
 
 template <typename AET>

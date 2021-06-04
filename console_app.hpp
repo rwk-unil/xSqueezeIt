@@ -20,6 +20,8 @@ public:
 
         app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         app.add_flag("--phase", phase, "DEBUG - phases the file according to PBWT sort");
+        app.add_flag("--phase2", phase_2, "DEBUG - phases the file given samples");
+        app.add_flag("--het-info", het_info, "DEBUG - displays number of het sites per sample");
         app.add_flag("--compute-phase-switch-errors", compute_phase_switch_errors, "Compute phase switch errors between input and output file");
         app.add_flag("--count-xcf", count_xcf, "DEBUG - counts number of variant entries in VCF/BCF");
         app.add_flag("--create-map", create_map, "DEBUG - create map");
@@ -61,6 +63,8 @@ public:
     bool compute_phase_switch_errors = false;
     bool create_map = false;
     bool phase = false;
+    bool phase_2 = false;
+    bool het_info = false;
     bool unphase = false;
     bool unphase_random = false;
     bool sprinkle_missing = false;

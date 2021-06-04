@@ -38,7 +38,7 @@ std::vector<A_T> get_reverse_permutation_array(const std::vector<A_T> a) {
     return result;
 }
 
-inline int get_score_from_allele_position(const size_t position, int32_t allele_min, int32_t allele_max, int32_t* gt_array) {
+/*inline*/ int get_score_from_allele_position(const size_t position, int32_t allele_min, int32_t allele_max, int32_t* gt_array) {
     // Only take into account if phased
     if (bcf_gt_is_phased(gt_array[position])) {
         if (bcf_gt_allele(gt_array[position]) == allele_min) {
@@ -53,7 +53,7 @@ inline int get_score_from_allele_position(const size_t position, int32_t allele_
     return 0;
 }
 
-inline void phase_sample(const size_t sample, int32_t* gt_array, int polarity) {
+/*inline*/ void phase_sample(const size_t sample, int32_t* gt_array, int polarity) {
     const auto i = sample;
     const auto allele_min = std::min(bcf_gt_allele(gt_array[i*2]), bcf_gt_allele(gt_array[i*2+1]));
     const auto allele_max = std::max(bcf_gt_allele(gt_array[i*2]), bcf_gt_allele(gt_array[i*2+1]));
@@ -81,7 +81,7 @@ inline void phase_sample(const size_t sample, int32_t* gt_array, int polarity) {
  *
  * */
 template <typename A_T>
-inline int score_sample_given_permutation_neighbors(const size_t sample, int32_t* gt_array, const size_t gt_array_size, const std::vector<A_T>& a, const std::vector<A_T>& a_index) {
+/*inline*/ int score_sample_given_permutation_neighbors(const size_t sample, int32_t* gt_array, const size_t gt_array_size, const std::vector<A_T>& a, const std::vector<A_T>& a_index) {
     int score = 0;
 
     const auto i = sample;
@@ -151,6 +151,9 @@ void rephase_samples_given_permutation(int32_t* gt_array, const size_t gt_array_
             }
         }
 
+        //std::cerr << "Samples to phase : " << samples_to_phase.size() << std::endl;
+        //std::cerr << "Samples phased : " << phased_samples.size() << std::endl;
+
         // If samples were phased
         if (!phased_samples.empty()) {
             // Remove them from the samples to phase
@@ -159,6 +162,7 @@ void rephase_samples_given_permutation(int32_t* gt_array, const size_t gt_array_
             }
         } else { // Else reduce the scoring threshold
             scoring_threshold--;
+            //std::cerr << "Reduced threshold to : " << scoring_threshold << std::endl;
         }
     }
 
@@ -196,6 +200,7 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
     std::iota(a.begin(), a.end(), 0);
     std::vector<size_t> b(N_HAPS);
 
+    size_t line = 0;
     while(bcf_next_line(bcf_fri)) {
         uint32_t minor_allele_count = 0;
         bcf1_t *rec = bcf_fri.line;
@@ -211,6 +216,7 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
             exit(-1); // Change this
         }
 
+        //std::cerr << "Line : " << line++ << std::endl;
         rephase_samples_given_permutation(bcf_fri.gt_arr, bcf_fri.n_samples, a);
 
         bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
@@ -224,6 +230,7 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
 
             // Only sort if minor allele count is high enough (better compression, faster)
             if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
+                //std::cerr << "Permuting" << std::endl;
                 // PBWT Sort
                 size_t u = 0;
                 size_t v = 0;
@@ -240,6 +247,373 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
                 std::copy(b.begin(), b.begin()+v, a.begin()+u);
             }
         }
+    }
+
+    // Close / Release ressources
+    hts_close(fp);
+    bcf_hdr_destroy(hdr);
+    destroy_bcf_file_reader(bcf_fri);
+}
+
+template <typename T>
+std::vector<T> extract_haplotypes_as_words(const std::vector<std::vector<bool> >& bit_matrix, const size_t pos) {
+    const size_t N_HAPS = bit_matrix.at(0).size();
+
+    std::vector<T> result(N_HAPS*2, 0);
+
+    for (size_t i = 0; i < sizeof(T)*8; ++i) {
+        for (size_t j = 0; j < N_HAPS; ++j) {
+            if (i) {
+                result[j] <<= 1;
+            }
+            result[j] |= (T)bit_matrix[pos+i][j];
+        }
+    }
+
+    return result;
+}
+
+template<typename T>
+class Sample {
+private:
+    inline T count_ones(T input) const {
+        T ones = 0;
+        // Can be optimized by assembly call popcount
+        for (T i = 0; i < sizeof(T)*8; ++i) {
+            if ((input >> i) & 1) {
+                ++ones;
+            }
+        }
+        return ones;
+    }
+
+public:
+    Sample(T hap_A, T hap_B, size_t id) : hap_A(hap_A), hap_B(hap_B), id(id) {
+        het_template = hap_A xor hap_B;
+
+        // Count number of het sites
+        het_sites = count_ones(het_template);
+    }
+
+    bool can_be_phased_by(T hap_1, T hap_2) const {
+        T other_het_template = hap_1 xor hap_2;
+        T other_hom = hap_1 & (~other_het_template);
+
+        //T template_diff = other_het_template xor het_template;
+
+        T hom = hap_A & (~het_template);
+
+        // The sample can be expressed as a combination of hap_1 and hap_2
+        // If they have the same variants in common and differ in same sites
+        return (other_hom == hom) and (other_het_template == het_template);
+    }
+
+    void rephase_as(T hap_1, T hap_2) {
+        hap_A = hap_1;
+        hap_B = hap_2;
+    }
+
+    bool almost_phased_by(T hap_1, T hap_2) const {
+        T other_het_template = hap_1 xor hap_2;
+
+        T template_diff = other_het_template xor het_template;
+        T het_sites_differences = count_ones(template_diff);
+
+        T other_hom = hap_1 & (~het_template);
+        T hom = hap_A & (~het_template);
+
+        // The sample can almost be expressed as a combination of hap_1 and hap_2
+        // The sample has at most one more heterozygous site, so all other sites
+        // can be phased according to hap_1 and hap_2 except one
+        //return (het_sites_differences < 2) and (other_hom == hom);
+        return false;
+    }
+
+    // Only apply when is almost phased by hap_1 and hap_2
+    // Because here we don't check that hap_1 and hap_2 are adapted
+    void rephase_with_guides(T hap_1, T hap_2) {
+        T other_het_template = hap_1 xor hap_2;
+
+        T template_diff = other_het_template xor het_template;
+        template_diff &= het_template;
+
+        T new_hap_A = hap_1;
+        T new_hap_B = hap_2;
+
+        // Put 0 alleles on A
+        new_hap_A &= ~template_diff;
+        // Put 1 alleles on B
+        new_hap_B |= template_diff;
+
+        hap_A = new_hap_A;
+        hap_B = new_hap_B;
+    }
+
+    void rephase_arbitrarily() {
+        // Put 0's on A
+        hap_A &= ~het_template;
+        // Put 1's on B
+        hap_B |= het_template;
+    }
+
+    T het_sites;
+    T het_template;
+    T hap_A;
+    T hap_B;
+    size_t id;
+};
+
+template <typename T>
+class PhasingMachinery {
+public:
+    PhasingMachinery(const std::vector<T>& haplotypes): rephased(false) {
+        for (size_t i = 0; i < haplotypes.size() / 2; ++i) {
+            samples.push_back(Sample(haplotypes[i*2], haplotypes[i*2+1], i));
+            unphased_samples.insert(i);
+        }
+    }
+
+    void do_phase() {
+        if (!rephased) {
+            do_rephase();
+            rephased = true;
+        }
+    }
+
+    std::vector<Sample<T> > get_samples() const {
+        return samples;
+    }
+
+    std::vector<Sample<T> >& get_ref_on_samples() {
+        return samples;
+    }
+protected:
+
+    void do_rephase() {
+        initialize_phasing();
+        do_direct_phasing();
+        move_new_haplotypes_to_haplotypes();
+
+        // If new haplotypes are generated do direct phasing again
+        bool try_one = true;
+        while (unphased_samples.size()) {
+            if (try_one) {
+                // Try first order new haplotype generation
+                phase_a_sample_with_one_arbitrary_site();
+                /**
+                 *  @todo optimize this, because it may retry many combinations
+                 * that were already tried... This is a bit tricky because how
+                 * the generation is nested but the same trick could be done as with
+                 * haplotypes and new haplotypes to only try new haps with each other
+                 * and haps with new haps instead of all haps with all haps, because
+                 * this includes already tested haps
+                 * */
+            } else {
+                // Try higher order haplotype generation
+                // Since this has no requirements the unphase_samples will go down to 0 eventually
+                phase_a_sample_arbitrarily();
+            }
+
+            if (new_haplotypes.size()) {
+                do_direct_phasing();
+                move_new_haplotypes_to_haplotypes();
+                // Because new haplotypes have been generated try again
+                try_one = true;
+            } else {
+                // Arbitrarily generate haplotypes
+                try_one = false;
+            }
+        }
+    }
+
+    void initialize_phasing() {
+        // First set hom and samples with single het site as phased
+        for (auto& i : unphased_samples) {
+            auto& sample = samples[i];
+            // Fully homozygous
+            if (sample.het_sites == 0) {
+                new_haplotypes.insert(sample.hap_A); // Same as hap_B
+                // Phasing doesn't matter
+                newly_phased.push_back(i);
+            // Only one heterozygous site
+            } else if (sample.het_sites == 1) {
+                new_haplotypes.insert(sample.hap_A);
+                new_haplotypes.insert(sample.hap_B);
+                // Phasing doesn't matter (at least for current region)
+                newly_phased.push_back(i);
+            }
+        }
+        update_sets();
+    }
+
+    void do_direct_phasing() {
+        // Try to phase
+        for (auto& i : unphased_samples) {
+            auto& sample = samples[i];
+
+            // Check the new haplotypes with each other
+            for (auto& hap_1 : new_haplotypes) {
+                for (auto& hap_2 : new_haplotypes) {
+                    if (hap_2 <= hap_1) {continue;}
+                    if (sample.can_be_phased_by(hap_1, hap_2)) {
+                        sample.rephase_as(hap_1, hap_2);
+                        newly_phased.push_back(i);
+                        goto next_sample;
+                    }
+                }
+            }
+            // Check the new haplotypes with the old ones
+            for (auto& hap_1 : haplotypes) {
+                for (auto& hap_2 : new_haplotypes) {
+                    if (sample.can_be_phased_by(hap_1, hap_2)) {
+                        sample.rephase_as(hap_1, hap_2);
+                        newly_phased.push_back(i);
+                        goto next_sample;
+                    }
+                }
+            }
+            next_sample:
+            ;
+        }
+        update_sets();
+    }
+
+    void phase_a_sample_with_one_arbitrary_site() {
+        // Try to phase
+        for (auto& i : unphased_samples) {
+            auto& sample = samples[i];
+
+            for (auto& hap_1 : haplotypes) {
+                for (auto& hap_2 : haplotypes) {
+                    if (hap_2 <= hap_1) {continue;}
+                    if (sample.almost_phased_by(hap_1, hap_2)) {
+                        sample.rephase_with_guides(hap_1, hap_2);
+                        new_haplotypes.insert(sample.hap_A);
+                        new_haplotypes.insert(sample.hap_B);
+                        newly_phased.push_back(i);
+                        update_sets();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    void phase_a_sample_arbitrarily() {
+        auto& i = *unphased_samples.begin();
+        auto& sample = samples[i];
+
+        sample.rephase_arbitrarily();
+        new_haplotypes.insert(sample.hap_A);
+        new_haplotypes.insert(sample.hap_B);
+        newly_phased.push_back(i);
+        update_sets();
+    }
+
+    void update_sets() {
+        for (auto i : newly_phased) {
+            unphased_samples.erase(i);
+            phased_samples.insert(i);
+        }
+        newly_phased.clear();
+    }
+
+    void move_new_haplotypes_to_haplotypes() {
+        for (auto& new_hap : new_haplotypes) {
+            haplotypes.insert(new_hap);
+        }
+        new_haplotypes.clear();
+    }
+
+    std::vector<Sample<T> > samples;
+    std::set<size_t> unphased_samples;
+    std::set<size_t> phased_samples;
+
+    std::set<T> haplotypes;
+    std::set<T> new_haplotypes;
+
+    std::vector<size_t> newly_phased;
+
+    bool rephased;
+};
+
+/// @todo THIS DOES NOT YET WORK AS EXPECTED
+template <typename T>
+void new_phase_xcf(const std::string& ifname, const std::string& ofname) {
+    bcf_file_reader_info_t bcf_fri;
+    htsFile* fp = NULL;
+    bcf_hdr_t* hdr = NULL;
+    initialize_bcf_file_reader(bcf_fri, ifname);
+
+    fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wu"); // "-" for stdout
+    if (fp == NULL) {
+        std::cerr << "Could not open " << ofname << std::endl;
+        throw "File open error";
+    }
+
+    // Duplicate the header from the input bcf
+    hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
+
+    // Write the header to the new file
+    int ret = bcf_hdr_write(fp, hdr);
+
+    const size_t PLOIDY = 2;
+    const double MAF = 0.01;
+    const size_t N_HAPS = bcf_fri.n_samples * PLOIDY;
+    const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * MAF;
+
+    std::vector<size_t> a(N_HAPS);
+    std::iota(a.begin(), a.end(), 0);
+    std::vector<size_t> b(N_HAPS);
+
+    // Matrix for phasing
+    auto matrix = extract_matrix(ifname);
+    const size_t PHASING_GRANULARITY = sizeof(T)*8;
+    std::vector<PhasingMachinery<T> > phasing_machinery_vector;
+
+    for (size_t i = 0; i < matrix.size()/PHASING_GRANULARITY; ++i) {
+        phasing_machinery_vector.push_back(PhasingMachinery<T>(extract_haplotypes_as_words<T>(matrix, i*PHASING_GRANULARITY)));
+        phasing_machinery_vector.back().do_phase(); // Phase directly
+    }
+    const size_t PHASED_LINE_LIMIT = (matrix.size()/PHASING_GRANULARITY)*PHASING_GRANULARITY;
+
+    /// @todo phase the last remainder samples
+
+    size_t line = 0;
+    while(bcf_next_line(bcf_fri)) {
+        bcf1_t *rec = bcf_fri.line;
+
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        // Check ploidy, only support diploid for the moment
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+            exit(-1); // Change this
+        }
+        if (bcf_fri.line->n_allele > 2) {
+            std::cerr << "[ERROR] This does not handle multi-allelic sites" << std::endl;
+            exit(-1); // Change this
+        }
+
+        // Set alleles according to phase
+        if (line < PHASED_LINE_LIMIT) {
+            for (size_t sample_i = 0; sample_i < bcf_fri.n_samples; ++sample_i) {
+                const auto hap_A = phasing_machinery_vector[line/PHASING_GRANULARITY].get_ref_on_samples()[sample_i].hap_A;
+                const auto hap_B = phasing_machinery_vector[line/PHASING_GRANULARITY].get_ref_on_samples()[sample_i].hap_B;
+                const size_t SHIFT = sizeof(T)*8-1 - (line % PHASING_GRANULARITY);
+                const int32_t allele_A = (hap_A >> SHIFT) & 0x1;
+                const int32_t allele_B = (hap_B >> SHIFT) & 0x1;
+                bcf_fri.gt_arr[sample_i*2] = bcf_gt_phased(allele_A);
+                bcf_fri.gt_arr[sample_i*2+1] = bcf_gt_phased(allele_B);
+            }
+            bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
+        }
+        ret = bcf_write1(fp, hdr, rec);
+
+        line++;
     }
 
     // Close / Release ressources
