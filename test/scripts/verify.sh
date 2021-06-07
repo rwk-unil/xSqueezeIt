@@ -13,6 +13,11 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    -r|--regions)
+    REGIONS="$2"
+    shift # past argument
+    shift # past value
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -34,6 +39,7 @@ TMPDIR=$(mktemp -d -t gtcompressor) || { echo "Failed to create temporary direct
 echo "Temporary director : ${TMPDIR}"
 
 function exit_fail_rm_tmp {
+    echo "Removing directory : ${TMPDIR}"
     rm -r ${TMPDIR}
     exit 1
 }
@@ -44,9 +50,9 @@ function exit_fail_rm_tmp {
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }
 
 echo
-echo "Diff between original file and uncompressed compressed file :"
-echo "We expect at least one line that differs, which is the bcftools_viewCommand="
-echo
+#echo "Diff between original file and uncompressed compressed file :"
+#echo "We expect at least one line that differs, which is the bcftools_viewCommand="
+#echo
 
 # Diffing two large VCF/BCFs will take huge amount of memory since diff is not
 # a streaming program, it will load everything in memory first...
@@ -59,8 +65,8 @@ if [ ${DIFFLINES} -gt 4 ]
 then
     echo
     echo "[KO] The files differ, check out ${TMPDIR}/difflog.txt"
-    #exit_fail_rm_tmp # For dev
-    exit 1
+    exit_fail_rm_tmp # For dev
+    #exit 1
 else
     echo
     echo "[OK] The files are the same"
@@ -68,3 +74,5 @@ fi
 
 rm -r $TMPDIR
 exit 0
+
+# sdiff <(./console_app -x -f temp_test/chr20_mini.bin -s "^NA12878") <(bcftools view ../Data/pbwt/chr20_mini.bcf -s "^NA12878")
