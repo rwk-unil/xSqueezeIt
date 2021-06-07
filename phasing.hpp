@@ -455,6 +455,8 @@ protected:
         for (auto& i : unphased_samples) {
             auto& sample = samples[i];
 
+            /// @todo remove these loops and replace by hash table
+
             // Check the new haplotypes with each other
             for (auto& hap_1 : new_haplotypes) {
                 for (auto& hap_2 : new_haplotypes) {
@@ -482,6 +484,7 @@ protected:
         update_sets();
     }
 
+    /// @todo This is way too slow, remove (O(n^3) n is number of samples)
     void phase_a_sample_with_one_arbitrary_site() {
         // Try to phase
         for (auto& i : unphased_samples) {
