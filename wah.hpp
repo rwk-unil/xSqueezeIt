@@ -145,7 +145,7 @@ namespace wah {
 
     // Note that bits should be padded to accomodate the last encoding (easiest is to add sizeof(T))
     template<typename T = uint16_t>
-    inline void wah2_extract(T*& wah_p, std::vector<bool>& bits, size_t size) {
+    inline T* wah2_extract(T* wah_p, std::vector<bool>& bits, size_t size) {
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
         constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
@@ -205,6 +205,8 @@ namespace wah {
             wah_p++;
         }
 #endif
+
+    return wah_p;
     }
 
     // This is a stream based on the current wah pointer and state
@@ -302,7 +304,7 @@ namespace wah {
 
             AET u = 0;
             AET v = 0;
-            wah2_extract(wah_p, y, N);
+            wah_p = wah2_extract(wah_p, y, N);
             for (size_t i = 0; i < N; ++i) {
                 //bool x = wah2_pull<WAH_T>(wah_p, state);
                 if (y[i] == 0) {

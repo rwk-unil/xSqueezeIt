@@ -168,7 +168,7 @@ private:
                 std::iota(a.begin(), a.end(), 0);
             }
             wah_p = wah_origin_p + (indices_p[num]); // Pointer arithmetic handles sizeof(WAH_T)
-            wah2_extract(wah_p, y, N_HAPS); // Extract current values
+            wah_p = wah2_extract(wah_p, y, N_HAPS); // Extract current values
             current_position = arrangement_sample_rate * num;
         }
 
@@ -240,7 +240,7 @@ private:
 
             if (extract or rearrangement_track[current_position+1]) {
                 // Optimisation : Only extract if chosen or if needed to advance further
-                wah2_extract(wah_p, y, N_HAPS);
+                wah_p = wah2_extract(wah_p, y, N_HAPS);
             } else {
                 // Otherwise only advance the WAH pointer
                 wah2_advance_pointer(wah_p, N_HAPS);
