@@ -41,6 +41,9 @@ mkdir output
 # output/chr20.bin_var.bcf which is the variant data, can be opened with bcftools
 ```
 
+Options :
+- `--iota` allows to use natural ordering for checkpoints instead of saving the permutation arrays in the binary file, this results in smaller binary file for collection with many samples. This has no noticeable impact on speed.
+
 ### Extraction
 
 ```shell
@@ -58,6 +61,13 @@ mkdir output
 # because only the chosen regions are decompressed, both generate the same result
 ```
 
+#### Sample extraction
+```shell
+# Extraction (requires both files generated above) :
+./console_app -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./console_app -x -s HG00101,NA12878 -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+```
+
 ### Pipe into bcftools
 
 ```shell
@@ -71,6 +81,7 @@ mkdir output
 
 - Rename the compressor (currently named console_app ...)
 - Only outputs data as phased for the moment
+- Handle missing
 - ~~Only supports bi-allelic sites for the moment~~ Done !
     - (not needed anymore) Convert multi-allelic VCF/BCF to bi-allelic with bcftools :  
       ```shell
