@@ -61,7 +61,7 @@ Options :
 # because only the chosen regions are decompressed, both generate the same result
 ```
 
-#### Sample extraction
+#### Sample extraction
 ```shell
 # Extraction (requires both files generated above) :
 ./console_app -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
