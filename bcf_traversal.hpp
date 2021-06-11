@@ -33,6 +33,8 @@ public:
 
     BcfTraversal() {}
 
+    // Todo set region / samples
+
     void traverse(const std::string filename) {
         initialize_bcf_file_reader(bcf_fri, filename);
 
@@ -164,20 +166,47 @@ protected:
         n_samples = bcf_fri.n_samples;
     }
 
-    void handle_bcf_line() override {
-        matrix_ref.push_back(std::vector<bool>(n_samples * PLOIDY, false));
+    virtual void line_to_matrix() {
+        matrix_ref.push_back(std::vector<T>(n_samples * PLOIDY, false));
         for (size_t i = 0; i < bcf_fri.n_samples * PLOIDY; ++i) {
             matrix_ref.back().at(i) = bcf_gt_allele(bcf_fri.gt_arr[i]);
         }
+    }
+
+    void handle_bcf_line() override {
+        line_to_matrix();
     }
 
     std::vector<std::vector<T> >& matrix_ref;
     size_t n_samples = 0;
 };
 
+class BcfFillPhaseMatrix : public BcfFillMatrix<int8_t> {
+public:
+    BcfFillPhaseMatrix(std::vector<std::vector<int8_t> >& m) : BcfFillMatrix(m) {}
+    virtual ~BcfFillPhaseMatrix() {}
+
+protected:
+    void line_to_matrix() override {
+        matrix_ref.push_back(std::vector<int8_t>(n_samples, 0));
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            auto allele_0 = bcf_gt_allele(bcf_fri.gt_arr[i*2]);
+            auto allele_1 = bcf_gt_allele(bcf_fri.gt_arr[i*2+1]);
+
+            if (allele_0 == allele_1) {
+                matrix_ref.back().at(i) = allele_0 ? 2 : 0;
+            } else {
+                matrix_ref.back().at(i) = allele_0 > allele_1 ? -1 : 1;
+            }
+
+        }
+    }
+};
+
 template<typename T = bool>
 class BcfMatrix {
 public:
+    BcfMatrix() {};
     BcfMatrix(std::string filename) : filename(filename) {
         BcfFillMatrix bfm(matrix);
         bfm.fill_matrix_from_file(filename);
@@ -218,15 +247,24 @@ public:
     }
 
     std::string get_original_filename() const {return filename;}
-    const std::vector<std::vector<T> >& get_matrix_ref() const {return matrix;}
+    const std::vector<std::vector<T> >& get_matrix_const_ref() const {return matrix;}
+    std::vector<std::vector<T> >& get_matrix_ref() {return matrix;}
 protected:
     std::string filename;
     std::vector<std::vector<T> > matrix;
 };
 
+class BcfPhaseMatrix : public BcfMatrix<int8_t> {
+    BcfPhaseMatrix(std::string filename) {
+        this->filename = filename;
+        BcfFillPhaseMatrix bfm(matrix);
+        bfm.fill_matrix_from_file(filename);
+    }
+};
+
 class BcfWriteMatrix : protected BcfTransformer {
 public:
-    BcfWriteMatrix(const BcfMatrix<bool>& bfm) : filename(bfm.get_original_filename()), matrix(bfm.get_matrix_ref()) {}
+    BcfWriteMatrix(const BcfMatrix<bool>& bfm) : filename(bfm.get_original_filename()), matrix(bfm.get_matrix_const_ref()) {}
     virtual ~BcfWriteMatrix() {}
 
     void write(std::string ofname) {
