@@ -41,6 +41,32 @@ bool has_extension(const std::string& filename, const std::string& extension) {
     return std::regex_match(filename.c_str(), ext_regex);
 }
 
+/**
+ * @brief Creates csi index for given file
+ *
+ * @param filename file to index
+ * @param n_threads optional parameters, number of threads for indexing, default 1
+ * */
+void create_index_file(std::string filename, int n_threads = 1) {
+    int ret = bcf_index_build3(filename.c_str() /* input */,
+                               NULL /* Output filename, or NULL to add .csi/.tbi */,
+                               14 /* Positive to generate CSI, or 0 to generate TBI, CSI bin size (CSI default is 14) */,
+                               n_threads /* n_threads */);
+
+    if (ret != 0) {
+        if (ret == -2) {
+            std::cerr << "index: failed to open " << filename << std::endl;
+            throw "Failed to open file";
+        } else if (ret == -3) {
+            std::cerr << "index: " << filename << " is in a format that cannot be usefully indexed" << std::endl;
+            throw "Failed to index";
+        } else {
+            std::cerr << "index: failed to create index for " << filename << std::endl;
+            throw "Failed to index";
+        }
+    }
+}
+
 typedef struct bcf_file_reader_info_t {
     bcf_srs_t* sr = nullptr; /* The BCF Synced reader */
     size_t n_samples = 0; /* The number of samples */
@@ -54,10 +80,24 @@ typedef struct bcf_file_reader_info_t {
 } bcf_file_reader_info_t;
 
 static void initialize_bcf_file_reader_common(bcf_file_reader_info_t& bcf_fri, const std::string& filename) {
-    if(!bcf_sr_add_reader(bcf_fri.sr, filename.c_str())) {
-        std::cerr << "Failed to read file " << filename << std::endl;
-        std::cerr << "Reason : " << bcf_sr_strerror(bcf_fri.sr->errnum) << std::endl;
-        throw "bcf_synced_reader read error";
+    while(!bcf_sr_add_reader(bcf_fri.sr, filename.c_str())) {
+        if (bcf_fri.sr->errnum == idx_load_failed) {
+            bcf_sr_destroy(bcf_fri.sr);
+            bcf_fri.sr = bcf_sr_init();
+            bcf_fri.sr->collapse = COLLAPSE_NONE;
+            bcf_fri.sr->require_index = 1;
+            std::cerr << "Index is missing, indexing " << filename << std::endl;
+            try {
+                create_index_file(filename);
+            } catch (const char* e) {
+                std::cerr << "Failed to index" << std::endl << e << std::endl;
+                throw "bcf_synced_reader read error";
+            }
+        } else {
+            std::cerr << "Failed to read file " << filename << std::endl;
+            std::cerr << "Reason : " << bcf_sr_strerror(bcf_fri.sr->errnum) << std::endl;
+            throw "bcf_synced_reader read error";
+        }
     }
     bcf_fri.n_samples = bcf_hdr_nsamples(bcf_fri.sr->readers[0].header);
 
@@ -305,32 +345,6 @@ size_t count_entries(const std::string& ifname) {
     destroy_bcf_file_reader(bcf_fri);
 
     return lines;
-}
-
-/**
- * @brief Creates tabix index for given file
- *
- * @param filename file to index
- * @param n_threads optional parameters, number of threads for indexing, default 1
- * */
-void create_index_file(std::string filename, int n_threads = 1) {
-    int ret = bcf_index_build3(filename.c_str() /* input */,
-                               NULL /* Output filename, or NULL to add .csi/.tbi */,
-                               14 /* Positive to generate CSI, or 0 to generate TBI, CSI bin size (CSI default is 14) */,
-                               n_threads /* n_threads */);
-
-    if (ret != 0) {
-        if (ret == -2) {
-            std::cerr << "index: failed to open " << filename << std::endl;
-            throw "Failed to open file";
-        } else if (ret == -3) {
-            std::cerr << "index: " << filename << " is in a format that cannot be usefully indexed" << std::endl;
-            throw "Failed to index";
-        } else {
-            std::cerr << "index: failed to create index for " << filename << std::endl;
-            throw "Failed to index";
-        }
-    }
 }
 
 /**
