@@ -19,6 +19,7 @@ public:
         app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
 
         app.add_flag("--sandbox", sandbox, "DEBUG - ...");
+        app.add_flag("--compare-matrices", compare_matrices, "DEBUG compare matrices from two bi-allelic bcf files");
         app.add_flag("--phase", phase, "DEBUG - phases the file according to PBWT sort");
         app.add_flag("--phase2", phase_2, "DEBUG - phases the file given samples");
         app.add_flag("--het-info", het_info, "DEBUG - displays number of het sites per sample");
@@ -60,6 +61,7 @@ public:
     bool iota = false;
     bool count_xcf = false;
     bool sandbox = false;
+    bool compare_matrices = false;
     bool compute_phase_switch_errors = false;
     bool create_map = false;
     bool phase = false;

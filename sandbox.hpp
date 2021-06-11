@@ -8,6 +8,7 @@
 #include "data_mining.hpp"
 #include "bitmap.hpp"
 #include "phasing.hpp"
+#include "bcf_traversal.hpp"
 extern GlobalAppOptions global_app_options;
 
 #include <cstdlib>
@@ -17,6 +18,14 @@ class Sandbox
 public:
     void run() {
         auto& opt = global_app_options;
+
+        if (opt.compare_matrices) {
+            BcfMatrix m1(opt.filename);
+            BcfMatrix m2(opt.ofname);
+            if (m1.compare<true>(m2)) {
+                std::cerr << "Matrices from " << opt.filename << " and " << opt.filename << " are the same" << std::endl;
+            }
+        }
 
         if (opt.het_info) {
             auto phase_vectors = extract_phase_vectors(opt.filename);
@@ -168,7 +177,9 @@ public:
 
         if (opt.unphase_random) {
             try {
-                unphase_xcf_random(opt.filename, opt.ofname);
+                //unphase_xcf_random(opt.filename, opt.ofname);
+                BcfUnphaser bcfu;
+                bcfu.unphase_random(opt.filename, opt.ofname);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 exit(-1);
