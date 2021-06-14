@@ -19,6 +19,19 @@ public:
     void run() {
         auto& opt = global_app_options;
 
+        if (opt.inject_phase_switches) {
+            BcfMatrix m1(opt.filename);
+            m1.inject_phase_switch_errors(opt.phase_switch_prob);
+            BcfWriteMatrix bwm(m1);
+            bwm.write(opt.ofname);
+        }
+
+        if (opt.copy_bcf) {
+            BcfMatrix m1(opt.filename);
+            BcfWriteMatrix bwm(m1);
+            bwm.write(opt.ofname);
+        }
+
         if (opt.compare_matrices) {
             BcfMatrix m1(opt.filename);
             BcfMatrix m2(opt.ofname);

@@ -28,6 +28,8 @@
 
 #include "xcf.hpp"
 
+#include <random>
+
 class BcfTraversal {
 public:
 
@@ -249,6 +251,30 @@ public:
     std::string get_original_filename() const {return filename;}
     const std::vector<std::vector<T> >& get_matrix_const_ref() const {return matrix;}
     std::vector<std::vector<T> >& get_matrix_ref() {return matrix;}
+
+    void inject_phase_switch_errors(double phase_switch_probability) {
+        std::random_device rd;  // Will be used to obtain a seed for the random number engine
+        std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+        const size_t RANGE_MAX = 1000000;
+        std::uniform_int_distribution<> distrib(0, RANGE_MAX);
+
+        std::vector<bool> samples_phase(matrix.at(0).size(), false);
+        for (size_t i = 0; i < matrix.size(); ++i) {
+            for (size_t j = 0; j < matrix.at(0).size() / 2; ++j) {
+                bool allele_1 = matrix.at(i).at(2*j);
+                bool allele_2 = matrix.at(i).at(2*j+1);
+                if (allele_1 != allele_2) {
+                    if (distrib(gen) < phase_switch_probability*RANGE_MAX) {
+                        samples_phase.at(j) = !samples_phase.at(j); // Toggle phase
+                    }
+                }
+                if (samples_phase.at(j)) { // Phase switch
+                    matrix.at(i).at(2*j) = allele_2;
+                    matrix.at(i).at(2*j+1) = allele_1;
+                }
+            }
+        }
+    }
 protected:
     std::string filename;
     std::vector<std::vector<T> > matrix;
