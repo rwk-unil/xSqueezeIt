@@ -50,7 +50,7 @@ public:
 
         if (opt.phase_2) {
             try {
-                new_phase_xcf<uint32_t>(opt.filename, opt.ofname);
+                new_phase_xcf<uint64_t>(opt.filename, opt.ofname);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 exit(-1);

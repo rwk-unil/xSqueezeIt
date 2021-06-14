@@ -24,6 +24,8 @@
 #define __PHASING_HPP__
 
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include "xcf.hpp"
 #include "wah.hpp"
 
@@ -288,11 +290,16 @@ private:
     }
 
 public:
-    Sample(T hap_A, T hap_B, size_t id) : hap_A(hap_A), hap_B(hap_B), id(id) {
+    Sample(T hap_A, T hap_B, size_t id) : hap_A(std::min(hap_A, hap_B)), hap_B(std::max(hap_A, hap_B)), id(id) {
         het_template = hap_A xor hap_B;
 
         // Count number of het sites
         het_sites = count_ones(het_template);
+    }
+
+    bool can_be_phased_by(T hap) const {
+        // have the same homozygous sites
+        return (hap & ~het_template) == (hap_A & ~het_template);
     }
 
     bool can_be_phased_by(T hap_1, T hap_2) const {
@@ -306,6 +313,11 @@ public:
         // The sample can be expressed as a combination of hap_1 and hap_2
         // If they have the same variants in common and differ in same sites
         return (other_hom == hom) and (other_het_template == het_template);
+    }
+
+    void rephase_as(T hap) {
+        hap_A = hap;
+        hap_B = hap ^ het_template;
     }
 
     void rephase_as(T hap_1, T hap_2) {
@@ -358,6 +370,22 @@ public:
         hap_A &= ~het_template;
         // Put 1's on B
         hap_B |= het_template;
+    }
+
+    size_t distance_to(T hap) {
+        T hom = hap_A & ~het_template;
+        T other_hom = hap & ~het_template;
+
+        return count_ones(hom xor other_hom);
+    }
+
+    void phase_from_imperfect_match(T hap) {
+        /// @todo optimize
+        T phasing = hap & het_template;
+        T a = (hap_A & ~het_template) | phasing;
+        T b = (hap_B & ~het_template) | (phasing xor het_template);
+        hap_A = std::min(a,b);
+        hap_B = std::max(a,b);
     }
 
     T het_sites;
@@ -544,7 +572,238 @@ protected:
     bool rephased;
 };
 
-/// @todo THIS DOES NOT YET WORK AS EXPECTED
+template <typename T>
+class PhasingMachineryNew {
+public:
+    PhasingMachineryNew(const std::vector<T>& haplotypes): rephased(false) {
+        for (size_t i = 0; i < haplotypes.size() / 2; ++i) {
+            samples.push_back(Sample(haplotypes[i*2], haplotypes[i*2+1], i));
+            unphased_samples.insert(i);
+        }
+    }
+
+    void do_phase() {
+        if (!rephased) {
+            do_rephase();
+            rephased = true;
+        }
+    }
+
+    std::vector<Sample<T> > get_samples() const {
+        return samples;
+    }
+
+    std::vector<Sample<T> >& get_ref_on_samples() {
+        return samples;
+    }
+protected:
+
+    void do_rephase() {
+        initialize_phasing();
+        do_direct_phasing();
+        move_new_haplotypes_to_haplotypes();
+
+        while (unphased_samples.size()) {
+            auto number_to_phase = unphased_samples.size();
+            /// @todo based on hamming distance
+            //phase_a_sample_arbitrarily();
+            phase_a_sample_as_close_as_possible();
+
+            /// @todo optimize this
+            do {
+                number_to_phase = unphased_samples.size();
+                do_direct_phasing();
+            } while (number_to_phase != unphased_samples.size());
+            move_new_haplotypes_to_haplotypes();
+        }
+    }
+
+    void initialize_phasing() {
+        // First set hom and samples with single het site as phased
+        for (auto& i : unphased_samples) {
+            auto& sample = samples[i];
+            // Fully homozygous
+            if (sample.het_sites == 0) {
+                new_haplotypes[sample.hap_A] += 2; // Same as hap_B
+                // Phasing doesn't matter
+                newly_phased.push_back(i);
+            // Only one heterozygous site
+            } else if (sample.het_sites == 1) {
+                new_haplotypes[sample.hap_A]++;
+                new_haplotypes[sample.hap_B]++;
+                // Phasing doesn't matter (at least for current region)
+                newly_phased.push_back(i);
+            }
+        }
+        update_sets();
+    }
+
+    void do_direct_phasing() {
+        // Try to phase
+        for (auto& i : unphased_samples) {
+            auto& sample = samples[i];
+
+            T candidate;
+            size_t candidate_score = 0;
+            bool can_be_phased = false;
+            for (auto& hap : new_haplotypes) {
+                if (sample.can_be_phased_by(hap.first)) {
+                    can_be_phased = true;
+                    if (candidate_score < hap.second) {
+                        candidate = hap.first;
+                        candidate_score = hap.second;
+                    }
+                }
+            }
+
+            if (can_be_phased) {
+                sample.rephase_as(candidate);
+                new_haplotypes[sample.hap_A]++;
+                new_haplotypes[sample.hap_B]++;
+                newly_phased.push_back(i);
+            }
+
+            next_sample:
+            ;
+        }
+        update_sets();
+    }
+
+    void phase_a_sample_arbitrarily() {
+        auto& i = *unphased_samples.begin();
+        auto& sample = samples[i];
+
+        sample.rephase_arbitrarily();
+        new_haplotypes[sample.hap_A]++;
+        new_haplotypes[sample.hap_B]++;
+        newly_phased.push_back(i);
+        update_sets();
+    }
+
+    void phase_a_sample_as_close_as_possible() {
+        auto& i = *unphased_samples.begin();
+        auto& sample = samples[i];
+
+        // Find best candidate (smallest hamming distance on hom sites)
+        T best_candidate;
+        size_t closest = std::numeric_limits<size_t>::max();
+        size_t score = 0;
+        for (const auto& hap : haplotypes) {
+            auto dist = sample.distance_to(hap.first);
+            if (dist < closest) {
+                closest = dist;
+                best_candidate = hap.first;
+                score = hap.second;
+            } else if (dist == closest) {
+                if (score < hap.second) {
+                    best_candidate = hap.first;
+                    score = hap.second;
+                }
+            }
+        }
+
+        // Phase with closest hap found
+        sample.phase_from_imperfect_match(best_candidate);
+        new_haplotypes[sample.hap_A]++;
+        new_haplotypes[sample.hap_B]++;
+
+        newly_phased.push_back(i);
+        update_sets();
+    }
+
+    void update_sets() {
+        for (auto i : newly_phased) {
+            unphased_samples.erase(i);
+            phased_samples.insert(i);
+        }
+        newly_phased.clear();
+    }
+
+    void move_new_haplotypes_to_haplotypes() {
+        for (auto& new_hap : new_haplotypes) {
+            haplotypes[new_hap.first] += new_hap.second;
+        }
+        new_haplotypes.clear();
+    }
+
+    std::vector<Sample<T> > samples;
+    std::set<size_t> unphased_samples;
+    std::set<size_t> phased_samples;
+
+    /// @todo map instead of set
+    std::unordered_map<T, size_t> haplotypes;
+    std::unordered_map<T, size_t> new_haplotypes;
+
+    std::vector<size_t> newly_phased;
+
+    bool rephased;
+};
+
+#if 0
+template <typename T>
+class PhasingMachinery2 {
+
+    template <const size_t PLOIDY = 2>
+    class InternalSample {
+    public:
+        InternalSample() {
+            for (size_t i = 0; i < PLOIDY; ++i) {
+                haps[i] = 0;
+                next_alleles[i] = 0;
+            }
+        }
+
+        set_next_alleles(bool[PLOIDY] new_alleles, bool phased = false) {
+
+            for (size_t i = 0; i < PLOIDY; ++i) {
+                haps[i] <<= 1;
+                if (alleles[i]) haps[i] |= 1;
+            }
+
+            alleles_phased(phased);
+            allele_A = allele_A;
+            allele_B = allele_B;
+        }
+
+        bool is_hom() const { // If previous alleles are all the same
+            return (hap_A xor hap_B) == 0;
+        }
+
+        void phase_natural() { // If next allele het phase as 0|1
+            alleles_phased = true;
+            if (allele_A != allele_B) {
+                allele_A = false;
+                allele_B = true;
+            }
+        }
+
+        bool alleles_phased;
+        bool[2] next_alleles;
+        bool[2] allele_B;
+        T hap_A;
+        T hap_B;
+    }
+
+    do_phase() {
+        for (auto& sample : samples) {
+            if (sample.is_hom()) {
+                sample.phase_natural();
+
+            } else {
+
+            }
+        }
+    }
+
+protected:
+    std::vector<Sample<T> > samples;
+
+    std::unordered_map<T, size_t> predict_0_histogram;
+    std::unordered_map<T, size_t> predict_1_histogram;
+}
+#endif
+
+/// @todo THIS IS WIP
 template <typename T>
 void new_phase_xcf(const std::string& ifname, const std::string& ofname) {
     bcf_file_reader_info_t bcf_fri;
@@ -576,10 +835,10 @@ void new_phase_xcf(const std::string& ifname, const std::string& ofname) {
     // Matrix for phasing
     auto matrix = extract_matrix(ifname);
     const size_t PHASING_GRANULARITY = sizeof(T)*8;
-    std::vector<PhasingMachinery<T> > phasing_machinery_vector;
+    std::vector<PhasingMachineryNew<T> > phasing_machinery_vector;
 
     for (size_t i = 0; i < matrix.size()/PHASING_GRANULARITY; ++i) {
-        phasing_machinery_vector.push_back(PhasingMachinery<T>(extract_haplotypes_as_words<T>(matrix, i*PHASING_GRANULARITY)));
+        phasing_machinery_vector.push_back(PhasingMachineryNew<T>(extract_haplotypes_as_words<T>(matrix, i*PHASING_GRANULARITY)));
         phasing_machinery_vector.back().do_phase(); // Phase directly
     }
     const size_t PHASED_LINE_LIMIT = (matrix.size()/PHASING_GRANULARITY)*PHASING_GRANULARITY;
