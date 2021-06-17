@@ -121,6 +121,7 @@ int main(int argc, const char *argv[]) {
         auto compress_thread = std::thread([&]{
             Compressor c;
             c.set_ppa_use(!opt.iota);
+            c.set_sort(!opt.no_sort);
             try {
                 c.compress_in_memory(filename);
                 std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;

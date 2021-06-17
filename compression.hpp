@@ -211,7 +211,8 @@ struct header_s {
         uint8_t specific_bitset = 0;
         struct {
             bool iota_ppa : 1;
-            uint8_t rsvd__2 : 7;
+            bool no_sort : 1;
+            uint8_t rsvd__2 : 6;
         };
     };
     uint8_t  rsvd_bs[2] = {0,};
@@ -256,6 +257,7 @@ void print_header_info(const header_t& header) {
     std::cerr << "Has missing : " << (header.has_missing ? "yes" : "no") << std::endl;
     std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;
     std::cerr << "Uses PPA's : " << (header.iota_ppa ? "no" : "yes" ) << std::endl;
+    std::cerr << "Is not sorted : " << (header.no_sort ? "yes" : "no" ) << std::endl;
     std::cerr << "--" << std::endl;
     std::cerr << "Haplotype samples  : " << header.hap_samples << std::endl;
     std::cerr << "Number of variants : " << header.num_variants << std::endl;

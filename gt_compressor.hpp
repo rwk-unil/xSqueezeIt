@@ -66,6 +66,11 @@ public:
         compressor32b.set_ppa_use(use);
     }
 
+    void set_sort(bool s) {
+        compressor16b.sort = s;
+        compressor32b.sort = s;
+    }
+
 private:
     template<typename T = uint32_t>
     class GtCompressor {
@@ -222,6 +227,8 @@ private:
                 size_t rephase_counter = 0;
                 has_missing_in_file = false;
 
+                if (!sort) { use_ppas = false; }
+
                 //std::cout << "het counts : ";
                 // While the BCF has lines
                 while(bcf_next_line(bcf_fri)) {
@@ -301,7 +308,7 @@ private:
                         }
 
                         // Only sort if minor allele count is high enough (better compression, faster)
-                        if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
+                        if (sort and (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD)) {
                             // Indicate that the current position has a rearrangement
                             rearrangement_track[variant_counter] = true;
 
@@ -400,7 +407,8 @@ private:
                 .data_chksum = 0 /* TODO */,
                 .header_chksum = 0 /* TODO */
             };
-            header.iota_ppa = !use_ppas,
+            header.iota_ppa = !use_ppas;
+            header.no_sort = !sort;
             s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
 
             size_t written_bytes = 0;
@@ -484,6 +492,7 @@ private:
         const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
 
         bool use_ppas = true;
+        bool sort = true;
 
         std::vector<std::vector<uint16_t> > wahs;
         std::vector<std::vector<uint16_t> > missing_wahs;
