@@ -219,6 +219,7 @@ private:
                 this->ss_rate = ARRANGEMENT_SAMPLE_RATE;
                 size_t wah_words = 0;
                 size_t rare_wah_words = 0;
+                size_t rare_sparse_cost = 0;
                 size_t common_wah_words = 0;
                 wahs.clear();
                 rearrangement_track.clear();
@@ -295,6 +296,7 @@ private:
                         if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
                             common_wah_words += wahs.back().size();
                         } else {
+                            rare_sparse_cost += minor_allele_count;
                             rare_wah_words += wahs.back().size();
                         }
 
@@ -355,6 +357,7 @@ private:
                 // samples x 2 x variants bits
                 size_t raw_size = bcf_fri.n_samples * 2 * variant_counter / (8 * 1024 * 1024);
                 std::cout << "GT Matrix bits : " << bcf_fri.n_samples * 2 * variant_counter << std::endl;
+                std::cout << "Rare minor bits : " << rare_sparse_cost << std::endl;
                 std::cout << "RAW size (GT bits, not input file) : " << raw_size << " MBytes" << std::endl;
                 size_t compressed_size = wah_words * sizeof(uint16_t) / (1024 * 1024);
                 std::cout << "Compressed size : " << compressed_size << " MBytes" << std::endl;
