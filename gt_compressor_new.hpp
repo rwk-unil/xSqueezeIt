@@ -259,6 +259,14 @@ public:
             if (ie.sparse_gt_line) {
                 auto& sparse = ie.sparse_gt_line->sparse_encoding;
                 T number_of_positions = sparse.size();
+                // Case where the REF allele is actually sparse
+                if (ie.sparse_gt_line->sparse_allele == 0) {
+                    // Set the MSB Bit
+                    // This will always work as long as MAF is < 0.5
+                    // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
+                    /// @todo Check for this if user can set MAF
+                    number_of_positions |= (T)1 << (sizeof(T)*8-1);
+                }
                 s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
                 s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
             }
