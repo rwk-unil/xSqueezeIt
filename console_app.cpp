@@ -28,7 +28,7 @@ namespace fs = std::filesystem;
 
 #include "gt_compressor.hpp"
 #include "gt_decompressor.hpp"
-
+#include "gt_compressor_new.hpp"
 #include "time.hpp"
 
 // Getting some insights (remove for release)
@@ -119,16 +119,28 @@ int main(int argc, const char *argv[]) {
             }
         });
         auto compress_thread = std::thread([&]{
-            Compressor c;
-            c.set_ppa_use(!opt.iota);
-            c.set_sort(!opt.no_sort);
-            try {
-                c.compress_in_memory(filename);
-                std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
-                c.save_result_to_file(ofname);
-            } catch (const char* e) {
-                std::cerr << e << std::endl;
-                fail = true;
+            if (opt.v2) {
+                NewCompressor c;
+                try {
+                    c.compress_in_memory(filename);
+                    std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
+                    c.save_result_to_file(ofname);
+                } catch (const char* e) {
+                    std::cerr << e << std::endl;
+                    fail = true;
+                }
+            } else {
+                Compressor c;
+                c.set_ppa_use(!opt.iota);
+                c.set_sort(!opt.no_sort);
+                try {
+                    c.compress_in_memory(filename);
+                    std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
+                    c.save_result_to_file(ofname);
+                } catch (const char* e) {
+                    std::cerr << e << std::endl;
+                    fail = true;
+                }
             }
         });
 
