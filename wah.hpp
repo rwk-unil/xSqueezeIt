@@ -669,7 +669,7 @@ namespace wah {
      * @brief Copy-less reordering wah encoder
      * */
     template <typename T = uint16_t, typename A = uint16_t>
-    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& minor_allele_count, bool& has_missing) {
+    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& alt_allele_count, bool& has_missing) {
         // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         // 0b1000'0000 for 8b
@@ -733,7 +733,8 @@ namespace wah {
             wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
         }
 
-        minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_counter, alt_allele_counter);
+        alt_allele_count = alt_allele_counter;
+        //minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_counter, alt_allele_counter);
         return wah;
     }
 

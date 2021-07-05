@@ -220,6 +220,8 @@ private:
                 size_t wah_words = 0;
                 size_t rare_wah_words = 0;
                 size_t rare_sparse_cost = 0;
+                size_t rare_wah_counter = 0;
+                size_t rare_counter = 0;
                 size_t common_wah_words = 0;
                 wahs.clear();
                 rearrangement_track.clear();
@@ -291,19 +293,30 @@ private:
 
                         // Encode the current alternative allele track given the arrangement in a and update minor allele count
                         bool has_missing = false;
-                        wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, minor_allele_count, has_missing));
+                        uint32_t alt_allele_count = 0;
+                        wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, alt_allele_count, has_missing));
+                        minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_count, alt_allele_count);
                         wah_words += wahs.back().size();
                         if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
                             common_wah_words += wahs.back().size();
                         } else {
+                            rare_counter++;
                             rare_sparse_cost += minor_allele_count;
                             rare_wah_words += wahs.back().size();
+
+                            size_t _rare_sparse_cost = minor_allele_count + 2;
+                            size_t _rare_wah_cost = wahs.back().size();
+
+                            if (_rare_sparse_cost > _rare_wah_cost) {
+                                rare_wah_counter++;
+                            }
                         }
 
                         // Encode the missing values
                         if (has_missing) {
                             has_missing_in_file = true;
-                            missing_wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, -1 /* missing allele */, a, minor_allele_count, has_missing));
+                            uint32_t _;
+                            missing_wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, -1 /* missing allele */, a, _, has_missing));
                         } else {
                             // Optimisation, since we know there are no missing, use this function
                             missing_wahs.push_back(wah::wah_encode2_all_same_value(N_HAPS, 0));
@@ -341,6 +354,157 @@ private:
                 num_variants = variant_counter;
 
                 std::cout << "Rephased " << rephase_counter << " variant sites" << std::endl;
+                std::cout << "Rearrangements : " << rearrangement_counter << std::endl;
+
+                // Some summary statistics for debug
+                std::cout << "Number of entries extracted from " << filename << " : " << num_entries << std::endl;
+                std::cout << "Number of variants : " << variant_counter << std::endl;
+                std::cout << "Number of rare variants : " << rare_counter << std::endl;
+                std::cout << "Number of rare that should be WAH encoded : " << rare_wah_counter << std::endl;
+                std::cout << "Total number of WAH words : " << wah_words << " " << sizeof(uint16_t)*8 << "-bits" << std::endl;
+                std::cout << "Rare wah words : " << rare_wah_words << std::endl;
+                std::cout << "Common wah words : " << common_wah_words << std::endl;
+                std::cout << "Number of haplotype samples : " << bcf_fri.n_samples * 2 << std::endl;
+                this->num_samples = bcf_fri.n_samples * 2;
+                //std::cout << "Number of variants : " << bcf_fri.var_count << std::endl; // This is outdated
+                this->num_variants = variant_counter;
+                this->num_ssas = sampled_arrangements.size();
+                // samples x 2 x variants bits
+                size_t raw_size = bcf_fri.n_samples * 2 * variant_counter / (8 * 1024 * 1024);
+                std::cout << "GT Matrix bits : " << bcf_fri.n_samples * 2 * variant_counter << std::endl;
+                std::cout << "Rare minor bits : " << rare_sparse_cost << std::endl;
+                std::cout << "RAW size (GT bits, not input file) : " << raw_size << " MBytes" << std::endl;
+                size_t compressed_size = wah_words * sizeof(uint16_t) / (1024 * 1024);
+                std::cout << "Compressed size : " << compressed_size << " MBytes" << std::endl;
+                if (compressed_size) {
+                    std::cout << "Reduction vs RAW is : " << raw_size / compressed_size << std::endl;
+                }
+
+                destroy_bcf_file_reader(bcf_fri);
+            } else {
+                std::cerr << "Unknown extension of file " << filename << std::endl;
+                throw "Unknown extension";
+            }
+        }
+
+        void compress_in_memory_exp(std::string filename) {
+            if (has_extension(filename, ".bcf") or has_extension(filename, ".vcf.gz") or has_extension(filename, ".vcf")) {
+                bcf_file_reader_info_t bcf_fri;
+                initialize_bcf_file_reader(bcf_fri, filename);
+
+                sample_list = extract_samples(bcf_fri);
+
+                const T PLOIDY = 2;
+                const T N_HAPS = bcf_fri.n_samples * PLOIDY;
+                const T MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * MAF;
+
+                std::vector<T> a(N_HAPS);
+                std::iota(a.begin(), a.end(), 0);
+                std::vector<T> b(N_HAPS);
+
+                size_t variant_counter = 0;
+                size_t rearrangement_counter = 0;
+
+                this->ss_rate = ARRANGEMENT_SAMPLE_RATE;
+                size_t wah_words = 0;
+                size_t rare_wah_words = 0;
+                size_t rare_sparse_cost = 0;
+                size_t common_wah_words = 0;
+                wahs.clear();
+                rearrangement_track.clear();
+                rearrangement_track.resize(REARRANGEMENT_TRACK_CHUNK, false);
+
+                has_missing_in_file = false;
+
+                if (!sort) { use_ppas = false; }
+
+                while(bcf_next_line(bcf_fri)) {
+                    uint32_t minor_allele_count = 0;
+
+                    // Unpack the line and get genotypes
+                    bcf_unpack(bcf_fri.line, BCF_UN_STR);
+                    int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+                    int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+                    // Check ploidy, only support diploid for the moment
+                    if (line_max_ploidy != PLOIDY) {
+                        std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+                        exit(-1); // Change this
+                    }
+
+                    // For each alternative allele (can be multiple)
+                    for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+                        // Allocate more size to the rearrangement track if needed
+                        if (variant_counter >= rearrangement_track.size()) {
+                            rearrangement_track.resize(rearrangement_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
+                        }
+
+                        // Sample arrangement every so often
+                        // Also sample the first one, because we could change it, for example
+                        // by seeking a better arrangement before encoding
+                        if ((variant_counter % ARRANGEMENT_SAMPLE_RATE) == 0) {
+                            if (use_ppas) {
+                                sampled_arrangements.push_back(a);
+                            } else {
+                                // Restart from natural order
+                                std::iota(a.begin(), a.end(), 0);
+                            }
+                        }
+
+                        // Encode the current alternative allele track given the arrangement in a and update minor allele count
+                        bool has_missing = false;
+                        uint32_t alt_allele_count = 0;
+                        wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, alt_allele_count, has_missing));
+                        wah_words += wahs.back().size();
+                        minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_count, alt_allele_count);
+                        if (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD) {
+                            common_wah_words += wahs.back().size();
+                        } else {
+                            rare_sparse_cost += minor_allele_count;
+                            rare_wah_words += wahs.back().size();
+                        }
+
+                        // Encode the missing values
+                        if (has_missing) {
+                            has_missing_in_file = true;
+                            uint32_t _;
+                            missing_wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, -1 /* missing allele */, a, _, has_missing));
+                        } else {
+                            // Optimisation, since we know there are no missing, use this function
+                            missing_wahs.push_back(wah::wah_encode2_all_same_value(N_HAPS, 0));
+                        }
+
+                        // Only sort if minor allele count is high enough (better compression, faster)
+                        if (sort and (minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD)) {
+                            // Indicate that the current position has a rearrangement
+                            rearrangement_track[variant_counter] = true;
+
+                            // PBWT Sort
+                            {
+                                size_t u = 0;
+                                size_t v = 0;
+
+                                //std::cout << count_het(bcf_fri.gt_arr, a.size()) << ",";
+                                rearrangement_counter++;
+                                for (size_t j = 0; j < N_HAPS; ++j) {
+                                    if (bcf_gt_allele(bcf_fri.gt_arr[a[j]]) != alt_allele) { // If non alt allele
+                                        a[u] = a[j];
+                                        u++;
+                                    } else { // if alt allele
+                                        b[v] = a[j];
+                                        v++;
+                                    }
+                                }
+                                std::copy(b.begin(), b.begin()+v, a.begin()+u);
+                            }
+                        } // Rearrangement condition
+                        variant_counter++;
+                    } // Alt allele loop
+                } // BCF line loop
+                rearrangement_track.resize(variant_counter); // Since it is allocated in chunks
+                num_entries = bcf_fri.line_num;
+                num_variants = variant_counter;
+
                 std::cout << "Rearrangements : " << rearrangement_counter << std::endl;
 
                 // Some summary statistics for debug
