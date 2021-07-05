@@ -174,7 +174,6 @@ private:
                 std::iota(a.begin(), a.end(), 0);
             }
             wah_p = wah_origin_p + (indices_p[num]); // Pointer arithmetic handles sizeof(WAH_T)
-            prev_wah_p = wah_p;
             wah_p = wah2_extract(wah_p, y, N_HAPS); // Extract current values
             current_position = arrangement_sample_rate * num;
         }
@@ -187,7 +186,6 @@ private:
             b.resize(N_HAPS);
             y.resize(N_HAPS + sizeof(WAH_T)*8, 0); // Get some extra space
             wah_p = wah_origin_p;
-            prev_wah_p = wah_origin_p;
             // Fill with original arrangement
             seek_sampled_arrangement();
         }
@@ -251,7 +249,6 @@ private:
                 }
             }
 
-            prev_wah_p = wah_p;
             if (extract or rearrangement_track[current_position+1]) {
                 // Optimisation : Only extract if chosen or if needed to advance further
                 wah_p = wah2_extract(wah_p, y, N_HAPS);
@@ -271,7 +268,6 @@ private:
         const size_t arrangement_sample_rate;
 
         WAH_T* wah_p; // Gets updated by wah2_extract
-        WAH_T* prev_wah_p;
         size_t current_position = 0;
         std::vector<A_T> a;
         std::vector<A_T> b;
