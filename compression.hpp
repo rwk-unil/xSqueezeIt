@@ -231,10 +231,11 @@ struct header_s {
     uint32_t samples_offset = 0;
     uint64_t xcf_entries = 0;
     uint32_t rearrangement_track_offset = 0;
-    uint8_t  rsvd_2b[4] = {0,};
+    uint32_t sparse_offset = 0;
 
     // 128 bytes
-    uint8_t rsvd_3[128] = {0,};
+    uint32_t rare_threshold = 0;
+    uint8_t rsvd_3[124] = {0,};
 
     // 32 bytes
     uint32_t rsvd_4[3] = {0,};
