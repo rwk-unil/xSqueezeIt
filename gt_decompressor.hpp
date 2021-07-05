@@ -66,6 +66,12 @@ public:
             throw "Bad magic";
         }
 
+        // Check version
+        if (header.version != 1) {
+            std::cerr << "Bad version" << std::endl;
+            throw "Bad version";
+        }
+
         // Extract the sample list
         sample_list.clear();
         s.seekg(header.samples_offset);
