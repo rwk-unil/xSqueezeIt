@@ -465,18 +465,23 @@ public:
 
         #ifdef OLDVERSION___
         #else
+        // The approach below is not optimal at all but it works and only is here for compatibility
+
+        //////////////////
         // MISSING DATA //
+        //////////////////
         header.missing_offset = total_bytes;
 
-        uint32_t record_counter = 0;
+        uint32_t bm_counter = 0;
         for (const auto& ir : internal_gt_records) {
             if (ir.sparse_missing.size()) {
                 T number_missing = ir.sparse_missing.size();
-                s.write(reinterpret_cast<const char*>(&record_counter), sizeof(record_counter));
+                s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
                 s.write(reinterpret_cast<const char*>(number_missing), sizeof(T));
                 s.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
             }
-            record_counter++;
+            // BM index has to be used because of -r option
+            bm_counter += ir.rearrangements.size();
         }
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
@@ -485,19 +490,22 @@ public:
             header.has_missing = true;
         }
 
+        ////////////////
         // PHASE INFO //
+        ////////////////
         header.phase_info_offset = total_bytes;
 
-        record_counter = 0;
+        bm_counter = 0;
         for (const auto& ir : internal_gt_records) {
             const auto& spndp = ir.sparse_non_default_phasing;
             if (spndp.size()) {
                 T qty = spndp.size();
-                s.write(reinterpret_cast<const char*>(&record_counter), sizeof(record_counter));
+                s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
                 s.write(reinterpret_cast<const char*>(qty), sizeof(T));
                 s.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
             }
-            record_counter++;
+            // BM index has to be used because of -r option
+            bm_counter += ir.rearrangements.size();
         }
 
         written_bytes = size_t(s.tellp()) - total_bytes;
