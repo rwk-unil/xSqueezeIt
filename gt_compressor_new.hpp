@@ -34,7 +34,11 @@
 #include <string>
 #include <memory>
 
+#ifndef DEBUGGG
+static constexpr bool DEBUG_COMPRESSION = false;
+#else
 static constexpr bool DEBUG_COMPRESSION = true;
+#endif
 
 // template<typename T = uint32_t>
 // class SparseGt {
@@ -146,7 +150,7 @@ public:
             .ind_bytes = sizeof(uint32_t), // Should never change
             .aet_bytes = sizeof(T), // Depends on number of hap samples
             .wah_bytes = sizeof(uint16_t), // Should never change
-            .hap_samples = (uint64_t)this->sample_list.size(),
+            .hap_samples = (uint64_t)this->sample_list.size()*PLOIDY, /// @todo
             .num_variants = (uint64_t)this->variant_counter,
             .block_size = (uint32_t)0,
             .number_of_blocks = (uint32_t)1, // This version is single block

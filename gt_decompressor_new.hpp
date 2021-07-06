@@ -41,7 +41,13 @@ extern GlobalAppOptions global_app_options;
 using namespace wah;
 
 constexpr uint32_t THIS_VERSION = 2;
+
+#ifndef DEBUGGG
+static constexpr bool DEBUG_DECOMP = false;
+#else
 static constexpr bool DEBUG_DECOMP = true;
+#endif
+
 
 class NewDecompressor {
 public:
@@ -291,16 +297,17 @@ private:
                     std::copy(b.begin(), b.begin()+v, a.begin()+u);
                 }
             }
-
-            if (rearrangement_track[current_position+1]) {
-                // Optimisation : Only extract if needed to advance further
-                wah_p = wah2_extract(wah_p, y, N_HAPS);
-                // (in V2 only rearrangement positions are in WAH, everything else is in sparse)
-            } else {
-                if (extract) {
-                    sparse_p = sparse_extract(sparse_p);
+            if (current_position < N_SITES-1) {
+                if (rearrangement_track[current_position+1]) {
+                    // Optimisation : Only extract if needed to advance further
+                    wah_p = wah2_extract(wah_p, y, N_HAPS);
+                    // (in V2 only rearrangement positions are in WAH, everything else is in sparse)
                 } else {
-                    sparse_p = sparse_advance_pointer(sparse_p);
+                    if (extract) {
+                        sparse_p = sparse_extract(sparse_p);
+                    } else {
+                        sparse_p = sparse_advance_pointer(sparse_p);
+                    }
                 }
             }
             current_position++;
@@ -408,6 +415,7 @@ private:
                     genotypes[i] = bcf_gt_phased(default_gt);
                 }
                 for (const auto& i : dp.get_sparse_ref()) {
+                    //if constexpr (DEBUG_DECOMP) std::cerr << "Setting variant at " << i << std::endl;
                     genotypes[i] = bcf_gt_phased(sparse_gt);
                 }
             } else {
