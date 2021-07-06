@@ -57,6 +57,23 @@ static constexpr bool DEBUG_COMPRESSION = true;
 //     std::vector<T> sparse;
 // };
 
+template<typename T>
+inline void pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, int32_t alt_allele) {
+    size_t u = 0;
+    size_t v = 0;
+
+    for (size_t j = 0; j < ngt; ++j) {
+        if (bcf_gt_allele(gt_arr[a[j]]) != alt_allele) { // If non alt allele
+            a[u] = a[j];
+            u++;
+        } else { // if alt allele
+            b[v] = a[j];
+            v++;
+        }
+    }
+    std::copy(b.begin(), b.begin()+v, a.begin()+u);
+}
+
 template<typename T = uint32_t>
 class SparseGtLine {
 public:
@@ -314,6 +331,8 @@ protected:
 
         internal_encoding.clear();
         rearrangement_track.clear();
+        missing_track.clear();
+        phase_track.clear();
 
         entry_counter = 0;
         variant_counter = 0;
@@ -341,27 +360,24 @@ protected:
             if ((internal_encoding.back().minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD)) {
                 // Indicate that the current position has a rearrangement
                 rearrangement_track[variant_counter] = true;
+                rearrangement_counter++;
 
                 // PBWT Sort
-                {
-                    size_t u = 0;
-                    size_t v = 0;
+                pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
 
-                    rearrangement_counter++;
-                    for (size_t j = 0; j < N_HAPS; ++j) {
-                        if (bcf_gt_allele(bcf_fri.gt_arr[a[j]]) != alt_allele) { // If non alt allele
-                            a[u] = a[j];
-                            u++;
-                        } else { // if alt allele
-                            b[v] = a[j];
-                            v++;
-                        }
-                    }
-                    std::copy(b.begin(), b.begin()+v, a.begin()+u);
-                }
             } // Rearrangement condition
             variant_counter++;
         } // Alt allele loop
+
+        // Allocate more size to tracks if needed
+        if (entry_counter >= missing_track.size()) {
+            missing_track.resize(missing_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
+            phase_track.resize(phase_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
+        }
+
+        if (internal_encoding.back().has_missing) {
+            missing_track[entry_counter] = true;
+        }
 
         // Counts the number of BCF lines
         entry_counter++;
@@ -376,6 +392,9 @@ protected:
 
     std::vector<InternalGtLine<T> > internal_encoding;
     std::vector<bool> rearrangement_track;
+    std::vector<bool> missing_track;
+    std::vector<bool> phase_track;
+
     size_t rearrangement_counter = 0;
     size_t entry_counter = 0;
     size_t variant_counter = 0;
