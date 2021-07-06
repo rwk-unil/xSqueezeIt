@@ -22,6 +22,18 @@ std::vector<std::unordered_map<T, size_t> > extract_histograms(const std::vector
     return histograms;
 }
 
+template<typename K, typename V>
+std::multimap<V, K> invertMap(std::unordered_map<K, V> const &map)
+{
+    std::multimap<V, K> multimap;
+
+    for (auto const &pair: map) {
+        multimap.insert(std::make_pair(pair.second, pair.first));
+    }
+
+    return multimap;
+}
+
 template <typename T>
 std::vector<size_t> extract_histogram_widths(const std::vector<std::unordered_map<T, size_t> >& histograms) {
     std::vector<size_t> widths(histograms.size());
@@ -36,11 +48,31 @@ std::vector<size_t> extract_histogram_widths(const std::vector<std::vector<T> >&
     return extract_histogram_widths(extract_histograms(input));
 }
 
+#if 0
 template <typename T>
 void print_histogram(const std::unordered_map<T, size_t>& histogram) {
     std::cerr << "[";
     for (auto& kv : histogram) {
         std::cerr << "[" << std::bitset<sizeof(T)*8>(kv.first) << ", " << kv.second << "] ";
+    }
+    std::cerr << std::endl;
+}
+#endif
+
+template <typename H>
+void print_histogram(H& histogram) {
+    std::cerr << "[";
+    for (auto& kv : histogram) {
+        std::cerr << "[" << std::bitset<sizeof(kv.first)*8>(kv.first) << ", " << kv.second << "] ";
+    }
+    std::cerr << std::endl;
+}
+
+template<typename K, typename V>
+void print_sorted_histogram(const std::multimap<V, K>& histogram) {
+    std::cerr << "[";
+    for (auto& kv : histogram) {
+        std::cerr << "[" << std::bitset<sizeof(kv.second)*8>(kv.second) << ", " << kv.first << "] ";
     }
     std::cerr << std::endl;
 }

@@ -112,8 +112,8 @@ public:
                 auto h32s = extract_histograms(m32);
                 auto h64s = extract_histograms(m64);
 
-                for (size_t i = 0; i < 30; ++i) {
-                    print_histogram(h32s[i]);
+                for (size_t i = 0; i < 1; ++i) {
+                    print_sorted_histogram(invertMap(h32s[i]));
                 }
 
                 print_basic_stats(extract_histogram_widths(h8s), "m8");
