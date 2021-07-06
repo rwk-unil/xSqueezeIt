@@ -93,6 +93,72 @@ public:
 };
 
 template<typename T = uint32_t>
+class InternalGtRecord {
+private:
+
+    // Scans the genotypes for missing data and phasing as well as does the allele counts
+    inline void scan_genotypes(const bcf_file_reader_info_t& bcf_fri) {
+        for (int32_t i = 0; i < bcf_fri.n_samples; ++i) {
+            for (size_t j = 0; j < PLOIDY; ++j) {
+                const auto index = i*PLOIDY+j;
+                if (j) {
+                    // Phasing only applies on the second haplotypes and following for polyploid
+                    // This is a quirk of the BCF format, the phase bit of the first genotype is not used...
+                    // 0/1 => 0x02 04 and 0|1 => 0x02 05, see VCF / BCF specifications
+                    // https://samtools.github.io/hts-specs/
+                    // Will be set to non zero if phase changes
+                    if (bcf_gt_is_phased(bcf_fri.gt_arr[index]) != default_is_phased) {
+                        sparse_non_default_phasing.push_back(index);
+                    }
+                }
+                /// @todo check if this works with END_OF_VECTOR for male samples on chrX
+                /// the bcf_get_genotypes() call should handle this and return "missing"
+                if (bcf_gt_is_missing(bcf_fri.gt_arr[index])) {
+                    sparse_missing.push_back(index);
+                } else {
+                    allele_counts[bcf_gt_allele(bcf_fri.gt_arr[index])]++;
+                }
+            }
+        }
+    }
+
+public:
+    InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, size_t MAC_THRESHOLD) :
+    PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), default_is_phased(default_is_phased) {
+        scan_genotypes(bcf_fri);
+
+        // For all alt alleles (1 if bi-allelic variant site)
+        for (size_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
+            const auto minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt_arr - allele_counts[alt_allele]);
+            if (minor_allele_count > MAC_THRESHOLD) {
+                size_t _; // Unused
+                bool __; // Unused
+                wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, _, __));
+                const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
+                if (minor_allele_count > SORT_THRESHOLD) {
+                    pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                }
+            } else {
+                int32_t sparse_allele = 0; // If 0 means sparse is negated
+                if (allele_counts[alt_allele] == minor_allele_count) {
+                    sparse_allele = alt_allele;
+                }
+                sparse_lines.emplace_back(SparseGtLine<T>(index, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
+            }
+        }
+    }
+
+    const size_t PLOIDY = 0;
+    const size_t n_alleles = 0;
+    std::vector<T> allele_counts;
+    int32_t default_is_phased = 0;
+    std::vector<std::vector<uint16_t> > wahs;
+    std::vector<SparseGtLine<T> > sparse_lines;
+    std::vector<T> sparse_missing;
+    std::vector<T> sparse_non_default_phasing;
+};
+
+template<typename T = uint32_t>
 class InternalGtLine {
 public:
 
