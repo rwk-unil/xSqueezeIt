@@ -206,7 +206,8 @@ struct header_s {
         struct {
             bool has_missing : 1;     // The input file had missing data
             bool non_uniform_phasing : 1; // The input file has phased / unphased mixed data
-            uint8_t rsvd__1 : 6;
+            bool default_phased : 1;
+            uint8_t rsvd__1 : 5;
         };
     };
     union {
@@ -233,14 +234,15 @@ struct header_s {
     uint32_t wahs_offset = 0;         // Position in the binary file of WAH data
     uint32_t samples_offset = 0;      // Position in the binary file of samples (e.g., "NA12878", "HG00101")
     uint32_t indices_sparse_offset = 0; // Position in the binary file of indices for the sparse data
-    uint32_t rsvd_offset = 0;
+    uint32_t missing_offset = 0;
     uint32_t rearrangement_track_offset = 0; // Position in the binary file of the rearrangement track
     uint32_t sparse_offset = 0;       // Position in the binary file of the sparse data
 
     // 128 bytes
     uint32_t rare_threshold = 0;      // Threshold for the rearrangement track / sorting / wah vs sparse
     uint64_t xcf_entries = 0;         // Num entries in the BCF file (may be less than num_variants if multi-allelic)
-    uint8_t rsvd_3[116] = {0,};
+    uint32_t phase_info_offset = 0;
+    uint8_t rsvd_3[112] = {0,};
 
     // 32 bytes
     uint32_t rsvd_4[3] = {0,};

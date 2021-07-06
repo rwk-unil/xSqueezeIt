@@ -463,6 +463,52 @@ public:
         total_bytes += written_bytes;
         std::cout << "sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
+        #ifdef OLDVERSION___
+        #else
+        // MISSING DATA //
+        header.missing_offset = total_bytes;
+
+        uint32_t record_counter = 0;
+        for (const auto& ir : internal_gt_records) {
+            if (ir.sparse_missing.size()) {
+                T number_missing = ir.sparse_missing.size();
+                s.write(reinterpret_cast<const char*>(&record_counter), sizeof(record_counter));
+                s.write(reinterpret_cast<const char*>(number_missing), sizeof(T));
+                s.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
+            }
+            record_counter++;
+        }
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        if (written_bytes) {
+            std::cout << "missing sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            header.has_missing = true;
+        }
+
+        // PHASE INFO //
+        header.phase_info_offset = total_bytes;
+
+        record_counter = 0;
+        for (const auto& ir : internal_gt_records) {
+            const auto& spndp = ir.sparse_non_default_phasing;
+            if (spndp.size()) {
+                T qty = spndp.size();
+                s.write(reinterpret_cast<const char*>(&record_counter), sizeof(record_counter));
+                s.write(reinterpret_cast<const char*>(qty), sizeof(T));
+                s.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
+            }
+            record_counter++;
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        if (written_bytes) {
+            std::cout << "non uniform phasing sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            header.non_uniform_phasing = true;
+        }
+        header.default_phased = default_phased;
+        #endif
+
         ///////////////////////////
         // Rewrite Filled Header //
         ///////////////////////////
