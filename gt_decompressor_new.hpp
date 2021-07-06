@@ -138,10 +138,16 @@ public:
 
         if (header.non_uniform_phasing) {
             /// @todo
+            // Extract the non uniform phasing data as a hash table
+            // Key is BM index (cannot be entry number because of the -r option)
+            // Val is vector of sparse entries of non default phasing
         }
 
         if (header.has_missing) {
             /// @todo
+            // Extract the missing data as a hash table
+            // Key is BM index (cannot be entry number because of the -r option)
+            // val is vector of sparse entries of missing data
         }
 
         // This may seem silly but is to make sure the cast is ok
