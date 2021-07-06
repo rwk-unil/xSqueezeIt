@@ -135,6 +135,18 @@ public:
             std::cerr << "Version " << THIS_VERSION << " does not use ppas" << std::endl;
             throw "Bad file format";
         }
+
+        if (header.non_uniform_phasing) {
+            /// @todo
+        }
+
+        if (header.has_missing) {
+            /// @todo
+        }
+
+        // This may seem silly but is to make sure the cast is ok
+        // Because in the header the value is a bool inside a union with a uint8_t
+        default_phased = header.default_phased ? 1 : 0;
     }
 
     /**
@@ -380,6 +392,7 @@ private:
         int *values = NULL;
         int count = 0;
         const int32_t an = samples_to_use.size() * PLOIDY;
+        const int32_t DEFAULT_PHASED = default_phased; // For compiler optimizations
         std::vector<int32_t> ac_s;
 
         // The number of variants does not equal the number of lines if multiple ALTs
@@ -412,15 +425,15 @@ private:
                 int32_t default_gt = dp.is_negated() ? 1 : 0;
                 int32_t sparse_gt = dp.is_negated() ? 0 : 1;
                 for (size_t i = 0; i < N_HAPS; ++i) {
-                    genotypes[i] = bcf_gt_phased(default_gt);
+                    genotypes[i] = bcf_gt_unphased(default_gt) | DEFAULT_PHASED;
                 }
                 for (const auto& i : dp.get_sparse_ref()) {
                     //if constexpr (DEBUG_DECOMP) std::cerr << "Setting variant at " << i << std::endl;
-                    genotypes[i] = bcf_gt_phased(sparse_gt);
+                    genotypes[i] = bcf_gt_unphased(sparse_gt) | DEFAULT_PHASED;
                 }
             } else {
                 for (size_t i = 0; i < N_HAPS; ++i) {
-                    genotypes[a[i]] = bcf_gt_phased(y[i]); /// @todo Phase
+                    genotypes[a[i]] = bcf_gt_unphased(y[i]) | DEFAULT_PHASED; /// @todo Phase
                     //ac_s[0] += y[i];
                 }
             }
@@ -435,18 +448,18 @@ private:
                         for (size_t i = 0; i < N_HAPS; ++i) {
                             // Only overwrite refs
                             if (bcf_gt_allele(genotypes[i]) == 0) {
-                                genotypes[i] = bcf_gt_phased(alt_allele);
+                                genotypes[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
                             }
                         }
                         for (const auto& i : dp.get_sparse_ref()) {
                             // Restore overwritten refs
                             if (bcf_gt_allele(genotypes[i]) == alt_allele) {
-                                genotypes[i] = bcf_gt_phased(0);
+                                genotypes[i] = bcf_gt_unphased(0) | DEFAULT_PHASED;
                             }
                         }
                     } else {
                         for (const auto& i : dp.get_sparse_ref()) {
-                            genotypes[i] = bcf_gt_phased(alt_allele);
+                            genotypes[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
                         }
                     }
                 } else {
@@ -454,7 +467,7 @@ private:
                     auto& y = dp.get_ref_on_y();
                     for (size_t i = 0; i < N_HAPS; ++i) {
                         if (y[i]) {
-                            genotypes[a[i]] = bcf_gt_phased(alt_allele); /// @todo Phase
+                            genotypes[a[i]] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED; /// @todo Phase
                             //ac_s[alt_allele-1]++;
                         }
                     }
@@ -648,6 +661,8 @@ protected:
 
     int32_t* genotypes{NULL};
     int32_t* selected_genotypes{NULL};
+
+    int32_t default_phased = 0;
 
     std::vector<bool> rearrangement_track;
 };
