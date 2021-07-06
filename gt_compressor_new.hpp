@@ -124,7 +124,7 @@ private:
 
 public:
     InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, size_t MAC_THRESHOLD) :
-    PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), default_is_phased(default_is_phased) {
+    PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased) {
         scan_genotypes(bcf_fri);
 
         // For all alt alleles (1 if bi-allelic variant site)
@@ -136,6 +136,7 @@ public:
                 wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, _, __));
                 const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
                 if (minor_allele_count > SORT_THRESHOLD) {
+                    rearrangements[alt_allele-1] = true;
                     pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
                 }
             } else {
@@ -151,6 +152,7 @@ public:
     const size_t PLOIDY = 0;
     const size_t n_alleles = 0;
     std::vector<T> allele_counts;
+    std::vector<bool> rearrangements;
     int32_t default_is_phased = 0;
     std::vector<std::vector<uint16_t> > wahs;
     std::vector<SparseGtLine<T> > sparse_lines;
