@@ -98,9 +98,9 @@ private:
 
     // Scans the genotypes for missing data and phasing as well as does the allele counts
     inline void scan_genotypes(const bcf_file_reader_info_t& bcf_fri) {
-        for (int32_t i = 0; i < bcf_fri.n_samples; ++i) {
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
             for (size_t j = 0; j < PLOIDY; ++j) {
-                const auto index = i*PLOIDY+j;
+                const size_t index = i*PLOIDY+j;
                 if (j) {
                     // Phasing only applies on the second haplotypes and following for polyploid
                     // This is a quirk of the BCF format, the phase bit of the first genotype is not used...
@@ -123,15 +123,20 @@ private:
     }
 
 public:
-    InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, size_t MAC_THRESHOLD) :
+    InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, const size_t MAC_THRESHOLD, size_t& variant_counter, const size_t RESET_SORT_RATE) :
     PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased) {
         scan_genotypes(bcf_fri);
 
         // For all alt alleles (1 if bi-allelic variant site)
-        for (size_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
-            const auto minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt_arr - allele_counts[alt_allele]);
+        for (int32_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
+            if ((variant_counter % RESET_SORT_RATE) == 0) {
+                // Restart from natural order
+                std::iota(a.begin(), a.end(), 0);
+            }
+
+            const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt_arr - allele_counts[alt_allele]);
             if (minor_allele_count > MAC_THRESHOLD) {
-                size_t _; // Unused
+                uint32_t _; // Unused
                 bool __; // Unused
                 wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, _, __));
                 const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
@@ -144,14 +149,18 @@ public:
                 if (allele_counts[alt_allele] == minor_allele_count) {
                     sparse_allele = alt_allele;
                 }
-                sparse_lines.emplace_back(SparseGtLine<T>(index, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
+                sparse_lines.emplace_back(SparseGtLine<T>(variant_counter, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
             }
+
+            variant_counter++;
         }
     }
 
+    /// @todo wah/sparse and rearrangements may not be the same in the future
+
     const size_t PLOIDY = 0;
     const size_t n_alleles = 0;
-    std::vector<T> allele_counts;
+    std::vector<size_t> allele_counts;
     std::vector<bool> rearrangements;
     int32_t default_is_phased = 0;
     std::vector<std::vector<uint16_t> > wahs;
@@ -212,14 +221,23 @@ public:
     //GtCompressorTemplate(size_t RESET_SORT_RATE)
 
     void compress_in_memory(std::string filename) override {
+        default_phased = seek_default_phased(filename);
+        std::cerr << "It seems the file " << filename << " is mostly " << (default_phased ? "phased" : "unphased") << std::endl;
         traverse(filename);
     }
 
     void save_result_to_file(std::string filename) override {
+        #ifdef OLDVERSION___
         if (internal_encoding.size() == 0) {
             std::cerr << "GtCompressor internal encoding is empty" << std::endl;
             return;
         }
+        #else
+        if (internal_gt_records.size() == 0) {
+            std::cerr << "GtCompressor internal encoding is empty" << std::endl;
+            return;
+        }
+        #endif
 
         std::fstream s(filename, s.binary | s.out);
         if (!s.is_open()) {
@@ -277,6 +295,7 @@ public:
         uint32_t wah_index_offset = 0;
         uint32_t sparse_index_offset = 0;
         uint32_t encoding_counter = 0;
+        #ifdef OLDVERSION___
         for (const auto& ie : internal_encoding) {
             if ((encoding_counter % RESET_SORT_RATE) == 0) {
                 indices_wah[index_counter] = wah_index_offset;
@@ -291,6 +310,28 @@ public:
             }
             encoding_counter++;
         }
+        #else
+        for (const auto& ir : internal_gt_records) {
+            size_t index_w = 0;
+            size_t index_s = 0;
+            for (size_t i = 0; i < ir.rearrangements.size(); ++i) {
+                if ((encoding_counter % RESET_SORT_RATE) == 0) {
+                    indices_wah[index_counter] = wah_index_offset;
+                    indices_sparse[index_counter] = sparse_index_offset;
+                    index_counter++;
+                }
+                if (ir.rearrangements[i]) {
+                    wah_index_offset += ir.wahs[index_w].size();
+                    index_w++;
+                } else {
+                    // Sparse is encoded number followed by entries
+                    sparse_index_offset += (ir.sparse_lines[index_s].sparse_encoding.size() + 1);
+                    index_s++;
+                }
+                encoding_counter++;
+            }
+        }
+        #endif
 
         s.write(reinterpret_cast<const char*>(indices_wah.data()), indices_wah.size() * sizeof(decltype(indices_wah)::value_type));
 
@@ -309,17 +350,25 @@ public:
         //////////////////////////////////
         // Write the permutation arrays //
         //////////////////////////////////
-        header.ssas_offset = -1; // Not used in this compressor
+        header.ssas_offset = total_bytes; // Not used in this compressor
 
         ///////////////////////////////
         // Write the compressed data //
         ///////////////////////////////
         header.wahs_offset = total_bytes;
+        #ifdef OLDVERSION___
         for (const auto& ie : internal_encoding) {
             if (ie.sparse_gt_line == nullptr) {
                 s.write(reinterpret_cast<const char*>(ie.wah.data()), ie.wah.size() * sizeof(decltype(ie.wah.back())));
             }
         }
+        #else
+        for (const auto& ir : internal_gt_records) {
+            for (const auto& wah : ir.wahs) {
+                s.write(reinterpret_cast<const char*>(wah.data()), wah.size() * sizeof(decltype(wah.back())));
+            }
+        }
+        #endif
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
@@ -341,6 +390,16 @@ public:
         // Write the rearrangement track //
         ///////////////////////////////////
         header.rearrangement_track_offset = total_bytes;
+        #ifdef OLDVERSION___
+        #else
+        rearrangement_track.resize(variant_counter, false);
+        size_t _ = 0;
+        for (const auto& ir : internal_gt_records) {
+            for (const auto r : ir.rearrangements) {
+                rearrangement_track[_++] = r;
+            }
+        }
+        #endif
         auto rt = wah::wah_encode2<uint16_t>(rearrangement_track);
         s.write(reinterpret_cast<const char*>(rt.data()), rt.size() * sizeof(decltype(rt.back())));
 
@@ -352,6 +411,8 @@ public:
         // Write the sparse data //
         ///////////////////////////
         header.sparse_offset = total_bytes;
+
+        #ifdef OLDVERSION___
         for (const auto& ie : internal_encoding) {
             if (ie.sparse_gt_line) {
                 auto& sparse = ie.sparse_gt_line->sparse_encoding;
@@ -372,6 +433,28 @@ public:
                 s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
             }
         }
+        #else
+        for (const auto& ir : internal_gt_records) {
+            for (const auto& sl : ir.sparse_lines) {
+                const auto& sparse = sl.sparse_encoding;
+                T number_of_positions = sparse.size();
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry " << number_of_positions << " ";
+                // Case where the REF allele is actually sparse
+                if (sl.sparse_allele == 0) {
+                    if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
+                    // Set the MSB Bit
+                    // This will always work as long as MAF is < 0.5
+                    // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
+                    /// @todo Check for this if user can set MAF
+                    number_of_positions |= (T)1 << (sizeof(T)*8-1);
+                }
+                if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
+                s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+                s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
+            }
+        }
+        #endif
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         std::cout << "sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
@@ -399,8 +482,8 @@ protected:
 
         internal_encoding.clear();
         rearrangement_track.clear();
-        missing_track.clear();
-        phase_track.clear();
+        //missing_track.clear();
+        //phase_track.clear();
 
         entry_counter = 0;
         variant_counter = 0;
@@ -408,6 +491,7 @@ protected:
     }
 
     void handle_bcf_line() override {
+        #ifdef OLDVERSION___
         // For each alternative allele (can be multiple)
         for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
             // Allocate more size to the rearrangement track if needed
@@ -436,21 +520,17 @@ protected:
             } // Rearrangement condition
             variant_counter++;
         } // Alt allele loop
-
-        // Allocate more size to tracks if needed
-        if (entry_counter >= missing_track.size()) {
-            missing_track.resize(missing_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
-            phase_track.resize(phase_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
-        }
-
-        if (internal_encoding.back().has_missing) {
-            missing_track[entry_counter] = true;
-        }
+        #else
+        // The constructor does all the work
+        internal_gt_records.emplace_back(InternalGtRecord(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_RATE));
+        #endif
 
         // Counts the number of BCF lines
         entry_counter++;
     }
 
+    std::string filename;
+    int default_phased = 0; // If the file is mostly phased or unphased data
     const size_t PLOIDY = 2;
     const double MAF = 0.01;
     T N_HAPS = 0;
@@ -459,9 +539,8 @@ protected:
     const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
 
     std::vector<InternalGtLine<T> > internal_encoding;
+    std::vector<InternalGtRecord<T > > internal_gt_records;
     std::vector<bool> rearrangement_track;
-    std::vector<bool> missing_track;
-    std::vector<bool> phase_track;
 
     size_t rearrangement_counter = 0;
     size_t entry_counter = 0;

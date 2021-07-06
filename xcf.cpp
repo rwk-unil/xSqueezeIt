@@ -725,3 +725,95 @@ void compute_phase_switch_errors(const std::string& testFile, const std::string&
 
     std::cerr << "The error percentage is : " << percentage << " %" << std::endl;
 }
+
+int32_t seek_default_phased(const std::string& filename, size_t limit) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+    std::vector<size_t> counts(2, 0);
+    while(bcf_next_line(bcf_fri) && limit--) {
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        int line_max_ploidy = ngt / bcf_fri.n_samples;
+
+        if (line_max_ploidy == 1) {
+            destroy_bcf_file_reader(bcf_fri);
+            return 0; // Not phased, does not matter for haploid
+        }
+
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            counts[bcf_gt_is_phased(bcf_fri.gt_arr[i*line_max_ploidy+1])]++;
+        }
+    }
+    destroy_bcf_file_reader(bcf_fri);
+    if (counts[0] > counts[1]) {
+        return 0; // Majority is unphased
+    } else {
+        return 1; // Majority is phased
+    }
+}
+
+#if 0
+uint64_t get_number_of_record_from_indexed_xcf(std::string filename)
+{
+    const char **seq = NULL;
+    hts_idx_t *idx = NULL;
+    tbx_t *tbx = NULL;
+    htsFile *fp = NULL;
+
+    int tid, nseq = 0, ret = 0;
+    bcf_hdr_t *hdr = NULL;
+
+    uint64_t sum = 0;
+
+    fp = hts_open(filename.c_str(), "r");
+    if (!fp) {
+        std::cerr << "Could not open " << filename << std::endl;
+        throw "File error";
+    }
+
+    if (hts_get_format(fp)->format == vcf) {
+        std::stringstream ss;
+        ss << filename << ".tbi";
+        tbx = tbx_index_load2(filename.c_str(), ss.str().c_str());
+        if (!tbx) {
+            std::cerr << "Could not load index for VCF: " << filename << std::endl;
+            throw "File error";
+        }
+    } else if (hts_get_format(fp)->format == bcf) {
+        std::stringstream ss;
+        ss << filename << ".csi";
+        idx = bcf_index_load2(filename.c_str(), ss.str().c_str());
+        if (!idx) {
+            std::cerr << "Could not load index for VCF: " << filename << std::endl;
+            throw "File error";
+        }
+    } else {
+        std::cerr << "Bad file type" << std::endl;
+        throw "File error";
+    }
+
+    if (tbx) {
+        seq = tbx_seqnames(tbx, &nseq);
+    } else {
+        nseq = hts_idx_nseq(idx);
+    }
+
+    for (tid=0; tid<nseq; tid++) {
+        uint64_t records, v;
+        hts_idx_get_stat(tbx ? tbx->idx : idx, tid, &records, &v);
+        sum += records;
+    }
+
+    if (fp && hts_close(fp) != 0) {
+        std::cerr << "Could not close file..." << std::endl;
+    }
+    if (tbx) {
+        tbx_destroy(tbx);
+    }
+    if (idx) {
+        hts_idx_destroy(idx);
+    }
+    return sum;
+}
+#endif

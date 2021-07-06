@@ -291,4 +291,6 @@ size_t compute_phase_switch_errors(const std::vector<bool>& testseq, const std::
 
 void compute_phase_switch_errors(const std::string& testFile, const std::string& refFile);
 
+int32_t seek_default_phased(const std::string& filename, size_t limit = 3);
+
 #endif /* __XCF_HPP__ */
