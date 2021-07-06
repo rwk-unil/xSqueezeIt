@@ -414,14 +414,8 @@ private:
             // Remove the "BM" format /// @todo remove all possible junk (there should be none)
             bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
-            //ac_s.clear();
-            //ac_s.resize(bcf_fri.line->n_allele-1, 0);
-
             // Set REF / first ALT
-            auto& a = dp.get_ref_on_a();
-            auto& y = dp.get_ref_on_y();
-
-            if (dp.position_is_sparse()) {
+            if (dp.position_is_sparse()) { /* SPARSE */
                 int32_t default_gt = dp.is_negated() ? 1 : 0;
                 int32_t sparse_gt = dp.is_negated() ? 0 : 1;
                 for (size_t i = 0; i < N_HAPS; ++i) {
@@ -431,10 +425,11 @@ private:
                     //if constexpr (DEBUG_DECOMP) std::cerr << "Setting variant at " << i << std::endl;
                     genotypes[i] = bcf_gt_unphased(sparse_gt) | DEFAULT_PHASED;
                 }
-            } else {
+            } else { /* SORTED WAH */
+                auto& a = dp.get_ref_on_a();
+                auto& y = dp.get_ref_on_y();
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     genotypes[a[i]] = bcf_gt_unphased(y[i]) | DEFAULT_PHASED; /// @todo Phase
-                    //ac_s[0] += y[i];
                 }
             }
             dp.advance();
@@ -442,7 +437,7 @@ private:
 
             // If other ALTs (ALTs are 1 indexed, because 0 is REF)
             for (int alt_allele = 2; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-                if (dp.position_is_sparse()) {
+                if (dp.position_is_sparse()) { /* SPARSE */
                     if (dp.is_negated()) { // There can only be one negated because must be more than all others combined
                         // All non set positions are now filled
                         for (size_t i = 0; i < N_HAPS; ++i) {
@@ -458,17 +453,17 @@ private:
                             }
                         }
                     } else {
+                        // Fill normally
                         for (const auto& i : dp.get_sparse_ref()) {
                             genotypes[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
                         }
                     }
-                } else {
+                } else { /* SORTED WAH */
                     auto& a = dp.get_ref_on_a();
                     auto& y = dp.get_ref_on_y();
                     for (size_t i = 0; i < N_HAPS; ++i) {
                         if (y[i]) {
                             genotypes[a[i]] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED; /// @todo Phase
-                            //ac_s[alt_allele-1]++;
                         }
                     }
                 }
@@ -481,6 +476,7 @@ private:
             ///////////////////////
             int ret = 0;
             if (select_samples) {
+                // If select samples option has been enabled, recompute AC / AN as bcftools does
                 ac_s.clear();
                 ac_s.resize(bcf_fri.line->n_allele-1, 0);
                 for (size_t i = 0; i < samples_to_use.size(); ++i) {
@@ -497,6 +493,7 @@ private:
                 bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
                 bcf_update_info_int32(hdr, rec, "AN", &an, 1);
             } else {
+                // Else just fill the GT values
                 ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * PLOIDY); // 15% of time spent in here
             }
             if (ret) {
