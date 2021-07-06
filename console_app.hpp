@@ -19,6 +19,7 @@ public:
         app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
         app.add_flag("--no-sort", no_sort, "DEBUG - No PBWT sort");
         app.add_flag("--v2", v2, "DEBUG - New version");
+        app.add_option("--maf", maf, "DEBUG - New version MAF");
 
         app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         app.add_flag("--inject-phase-switches", inject_phase_switches, "DEBUG injects phase switches");
@@ -65,6 +66,7 @@ public:
     bool verify = false;
     bool iota = false;
     bool v2 = false;
+    double maf = 0.01;
     bool no_sort = false;
     bool count_xcf = false;
     bool sandbox = false;

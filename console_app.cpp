@@ -122,6 +122,7 @@ int main(int argc, const char *argv[]) {
         auto compress_thread = std::thread([&]{
             if (opt.v2) {
                 NewCompressor c;
+                c.set_maf(opt.maf);
                 try {
                     c.compress_in_memory(filename);
                     std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;

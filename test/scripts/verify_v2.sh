@@ -44,7 +44,7 @@ function exit_fail_rm_tmp {
     exit 1
 }
 
-../../console_app -c --v2 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILANEM}"; exit_fail_rm_tmp; }
+../../console_app -c --v2 --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILANEM}"; exit_fail_rm_tmp; }
 ../../console_app -x --v2 -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILANEM}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }

@@ -210,7 +210,11 @@ public:
     virtual void compress_in_memory(std::string filename) = 0;
     virtual void save_result_to_file(std::string filename) = 0;
 
+    void set_maf(double new_MAF) {MAF = new_MAF;}
+
     virtual ~GtCompressor() {}
+
+    double MAF = 0.01;
 };
 
 template<typename T = uint32_t>
@@ -532,7 +536,6 @@ protected:
     std::string filename;
     int default_phased = 0; // If the file is mostly phased or unphased data
     const size_t PLOIDY = 2;
-    const double MAF = 0.01;
     T N_HAPS = 0;
     size_t MINOR_ALLELE_COUNT_THRESHOLD = 0;
     const uint32_t RESET_SORT_RATE = 8192;
@@ -554,6 +557,8 @@ protected:
 
 class NewCompressor {
 public:
+    void set_maf(double new_MAF) {MAF = new_MAF;}
+
     void compress_in_memory(std::string filename) {
         bcf_file_reader_info_t bcf_fri;
         initialize_bcf_file_reader(bcf_fri, filename);
@@ -567,6 +572,7 @@ public:
         } else { // Else use a compressor that uses uint32_t as indices
             _compressor = std::make_unique<GtCompressorTemplate<uint32_t> >();
         }
+        _compressor->set_maf(MAF);
         _compressor->compress_in_memory(filename);
     }
     void save_result_to_file(std::string filename) {
@@ -579,6 +585,7 @@ public:
 
 protected:
     std::unique_ptr<GtCompressor> _compressor = nullptr;
+    double MAF = 0.01;
 };
 
 #endif /* __GT_COMPRESSOR_NEW_HPP__ */
