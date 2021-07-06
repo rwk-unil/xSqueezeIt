@@ -41,8 +41,9 @@ extern GlobalAppOptions global_app_options;
 using namespace wah;
 
 constexpr uint32_t THIS_VERSION = 2;
+static constexpr bool DEBUG_DECOMP = true;
 
-class GtDecompressor {
+class NewDecompressor {
 public:
 
     /**
@@ -51,7 +52,7 @@ public:
      * @param filename compressed genotype data file
      * @param bcf_nosamples corresponding bcf file with variant info
      * */
-    GtDecompressor(std::string filename, std::string bcf_nosamples) : filename(filename), bcf_nosamples(bcf_nosamples) {
+    NewDecompressor(std::string filename, std::string bcf_nosamples) : filename(filename), bcf_nosamples(bcf_nosamples) {
         std::fstream s(filename, s.binary | s.in);
         if (!s.is_open()) {
             std::cerr << "Failed to open file " << filename << std::endl;
@@ -147,7 +148,7 @@ public:
     /**
      * @brief Destructor
      * */
-    ~GtDecompressor() {
+    ~NewDecompressor() {
         if (file_mmap != NULL) {
             munmap(file_mmap, file_size);
         }
@@ -171,7 +172,7 @@ private:
     class DecompressPointer {
     private:
         A_T* sparse_extract(A_T* s_p) {
-            constexpr T MSB_BIT = (T)1 << (sizeof(T)*8-1);
+            constexpr A_T MSB_BIT = (A_T)1 << (sizeof(A_T)*8-1);
             A_T num = *s_p;
             s_p++;
 
@@ -179,15 +180,19 @@ private:
             num &= ~MSB_BIT; // Remove the bit !
 
             sparse.clear();
+            if (DEBUG_DECOMP) std::cerr << "DEBUG : Position : " << current_position << " Extracted " << num << " Sparse values ";
             for (A_T i = 0; i < num; i++) {
+                if (DEBUG_DECOMP) std::cerr << *s_p << " ";
                 sparse.push_back(*s_p);
                 s_p++;
             }
+            if (DEBUG_DECOMP) std::cerr << std::endl;
+
             return s_p;
         }
 
         A_T* sparse_advance_pointer(A_T* s_p) {
-            constexpr T MSB_BIT = (T)1 << (sizeof(T)*8-1);
+            constexpr A_T MSB_BIT = (A_T)1 << (sizeof(A_T)*8-1);
             A_T num = *s_p;
             s_p++;
 
@@ -305,8 +310,8 @@ private:
         const size_t N_SITES;
         const size_t N_HAPS;
         WAH_T* const wah_origin_p;
-        A_T* const sparse_origin_p;
         uint32_t* const indices_p;
+        A_T* const sparse_origin_p;
         uint32_t* const indices_sparse_p;
         const size_t arrangement_sample_rate;
 
@@ -386,7 +391,7 @@ private:
                 dp.seek(values[0]);
             }
 
-            // Remove the "BM" format /// @todo remove all possible junk
+            // Remove the "BM" format /// @todo remove all possible junk (there should be none)
             bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
             //ac_s.clear();
@@ -402,7 +407,7 @@ private:
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     genotypes[i] = bcf_gt_phased(default_gt);
                 }
-                for (const auto& pos : dp.get_sparse_ref()) {
+                for (const auto& i : dp.get_sparse_ref()) {
                     genotypes[i] = bcf_gt_phased(sparse_gt);
                 }
             } else {
@@ -412,7 +417,6 @@ private:
                 }
             }
             dp.advance();
-            // Since a and y are refs they should already be updated
             num_variants_extracted++;
 
             // If other ALTs (ALTs are 1 indexed, because 0 is REF)
@@ -426,14 +430,14 @@ private:
                                 genotypes[i] = bcf_gt_phased(alt_allele);
                             }
                         }
-                        for (const auto& pos : dp.get_sparse_ref()) {
+                        for (const auto& i : dp.get_sparse_ref()) {
                             // Restore overwritten refs
                             if (bcf_gt_allele(genotypes[i]) == alt_allele) {
                                 genotypes[i] = bcf_gt_phased(0);
                             }
                         }
                     } else {
-                        for (const auto& pos : dp.get_sparse_ref()) {
+                        for (const auto& i : dp.get_sparse_ref()) {
                             genotypes[i] = bcf_gt_phased(alt_allele);
                         }
                     }
@@ -451,6 +455,9 @@ private:
                 num_variants_extracted++;
             }
 
+            ///////////////////////
+            // Update BCF Record //
+            ///////////////////////
             int ret = 0;
             if (select_samples) {
                 ac_s.clear();
@@ -491,7 +498,7 @@ private:
         const size_t N_HAPS = header.hap_samples;
 
         WAH_T* wah_origin_p = (WAH_T*)((uint8_t*)file_mmap + header.wahs_offset);
-        A_T* sparse_origin_p = (A_T*)((uint8_t*)file_mmap + header.sparse_offset)
+        A_T* sparse_origin_p = (A_T*)((uint8_t*)file_mmap + header.sparse_offset);
         uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
         uint32_t* indices_sparse_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_sparse_offset);
 

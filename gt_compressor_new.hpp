@@ -34,7 +34,7 @@
 #include <string>
 #include <memory>
 
-
+static constexpr bool DEBUG_COMPRESSION = true;
 
 // template<typename T = uint32_t>
 // class SparseGt {
@@ -182,20 +182,20 @@ public:
         // Write the indices //
         ///////////////////////
         header.indices_offset = total_bytes;
-        std::vector<uint32_t>indices(header.number_of_ssas);
+        std::vector<uint32_t> indices_wah(header.number_of_ssas);
+        std::vector<uint32_t> indices_sparse(header.number_of_ssas);
         uint32_t index_counter = 0;
         uint32_t wah_index_offset = 0;
         uint32_t sparse_index_offset = 0;
         uint32_t encoding_counter = 0;
         for (const auto& ie : internal_encoding) {
             if ((encoding_counter % RESET_SORT_RATE) == 0) {
-                if (ie.sparse_gt_line) {
-                    indices[index_counter++] = sparse_index_offset;
-                } else {
-                    indices[index_counter++] = wah_index_offset;
-                }
+                indices_wah[index_counter] = wah_index_offset;
+                indices_sparse[index_counter] = sparse_index_offset;
+                index_counter++;
             }
             if (ie.sparse_gt_line) {
+                // Sparse is encoded number followed by entries
                 sparse_index_offset += (ie.sparse_gt_line->sparse_encoding.size() + 1);
             } else {
                 wah_index_offset += ie.wah.size();
@@ -203,11 +203,19 @@ public:
             encoding_counter++;
         }
 
-        s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices)::value_type));
+        s.write(reinterpret_cast<const char*>(indices_wah.data()), indices_wah.size() * sizeof(decltype(indices_wah)::value_type));
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        header.indices_sparse_offset = total_bytes;
+        s.write(reinterpret_cast<const char*>(indices_sparse.data()), indices_sparse.size() * sizeof(decltype(indices_sparse)::value_type));
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sparse indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
 
         //////////////////////////////////
         // Write the permutation arrays //
@@ -259,14 +267,18 @@ public:
             if (ie.sparse_gt_line) {
                 auto& sparse = ie.sparse_gt_line->sparse_encoding;
                 T number_of_positions = sparse.size();
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry " << number_of_positions << " ";
                 // Case where the REF allele is actually sparse
                 if (ie.sparse_gt_line->sparse_allele == 0) {
+                    if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
                     // Set the MSB Bit
                     // This will always work as long as MAF is < 0.5
                     // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
                     /// @todo Check for this if user can set MAF
                     number_of_positions |= (T)1 << (sizeof(T)*8-1);
                 }
+                if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
                 s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
                 s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
             }
