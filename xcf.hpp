@@ -58,8 +58,6 @@ typedef struct bcf_file_reader_info_t {
 
 } bcf_file_reader_info_t;
 
-static void initialize_bcf_file_reader_common(bcf_file_reader_info_t& bcf_fri, const std::string& filename);
-
 void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::string& filename);
 
 void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri);
