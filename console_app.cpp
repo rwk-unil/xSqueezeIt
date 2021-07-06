@@ -29,6 +29,7 @@ namespace fs = std::filesystem;
 #include "gt_compressor.hpp"
 #include "gt_decompressor.hpp"
 #include "gt_compressor_new.hpp"
+#include "gt_decompressor_new.hpp"
 #include "time.hpp"
 
 // Getting some insights (remove for release)
@@ -188,8 +189,13 @@ int main(int argc, const char *argv[]) {
 
         std::string variant_file(filename + "_var.bcf");
         create_index_file(variant_file);
-        Decompressor d(filename, variant_file);
-        d.decompress(ofname);
+        if (opt.v2) {
+            NewDecompressor d(filename, variant_file);
+            d.decompress(ofname);
+        } else {
+            Decompressor d(filename, variant_file);
+            d.decompress(ofname);
+        }
     } else {
         std::cerr << "Choose either to compress or decompress" << std::endl << std::endl;
         exit(app.exit(CLI::CallForHelp()));
