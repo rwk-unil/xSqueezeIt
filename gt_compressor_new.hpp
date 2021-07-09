@@ -101,22 +101,35 @@ private:
         for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
             for (size_t j = 0; j < PLOIDY; ++j) {
                 const size_t index = i*PLOIDY+j;
+                auto bcf_allele = bcf_fri.gt_arr[index];
                 if (j) {
                     // Phasing only applies on the second haplotypes and following for polyploid
                     // This is a quirk of the BCF format, the phase bit of the first genotype is not used...
                     // 0/1 => 0x02 04 and 0|1 => 0x02 05, see VCF / BCF specifications
                     // https://samtools.github.io/hts-specs/
                     // Will be set to non zero if phase changes
-                    if (bcf_gt_is_phased(bcf_fri.gt_arr[index]) != default_is_phased) {
+                    if (bcf_gt_is_phased(bcf_allele) != default_is_phased) {
                         sparse_non_default_phasing.push_back(index);
                     }
                 }
                 /// @todo check if this works with END_OF_VECTOR for male samples on chrX
                 /// the bcf_get_genotypes() call should handle this and return "missing"
-                if (bcf_gt_is_missing(bcf_fri.gt_arr[index])) {
+                /// see vcf.h in htslib 0x80000000 is missing and 0x80000001 is END_OF_VECTOR in bcf
+                /// in htslib 0 is missing, see bcf_gt_is_missing
+                if (bcf_gt_is_missing(bcf_allele) or (bcf_allele == bcf_int32_missing)) {
                     sparse_missing.push_back(index);
+                } else if (bcf_allele == bcf_int32_vector_end) {
+                    std::cerr << "End of vector index : " << index << std::endl;
+                    std::cerr << "Mixed ploidy is not supported yet" << std::endl;
+                    throw "PLOIDY ERROR";
                 } else {
-                    allele_counts[bcf_gt_allele(bcf_fri.gt_arr[index])]++;
+                    try {
+                        allele_counts.at(bcf_gt_allele(bcf_allele))++;
+                    } catch (std::exception& e) {
+                        printf("Bad access at : 0x%08x\n", bcf_gt_allele(bcf_allele));
+                        printf("Value in array is : 0x%08x\n", bcf_allele);
+                        throw "Unknown allele error !";
+                    }
                 }
             }
         }
@@ -593,7 +606,12 @@ protected:
             throw "PLOIDY ERROR";
         }
         // The constructor does all the work
+        try {
         internal_gt_records.emplace_back(InternalGtRecord(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_RATE));
+        } catch (...) {
+            std::cerr << "entry " << entry_counter << ", " << unique_id(bcf_fri.line) << " caused a problem" << std::endl;
+            exit(-1);
+        }
         #endif
 
         // Counts the number of BCF lines
