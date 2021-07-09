@@ -479,6 +479,9 @@ public:
                 s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
                 s.write(reinterpret_cast<const char*>(&number_missing), sizeof(T));
                 s.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Missing sparse entry at BM " << bm_counter << ", " << number_missing << " : ";
+                if (DEBUG_COMPRESSION) for (auto s : ir.sparse_missing) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
             }
             // BM index has to be used because of -r option
             bm_counter += ir.rearrangements.size();
@@ -503,6 +506,9 @@ public:
                 s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
                 s.write(reinterpret_cast<const char*>(&qty), sizeof(T));
                 s.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Phase sparse entry at BM " << bm_counter << ", " << qty << " ";
+                if (DEBUG_COMPRESSION) for (auto s : spndp) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
             }
             // BM index has to be used because of -r option
             bm_counter += ir.rearrangements.size();

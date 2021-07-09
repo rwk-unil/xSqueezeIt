@@ -136,18 +136,33 @@ public:
             throw "Bad file format";
         }
 
-        if (header.non_uniform_phasing) {
-            /// @todo
-            // Extract the non uniform phasing data as a hash table
-            // Key is BM index (cannot be entry number because of the -r option)
-            // Val is vector of sparse entries of non default phasing
-        }
-
         if (header.has_missing) {
             /// @todo
             // Extract the missing data as a hash table
             // Key is BM index (cannot be entry number because of the -r option)
             // val is vector of sparse entries of missing data
+            //std::cerr << "Has missing !" << std::endl;
+            uint32_t limit = header.phase_info_offset; // Next offset in file is phase info
+            if (header.aet_bytes == 2) {
+                fill_sparse_map<uint16_t>(header.missing_offset, limit, missing_map);
+            } else if (header.aet_bytes == 4) {
+                fill_sparse_map<uint32_t>(header.missing_offset, limit, missing_map);
+            }
+            //std::cerr << "missing map size : " << missing_map.size() << std::endl;
+        }
+
+        if (header.non_uniform_phasing) {
+            /// @todo
+            // Extract the non uniform phasing data as a hash table
+            // Key is BM index (cannot be entry number because of the -r option)
+            // Val is vector of sparse entries of non default phasing
+            uint32_t limit = file_size; // This is last in file for the moment
+            //std::cerr << "Has non uniform phasing" << std::endl;
+            if (header.aet_bytes == 2) {
+                fill_sparse_map<uint16_t>(header.phase_info_offset, limit, non_default_phase_map);
+            } else if (header.aet_bytes == 4) {
+                fill_sparse_map<uint32_t>(header.phase_info_offset, limit, non_default_phase_map);
+            }
         }
 
         // This may seem silly but is to make sure the cast is ok
@@ -355,6 +370,35 @@ private:
         const std::vector<bool>& rearrangement_track;
     };
 
+    template<typename A_T>
+    void fill_sparse_map(uint32_t offset, uint32_t end, std::unordered_map<size_t, std::vector<size_t> >& map) {
+        map.clear();
+        uint8_t* ptr = ((uint8_t*)file_mmap + offset);
+        uint8_t* end_ptr = ((uint8_t*)file_mmap + end);
+        if (DEBUG_DECOMP) printf("DEBUG : ptr is : %p end ptr is %p\n", ptr, end_ptr);
+
+        while(ptr < end_ptr) {
+            // Decode index
+            uint32_t bm_index = *((uint32_t*)ptr);
+            ptr += sizeof(uint32_t);
+            // Decode quantity
+            A_T qty = *((A_T*)ptr);
+            ptr += sizeof(A_T);
+            // Fill sparse vector
+            std::vector<size_t> sparse_pos_vector;
+            for (A_T i = 0; i < qty; ++i) {
+                A_T pos = *((A_T*)ptr);
+                ptr += sizeof(A_T);
+                sparse_pos_vector.push_back(pos);
+            }
+            if (DEBUG_DECOMP) std::cerr << "DEBUG : sparse entry at BM " << bm_index << ", " << qty << " : ";
+            if (DEBUG_DECOMP) for (auto s : sparse_pos_vector) {std::cerr << s << " ";}
+            if (DEBUG_DECOMP) std::cerr << std::endl;
+            // Add to map
+            map.insert({bm_index, sparse_pos_vector});
+        }
+    }
+
     template<typename A_T, typename WAH_T = uint16_t>
     void decompress_core(const std::string& ofname) {
         htsFile* fp = NULL;
@@ -397,6 +441,7 @@ private:
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, DecompressPointer<A_T, WAH_T>& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
         int *values = NULL;
         int count = 0;
+        uint32_t bm_index = 0;
         const int32_t an = samples_to_use.size() * PLOIDY;
         const int32_t DEFAULT_PHASED = default_phased; // For compiler optimizations
         std::vector<int32_t> ac_s;
@@ -414,7 +459,10 @@ private:
                     throw "BM key value not found";
                 }
                 // Non linear access (returns immediately if dp is already at correct position)
+                bm_index = values[0];
                 dp.seek(values[0]);
+            } else {
+                bm_index = num_variants_extracted;
             }
 
             // Remove the "BM" format /// @todo remove all possible junk (there should be none)
@@ -475,6 +523,20 @@ private:
                 }
                 dp.advance();
                 num_variants_extracted++;
+            }
+
+            // Set missing info
+            if (missing_map.find(bm_index) != missing_map.end()) {
+                for (auto pos : missing_map.at(bm_index)) {
+                    genotypes[pos] = bcf_gt_missing | DEFAULT_PHASED;
+                }
+            }
+
+            // Set non default phase info
+            if (non_default_phase_map.find(bm_index) != non_default_phase_map.end()) {
+                for (auto pos : non_default_phase_map.at(bm_index)) {
+                    genotypes[pos] ^= 0x1; // Toggle phase bit
+                }
             }
 
             ///////////////////////
@@ -668,6 +730,9 @@ protected:
     int32_t default_phased = 0;
 
     std::vector<bool> rearrangement_track;
+
+    std::unordered_map<size_t, std::vector<size_t> > missing_map;
+    std::unordered_map<size_t, std::vector<size_t> > non_default_phase_map;
 };
 
 #endif /* __DECOMPRESSOR_NEW_HPP__ */
