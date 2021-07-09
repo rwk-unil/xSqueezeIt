@@ -477,7 +477,7 @@ public:
             if (ir.sparse_missing.size()) {
                 T number_missing = ir.sparse_missing.size();
                 s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
-                s.write(reinterpret_cast<const char*>(number_missing), sizeof(T));
+                s.write(reinterpret_cast<const char*>(&number_missing), sizeof(T));
                 s.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
             }
             // BM index has to be used because of -r option
@@ -501,7 +501,7 @@ public:
             if (spndp.size()) {
                 T qty = spndp.size();
                 s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
-                s.write(reinterpret_cast<const char*>(qty), sizeof(T));
+                s.write(reinterpret_cast<const char*>(&qty), sizeof(T));
                 s.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
             }
             // BM index has to be used because of -r option
