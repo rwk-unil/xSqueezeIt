@@ -168,6 +168,12 @@ public:
         // This may seem silly but is to make sure the cast is ok
         // Because in the header the value is a bool inside a union with a uint8_t
         default_phased = header.default_phased ? 1 : 0;
+
+        PLOIDY = header.ploidy;
+        if (PLOIDY == 0) {
+            std::cerr << "Ploidy in header is set to 0 !" << std::endl;
+            throw "PLOIDY ERROR";
+        }
     }
 
     /**
@@ -654,10 +660,10 @@ private:
             throw "Unsupported option no sort";
         }
 
-        if (sample_list.size() != (header.hap_samples / 2)) {
+        if (sample_list.size() != (header.hap_samples / header.ploidy)) {
             std::cerr << "Number of samples doesn't match" << std::endl;
             std::cerr << "Sample list has " << sample_list.size() << " samples" << std::endl;
-            std::cerr << "Compressed file header has " << header.hap_samples / 2 << " samples" << std::endl;
+            std::cerr << "Compressed file header has " << header.hap_samples / header.ploidy << " samples" << std::endl;
             throw "Number of samples doesn't match";
         }
 
@@ -714,7 +720,7 @@ protected:
     int fd;
     void* file_mmap = NULL;
 
-    const size_t PLOIDY = 2;
+    size_t PLOIDY = 2;
     size_t N_HAPS;
 
     std::string bcf_nosamples;

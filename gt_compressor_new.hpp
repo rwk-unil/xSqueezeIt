@@ -226,6 +226,7 @@ public:
 
     void compress_in_memory(std::string filename) override {
         default_phased = seek_default_phased(filename);
+        PLOIDY = seek_max_ploidy_from_first_entry(filename);
         std::cerr << "It seems the file " << filename << " is mostly " << (default_phased ? "phased" : "unphased") << std::endl;
         traverse(filename);
     }
@@ -255,6 +256,7 @@ public:
         header_t header = {
             .version = 2, // New testing version
             .ind_bytes = sizeof(uint32_t), // Should never change
+            .ploidy = (uint8_t)PLOIDY,
             .aet_bytes = sizeof(T), // Depends on number of hap samples
             .wah_bytes = sizeof(uint16_t), // Should never change
             .hap_samples = (uint64_t)this->sample_list.size()*PLOIDY, /// @todo
@@ -595,7 +597,7 @@ protected:
 
     std::string filename;
     int default_phased = 0; // If the file is mostly phased or unphased data
-    const size_t PLOIDY = 2;
+    size_t PLOIDY = 2;
     T N_HAPS = 0;
     size_t MINOR_ALLELE_COUNT_THRESHOLD = 0;
     const uint32_t RESET_SORT_RATE = 8192;

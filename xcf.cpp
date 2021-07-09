@@ -753,6 +753,27 @@ int32_t seek_default_phased(const std::string& filename, size_t limit) {
     }
 }
 
+size_t seek_max_ploidy_from_first_entry(const std::string& filename) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+
+    size_t max_ploidy = 0;
+    if ((bcf_fri.n_samples == 0) or (bcf_next_line(bcf_fri) == 0)) {
+        std::cerr << "Could not determine max ploidy..." << std::endl;
+        destroy_bcf_file_reader(bcf_fri);
+        throw "PLOIDY ERROR";
+    } else {
+        // Unpack the line and get genotypes
+        bcf_unpack(bcf_fri.line, BCF_UN_STR);
+        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        max_ploidy = ngt / bcf_fri.n_samples;
+    }
+
+    destroy_bcf_file_reader(bcf_fri);
+
+    return max_ploidy;
+}
+
 #if 0
 uint64_t get_number_of_record_from_indexed_xcf(std::string filename)
 {

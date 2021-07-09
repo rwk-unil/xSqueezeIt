@@ -30,6 +30,8 @@
 
 #include <random>
 
+/// @todo Clean the usage of PLOIDY !
+
 class BcfTraversal {
 public:
 
@@ -46,7 +48,8 @@ protected:
     virtual void handle_bcf_line() {}
 
     bcf_file_reader_info_t bcf_fri;
-    const size_t PLOIDY = 2;
+    int ngt = 0;
+    int line_max_ploidy = 0;
 };
 
 class BcfTransformer : public BcfTraversal {
@@ -79,6 +82,7 @@ public:
     }
 
 protected:
+    const size_t PLOIDY = 2;
     void transform_record() override;
 
     std::random_device rd;  // Will be used to obtain a seed for the random number engine
@@ -109,9 +113,11 @@ protected:
     }
 
     void handle_bcf_line() override {
+        if (line_max_ploidy != PLOIDY) {throw "PLOIDY ERROR";}
         line_to_matrix();
     }
 
+    const size_t PLOIDY = 2;
     std::vector<std::vector<T> >& matrix_ref;
     size_t n_samples = 0;
 };
@@ -234,7 +240,7 @@ protected:
     std::string filename;
     const std::vector<std::vector<bool> >& matrix;
     void transform_record() {
-        for (size_t i = 0; i < bcf_fri.n_samples * PLOIDY; ++i) {
+        for (size_t i = 0; i < bcf_fri.n_samples * line_max_ploidy; ++i) {
             bcf_fri.gt_arr[i] = matrix.at(record_number).at(i) ? bcf_gt_phased(1) : bcf_gt_phased(0);
         }
         record_number++;

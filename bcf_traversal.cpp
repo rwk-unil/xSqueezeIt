@@ -7,14 +7,8 @@ void BcfTraversal::traverse(const std::string filename) {
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
-
-        // Check ploidy, only support diploid for the moment
-        if (line_max_ploidy != PLOIDY) {
-            std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
-            exit(-1); // Change this
-        }
+        ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
+        line_max_ploidy = ngt / bcf_fri.n_samples;
 
         handle_bcf_line();
     }
@@ -51,6 +45,13 @@ void BcfTransformer::handle_bcf_file_reader() {
 
 void BcfTransformer::handle_bcf_line() {
     rec = bcf_fri.line;
+
+    const size_t PLOIDY = 2;
+    // Check ploidy, only support diploid for the moment
+    if (line_max_ploidy != PLOIDY) {
+        std::cerr << "[ERROR] Ploidy of samples is different than 2" << std::endl;
+        exit(-1); // Change this
+    }
 
     transform_record();
     bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);

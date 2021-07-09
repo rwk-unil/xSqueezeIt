@@ -293,4 +293,6 @@ void compute_phase_switch_errors(const std::string& testFile, const std::string&
 
 int32_t seek_default_phased(const std::string& filename, size_t limit = 3);
 
+size_t seek_max_ploidy_from_first_entry(const std::string& filename);
+
 #endif /* __XCF_HPP__ */
