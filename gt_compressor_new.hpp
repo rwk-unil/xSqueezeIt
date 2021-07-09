@@ -587,6 +587,11 @@ protected:
             variant_counter++;
         } // Alt allele loop
         #else
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
+            std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
+            throw "PLOIDY ERROR";
+        }
         // The constructor does all the work
         internal_gt_records.emplace_back(InternalGtRecord(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_RATE));
         #endif
