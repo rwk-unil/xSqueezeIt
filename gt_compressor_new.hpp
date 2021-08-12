@@ -282,8 +282,8 @@ public:
             .ssas_offset = (uint32_t)-1, /* Set later */
             .wahs_offset = (uint32_t)-1, /* Set later */
             .samples_offset = (uint32_t)-1, /* Set later */
-            .xcf_entries = (uint64_t)entry_counter,
             .rearrangement_track_offset = (uint32_t)-1, /* Set later */
+            .xcf_entries = (uint64_t)entry_counter,
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,
