@@ -567,8 +567,8 @@ private:
                 .ssas_offset = (uint32_t)offsets.ssas,
                 .wahs_offset = (uint32_t)offsets.wahs,
                 .samples_offset = (uint32_t)offsets.samples,
-                .xcf_entries = (uint64_t)num_entries,
                 .rearrangement_track_offset = (uint32_t)rearrangement_track_offset, /* Set later */
+                .xcf_entries = (uint64_t)num_entries,
                 .sample_name_chksum = 0 /* TODO */,
                 .bcf_file_chksum = 0 /* TODO */,
                 .data_chksum = 0 /* TODO */,
