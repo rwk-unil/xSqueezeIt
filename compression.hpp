@@ -246,7 +246,7 @@ struct header_s {
 
     // 32 bytes
     uint32_t rsvd_4[3] = {0,};
-    uint32_t sample_name_chksum = 0;; // Checksum unused for now
+    uint32_t sample_name_chksum = 0;  // Checksum unused for now
     uint32_t bcf_file_chksum = 0;     // Checksum unused for now
     uint32_t data_chksum = 0;         // Checksum unused for now
     uint32_t header_chksum = 0;       // Checksum unused for now
