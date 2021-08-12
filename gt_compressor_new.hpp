@@ -268,8 +268,8 @@ public:
         //////////////////////
         header_t header = {
             .version = 2, // New testing version
-            .ind_bytes = sizeof(uint32_t), // Should never change
             .ploidy = (uint8_t)PLOIDY,
+            .ind_bytes = sizeof(uint32_t), // Should never change
             .aet_bytes = sizeof(T), // Depends on number of hap samples
             .wah_bytes = sizeof(uint16_t), // Should never change
             .hap_samples = (uint64_t)this->sample_list.size()*PLOIDY, /// @todo
