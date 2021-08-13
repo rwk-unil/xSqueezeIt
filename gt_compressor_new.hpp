@@ -481,11 +481,8 @@ protected:
         b.resize(N_HAPS);
         std::iota(a.begin(), a.end(), 0);
 
-        internal_encoding.clear();
         internal_gt_records.clear();
         rearrangement_track.clear();
-        //missing_track.clear();
-        //phase_track.clear();
 
         entry_counter = 0;
         variant_counter = 0;
@@ -518,7 +515,6 @@ protected:
     //const uint32_t RESET_SORT_BLOCK_LENGTH = 8192;
     const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
 
-    std::vector<InternalGtLine<T> > internal_encoding;
     std::vector<InternalGtRecord<T > > internal_gt_records;
     std::vector<bool> rearrangement_track;
 
@@ -527,14 +523,83 @@ protected:
     size_t variant_counter = 0;
 
     std::vector<T> a, b;
-    std::vector<std::vector<uint16_t> > wahs;
 
     std::vector<std::string> sample_list;
 };
 
-#if 0
 #include "block.hpp"
+template<typename T = uint32_t>
+class GtCompressorTemplateV3 : public GtCompressor, protected BcfTraversal {
+public:
 
+    void compress_in_memory(std::string filename) override {
+        default_phased = seek_default_phased(filename);
+        PLOIDY = seek_max_ploidy_from_first_entry(filename);
+        std::cerr << "It seems the file " << filename << " is mostly " << (default_phased ? "phased" : "unphased") << std::endl;
+        traverse(filename);
+    }
+
+    void save_result_to_file(std::string filename) override {
+    }
+    virtual ~GtCompressorTemplateV3() {}
+
+protected:
+
+    void handle_bcf_file_reader() override {
+        sample_list = extract_samples(bcf_fri);
+        N_HAPS = bcf_fri.n_samples * PLOIDY;
+        MINOR_ALLELE_COUNT_THRESHOLD = (size_t)((double)N_HAPS * MAF);
+        a.resize(N_HAPS);
+        b.resize(N_HAPS);
+        std::iota(a.begin(), a.end(), 0);
+
+        blocks.clear();
+        rearrangement_track.clear();
+
+        entry_counter = 0;
+        variant_counter = 0;
+        rearrangement_counter = 0;
+    }
+
+    void handle_bcf_line() override {
+        if (line_max_ploidy != PLOIDY) {
+            std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
+            std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
+            throw "PLOIDY ERROR";
+        }
+        // The constructor does all the work
+        try {
+        //internal_gt_records.emplace_back(InternalGtRecord(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH));
+        } catch (...) {
+            std::cerr << "entry " << entry_counter << ", " << unique_id(bcf_fri.line) << " caused a problem" << std::endl;
+            exit(-1);
+        }
+
+        // Counts the number of BCF lines
+        entry_counter++;
+    }
+
+    std::string filename;
+    int default_phased = 0; // If the file is mostly phased or unphased data
+    size_t PLOIDY = 2;
+    T N_HAPS = 0;
+    size_t MINOR_ALLELE_COUNT_THRESHOLD = 0;
+    const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
+
+    std::vector<EncodedBlock<T> > blocks;
+    std::vector<bool> rearrangement_track;
+
+    size_t rearrangement_counter = 0;
+    size_t entry_counter = 0;
+    size_t variant_counter = 0;
+
+    std::vector<T> a, b;
+
+    std::vector<std::string> sample_list;
+};
+
+
+#if 0
 template<typename T = uint32_t>
 class Experimental : public GtCompressorTemplate<T> {
 public:

@@ -47,7 +47,7 @@ protected:
     std::unordered_map<Dictionnary_Keys, uint32_t> dictionnary;
 };
 
-template <typename A_T, typename WAH_T>
+template <typename A_T, typename WAH_T = uint16_t>
 class EncodedBlock : public Block {
 public:
     EncodedBlock(size_t BLOCK_SIZE) : Block(BLOCK_SIZE) {}
