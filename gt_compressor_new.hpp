@@ -497,7 +497,8 @@ protected:
 template<typename T = uint32_t>
 class Experimental : public GtCompressorTemplate<T> {
 public:
-    //void save_result_to_file(std::string filename) override {
+
+    bool zstd_compression_on = false;
 
     void save_result_to_file(std::string filename) override {
         std::cerr << "EXPERIMENTAL !" << std::endl;
@@ -541,6 +542,7 @@ public:
         };
         header.iota_ppa = true;
         header.no_sort = false;
+        header.zstd = zstd_compression_on;
         header.rare_threshold = this->MINOR_ALLELE_COUNT_THRESHOLD;
 
         /////////////////////////////
@@ -571,7 +573,7 @@ public:
                 if ((i % this->RESET_SORT_BLOCK_LENGTH) == 0) {
                     if (i) {
                         indices[block_counter++] = (uint32_t)s.tellp();
-                        block.write_to_file(s);
+                        block.write_to_file(s, zstd_compression_on);
                     }
                     block.reset();
                 }

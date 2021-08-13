@@ -215,7 +215,8 @@ struct header_s {
         struct {
             bool iota_ppa : 1;        // Reset sort instead of saving permutation arrays
             bool no_sort : 1;         // Data is not permutated
-            uint8_t rsvd__2 : 6;
+            bool zstd : 1;
+            uint8_t rsvd__2 : 5;
         };
     };
     uint8_t  rsvd_bs[2] = {0,};
@@ -266,6 +267,7 @@ void print_header_info(const header_t& header) {
     std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;
     std::cerr << "Uses PPA's : " << (header.iota_ppa ? "no" : "yes" ) << std::endl;
     std::cerr << "Is not sorted : " << (header.no_sort ? "yes" : "no" ) << std::endl;
+    std::cerr << "Has a zstd compression layer : " << (header.zstd ? "yes" : "no") << std::endl;
     std::cerr << "--" << std::endl;
     std::cerr << "Haplotype samples  : " << header.hap_samples << std::endl;
     std::cerr << "Number of variants : " << header.num_variants << std::endl;
