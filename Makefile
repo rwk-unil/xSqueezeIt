@@ -7,7 +7,7 @@ INCLUDE_DIRS=-I . -I $(HTSLIB_PATH)/htslib -I $(BENCHMARK_PATH)/include
 CXXFLAGS=-O3 -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
 LD=g++
-LIBS=-lpthread -lhts
+LIBS=-lpthread -lhts -lzstd
 LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH)
 # Debugger
 XDB=gdb

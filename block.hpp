@@ -24,6 +24,14 @@
 #define __BLOCK_HPP__
 
 #include <unordered_map>
+#include <filesystem>
+#include <iostream>
+#include <zstd.h>
+#include <string>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+namespace fs = std::filesystem;
 
 class Block {
 public:
@@ -35,11 +43,7 @@ public:
         KEY_SORT = 0,
         KEY_SELECT,
         KEY_WAH,
-        KEY_SPARSE,
-        //KEY_MISSING_TRACK,
-        //KEY_MISSING,
-        //KEY_PHASE_TRACK,
-        //KEY_PHASE
+        KEY_SPARSE
     };
 
 protected:
@@ -56,18 +60,23 @@ public:
         rearrangement_track.clear();
         wahs.clear();
         sparse_lines.clear();
-        //missing.clear();
-        //non_uniform_phasing.clear();
         dictionnary.clear();
     }
 
     std::vector<bool> rearrangement_track;
     std::vector<std::vector<WAH_T> > wahs;
     std::vector<SparseGtLine<A_T> > sparse_lines;
-    //std::map<uint32_t, std::vector<A_T> > missing; // Sorted map
-    //std::map<uint32_t, std::vector<A_T> > non_uniform_phasing; // Sorted map
 
-    void write_to_file(std::fstream& s) {
+    void write_to_file(std::fstream& os, bool compressed = true) {
+        // Funky as f...
+        char *tmpname = strdup("/tmp/tmpfileXXXXXX");
+        int fd = mkstemp(tmpname); /// @todo check return code
+        std::string filename(tmpname);
+        free(tmpname);
+
+        std::fstream ts(filename, ts.binary | ts.out | ts.trunc);
+        std::fstream& s = compressed ? ts : os;
+
         size_t block_start_pos = 0;
         size_t block_end_pos = 0;
 
@@ -75,8 +84,6 @@ public:
         dictionnary.insert(std::pair(KEY_SELECT,-1)); // Key select
         dictionnary.insert(std::pair(KEY_WAH,-1)); // Key wah
         dictionnary.insert(std::pair(KEY_SPARSE,-1)); // Key sparse
-        //dictionnary.insert(std::pair(KEY_MISSING,-1)); // Key missing
-        //dictionnary.insert(std::pair(KEY_PHASE,-1)); // Key phase
 
         block_start_pos = s.tellp();
 
@@ -118,26 +125,6 @@ public:
             s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
             s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
         }
-        //if (missing.size()) {
-        //    // Write missing
-        //    dictionnary[KEY_MISSING] = (uint32_t)((size_t)s.tellp()-block_start_pos);
-        //    for (const auto& kv : missing) {
-        //        A_T number = kv.second.size();
-        //        s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(kv.first));
-        //        s.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
-        //        s.write(reinterpret_cast<const char*>(kv.second.data()), kv.second.size() * sizeof(decltype(kv.second.back())));
-        //    }
-        //}
-        //if (non_uniform_phasing.size()) {
-        //    // Write phase
-        //    dictionnary[KEY_PHASE] = (uint32_t)((size_t)s.tellp()-block_start_pos);
-        //    for (const auto& kv : non_uniform_phasing) {
-        //        A_T number = kv.second.size();
-        //        s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(kv.first));
-        //        s.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
-        //        s.write(reinterpret_cast<const char*>(kv.second.data()), kv.second.size() * sizeof(decltype(kv.second.back())));
-        //    }
-        //}
 
         block_end_pos = s.tellp();
 
@@ -149,6 +136,45 @@ public:
         }
         // Set stream to end of block
         s.seekp(block_end_pos, std::ios_base::beg);
+
+        // Funky as f...
+        if (compressed) {
+            size_t file_size = block_end_pos-block_start_pos;
+            auto file_mmap = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
+            if (file_mmap == NULL) {
+                std::cerr << "Failed to memory map file " << filename << std::endl;
+                throw "Failed to compress block";
+            }
+
+            size_t output_buffer_size = file_size * 2;
+            void *output_buffer = malloc(output_buffer_size);
+            if (!output_buffer) {
+                std::cerr << "Failed to allocate memory for output" << std::endl;
+                throw "Failed to compress block";
+            }
+
+            auto result = ZSTD_compress(output_buffer, output_buffer_size, file_mmap, file_size, 7 /* Compression level 1-ZSTD_maxCLevel() */);
+            if (ZSTD_isError(result)) {
+                std::cerr << "Failed to compress file" << std::endl;
+                std::cerr << "Error : " << ZSTD_getErrorName(result) << std::endl;
+                throw "Failed to compress block";
+            }
+
+            uint32_t size = (uint32_t)file_size;
+            uint32_t compressed_size = (uint32_t)result;
+            size_t start = os.tellp();
+            os.write(reinterpret_cast<const char*>(&compressed_size), sizeof(uint32_t));
+            os.write(reinterpret_cast<const char*>(&size), sizeof(uint32_t));
+            os.write(reinterpret_cast<const char*>(output_buffer), result);
+            size_t stop = os.tellp();
+            std::cerr << "compressed block of " << stop-start << " bytes written" << std::endl;
+            free(output_buffer);
+            munmap(file_mmap, file_size);
+        } else {
+            std::cerr << "block of " << block_end_pos-block_start_pos << " bytes written" << std::endl;
+        }
+        close(fd);
+        fs::remove(filename); // Delete temp file
     }
 };
 
