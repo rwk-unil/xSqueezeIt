@@ -196,7 +196,7 @@ public:
             return;
         }
 
-        std::fstream s(filename, s.binary | s.out);
+        std::fstream s(filename, s.binary | s.out | s.trunc);
         if (!s.is_open()) {
             std::cerr << "Failed to open file " << filename << std::endl;
             throw "Failed to open file";
@@ -507,7 +507,7 @@ public:
             return;
         }
 
-        std::fstream s(filename, s.binary | s.out);
+        std::fstream s(filename, s.binary | s.out | s.trunc);
         if (!s.is_open()) {
             std::cerr << "Failed to open file " << filename << std::endl;
             throw "Failed to open file";
