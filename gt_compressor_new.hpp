@@ -40,23 +40,6 @@ static constexpr bool DEBUG_COMPRESSION = false;
 static constexpr bool DEBUG_COMPRESSION = true;
 #endif
 
-// template<typename T = uint32_t>
-// class SparseGt {
-// public:
-//     SparseGt(const uint32_t& index, int32_t* gt_array, const int32_t& ngt, const int32_t& alt_allele) :
-//     alt_allele(alt_allele), index(index) {
-//         for (int32_t i = 0; i < ngt; ++i) {
-//             if (bcf_gt_allele(gt_array[i]) == alt_allele) {
-//                 sparse.push_back(i);
-//             }
-//         }
-//     }
-
-//     int32_t        alt_allele;
-//     uint32_t       index = 0;
-//     std::vector<T> sparse;
-// };
-
 template<typename T>
 inline void pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, int32_t alt_allele) {
     size_t u = 0;
@@ -244,17 +227,10 @@ public:
     }
 
     void save_result_to_file(std::string filename) override {
-        #ifdef OLDVERSION___
-        if (internal_encoding.size() == 0) {
-            std::cerr << "GtCompressor internal encoding is empty" << std::endl;
-            return;
-        }
-        #else
         if (internal_gt_records.size() == 0) {
             std::cerr << "GtCompressor internal encoding is empty" << std::endl;
             return;
         }
-        #endif
 
         std::fstream s(filename, s.binary | s.out);
         if (!s.is_open()) {
@@ -313,22 +289,7 @@ public:
         uint32_t wah_index_offset = 0;
         uint32_t sparse_index_offset = 0;
         uint32_t encoding_counter = 0;
-        #ifdef OLDVERSION___
-        for (const auto& ie : internal_encoding) {
-            if ((encoding_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
-                indices_wah[index_counter] = wah_index_offset;
-                indices_sparse[index_counter] = sparse_index_offset;
-                index_counter++;
-            }
-            if (ie.sparse_gt_line) {
-                // Sparse is encoded number followed by entries
-                sparse_index_offset += (ie.sparse_gt_line->sparse_encoding.size() + 1);
-            } else {
-                wah_index_offset += ie.wah.size();
-            }
-            encoding_counter++;
-        }
-        #else
+
         for (const auto& ir : internal_gt_records) {
             size_t index_w = 0;
             size_t index_s = 0;
@@ -349,7 +310,6 @@ public:
                 encoding_counter++;
             }
         }
-        #endif
 
         s.write(reinterpret_cast<const char*>(indices_wah.data()), indices_wah.size() * sizeof(decltype(indices_wah)::value_type));
 
@@ -374,19 +334,11 @@ public:
         // Write the compressed data //
         ///////////////////////////////
         header.wahs_offset = total_bytes;
-        #ifdef OLDVERSION___
-        for (const auto& ie : internal_encoding) {
-            if (ie.sparse_gt_line == nullptr) {
-                s.write(reinterpret_cast<const char*>(ie.wah.data()), ie.wah.size() * sizeof(decltype(ie.wah.back())));
-            }
-        }
-        #else
         for (const auto& ir : internal_gt_records) {
             for (const auto& wah : ir.wahs) {
                 s.write(reinterpret_cast<const char*>(wah.data()), wah.size() * sizeof(decltype(wah.back())));
             }
         }
-        #endif
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
@@ -408,8 +360,6 @@ public:
         // Write the rearrangement track //
         ///////////////////////////////////
         header.rearrangement_track_offset = total_bytes;
-        #ifdef OLDVERSION___
-        #else
         rearrangement_track.resize(variant_counter, false);
         size_t _ = 0;
         for (const auto& ir : internal_gt_records) {
@@ -417,7 +367,6 @@ public:
                 rearrangement_track[_++] = r;
             }
         }
-        #endif
         auto rt = wah::wah_encode2<uint16_t>(rearrangement_track);
         s.write(reinterpret_cast<const char*>(rt.data()), rt.size() * sizeof(decltype(rt.back())));
 
@@ -430,28 +379,6 @@ public:
         ///////////////////////////
         header.sparse_offset = total_bytes;
 
-        #ifdef OLDVERSION___
-        for (const auto& ie : internal_encoding) {
-            if (ie.sparse_gt_line) {
-                auto& sparse = ie.sparse_gt_line->sparse_encoding;
-                T number_of_positions = sparse.size();
-                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry " << number_of_positions << " ";
-                // Case where the REF allele is actually sparse
-                if (ie.sparse_gt_line->sparse_allele == 0) {
-                    if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
-                    // Set the MSB Bit
-                    // This will always work as long as MAF is < 0.5
-                    // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
-                    /// @todo Check for this if user can set MAF
-                    number_of_positions |= (T)1 << (sizeof(T)*8-1);
-                }
-                if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
-                if (DEBUG_COMPRESSION) std::cerr << std::endl;
-                s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
-                s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
-            }
-        }
-        #else
         for (const auto& ir : internal_gt_records) {
             for (const auto& sl : ir.sparse_lines) {
                 const auto& sparse = sl.sparse_encoding;
@@ -472,13 +399,10 @@ public:
                 s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
             }
         }
-        #endif
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         std::cout << "sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
-        #ifdef OLDVERSION___
-        #else
         // The approach below is not optimal at all but it works and only is here for compatibility
 
         //////////////////
@@ -535,7 +459,6 @@ public:
             header.non_uniform_phasing = true;
         }
         header.default_phased = default_phased;
-        #endif
 
         ///////////////////////////
         // Rewrite Filled Header //
@@ -570,36 +493,6 @@ protected:
     }
 
     void handle_bcf_line() override {
-        #ifdef OLDVERSION___
-        // For each alternative allele (can be multiple)
-        for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-            // Allocate more size to the rearrangement track if needed
-            if (variant_counter >= rearrangement_track.size()) {
-                rearrangement_track.resize(rearrangement_track.size() + REARRANGEMENT_TRACK_CHUNK, false);
-            }
-
-            // Reset the ordering (allows faster random access at the cost of file size)
-            if ((variant_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
-                // Restart from natural order
-                std::iota(a.begin(), a.end(), 0);
-            }
-
-            // Encode the current alternative allele track given the arrangement in a
-            internal_encoding.push_back(InternalGtLine(variant_counter, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele, a, MINOR_ALLELE_COUNT_THRESHOLD));
-
-            // Only sort if minor allele count is high enough (better compression, faster)
-            if ((internal_encoding.back().minor_allele_count > MINOR_ALLELE_COUNT_THRESHOLD)) {
-                // Indicate that the current position has a rearrangement
-                rearrangement_track[variant_counter] = true;
-                rearrangement_counter++;
-
-                // PBWT Sort
-                pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
-
-            } // Rearrangement condition
-            variant_counter++;
-        } // Alt allele loop
-        #else
         if (line_max_ploidy != PLOIDY) {
             std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
             std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
@@ -612,7 +505,6 @@ protected:
             std::cerr << "entry " << entry_counter << ", " << unique_id(bcf_fri.line) << " caused a problem" << std::endl;
             exit(-1);
         }
-        #endif
 
         // Counts the number of BCF lines
         entry_counter++;
@@ -640,6 +532,357 @@ protected:
     std::vector<std::string> sample_list;
 };
 
+#if 0
+#include "block.hpp"
+
+template<typename T = uint32_t>
+class Experimental : public GtCompressorTemplate<T> {
+public:
+    //void save_result_to_file(std::string filename) override {
+
+    void save_result_to_file(std::string filename) override {
+        std::cerr << "EXPERIMENTAL !" << std::endl;
+
+        if (this->internal_gt_records.size() == 0) {
+            std::cerr << "GtCompressor internal encoding is empty" << std::endl;
+            return;
+        }
+
+        std::fstream s(filename, s.binary | s.out);
+        if (!s.is_open()) {
+            std::cerr << "Failed to open file " << filename << std::endl;
+            throw "Failed to open file";
+        }
+
+        //////////////////////
+        // Write the header //
+        //////////////////////
+        header_t header = {
+            .version = 3, // New testing version
+            .ploidy = (uint8_t)this->PLOIDY, // May PLOIDY
+            .ind_bytes = sizeof(uint32_t), // Should never change
+            .aet_bytes = sizeof(T), // Depends on number of hap samples
+            .wah_bytes = sizeof(uint16_t), // Should never change
+            .hap_samples = (uint64_t)this->sample_list.size()*this->PLOIDY, /// @todo
+            .num_variants = (uint64_t)this->variant_counter,
+            .block_size = (uint32_t)0,
+            .number_of_blocks = (uint32_t)1, // This version is single block
+            .ss_rate = (uint32_t)this->RESET_SORT_BLOCK_LENGTH,
+            .number_of_ssas = (uint32_t)(this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH,
+            .indices_offset = (uint32_t)-1, /* Set later */
+            .ssas_offset = (uint32_t)-1, /* Set later */
+            .wahs_offset = (uint32_t)-1, /* Set later */
+            .samples_offset = (uint32_t)-1, /* Set later */
+            .rearrangement_track_offset = (uint32_t)-1, /* Set later */
+            .xcf_entries = (uint64_t)this->entry_counter,
+            .sample_name_chksum = 0 /* TODO */,
+            .bcf_file_chksum = 0 /* TODO */,
+            .data_chksum = 0 /* TODO */,
+            .header_chksum = 0 /* TODO */
+        };
+        header.iota_ppa = true;
+        header.no_sort = false;
+        header.rare_threshold = this->MINOR_ALLELE_COUNT_THRESHOLD;
+
+        /////////////////////////////
+        // Write Unfinished Header //
+        /////////////////////////////
+        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+
+        size_t written_bytes = 0;
+        size_t total_bytes = 0;
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+
+        //////////////////////
+        // Write the blocks //
+        //////////////////////
+        std::vector<uint32_t> indices(header.number_of_ssas);
+        size_t block_counter = 0;
+
+        EncodedBlock<T, uint16_t> block(this->RESET_SORT_BLOCK_LENGTH);
+
+        size_t i = 0;
+        for (const auto& ir : internal_gt_records) {
+            for (const auto& sl : ir.sparse_lines) {
+                const auto& sparse = sl.sparse_encoding;
+                T number_of_positions = sparse.size();
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry " << number_of_positions << " ";
+                // Case where the REF allele is actually sparse
+                if (sl.sparse_allele == 0) {
+                    if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
+                    // Set the MSB Bit
+                    // This will always work as long as MAF is < 0.5
+                    // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
+                    /// @todo Check for this if user can set MAF
+                    number_of_positions |= (T)1 << (sizeof(T)*8-1);
+                }
+                if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
+                s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+                s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
+            }
+        }
+
+            // Start new block
+            if ((i % this->RESET_SORT_BLOCK_LENGTH) == 0) {
+                if (i) {
+                    block.write_to_file(s);
+                    indices[block_counter++] = (uint32_t)s.tellp();
+                }
+                block.reset();
+            }
+
+
+        }
+        // Last block
+        if (this->variant_counter % this->RESET_SORT_BLOCK_LENGTH) {
+            block.write_to_file(s);
+            indices[block_counter++] = (uint32_t)s.tellp();
+        }
+
+#if 0
+        size_t i = 0;
+        while (i < this->variant_counter) {
+            // Start block
+            if ((i % this->RESET_SORT_BLOCK_LENGTH) == 0) {
+                index_counter = 0;
+                wah_index_offset = 0;
+                sparse_index_offset = 0;
+                encoding_counter = 0;
+                block_start_pos = s.tellp();
+                // Write dictionnary
+                for (const auto& kv : dictionnary) {
+                    s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(uint32_t));
+                    s.write(reinterpret_cast<const char*>(&(kv.second)), sizeof(uint32_t));
+                }
+                // Write end of dictionnary
+                uint32_t _ = -1;
+                s.write(reinterpret_cast<const char*>(&_), sizeof(uint32_t));
+                s.write(reinterpret_cast<const char*>(&_), sizeof(uint32_t));
+
+                // Update first entry
+                dictionnary[0] = uint32_t(s.tellp() - block_start_pos);
+            }
+
+            // Write sort
+            // Write select
+            // Write wah
+            // Write sparse
+            // Write missing
+            // Write phase
+
+
+            // End block
+            if ((i and ((i % this->RESET_SORT_BLOCK_LENGTH) == 0)) or (i == (this->variant_counter-1))) {
+                //block_end_pos = s.tellp();
+                s.seekp(block_start_pos, std::ios_base::beg);
+                // Update dictionnary
+                for (const auto& kv : dictionnary) {
+                    s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(uint32_t));
+                    s.write(reinterpret_cast<const char*>(&(kv.second)), sizeof(uint32_t));
+                }
+                //s.seekp(block_end_pos, std::ios_base::beg);
+                seekp(0, std::ios_base::end);
+
+                indices[block_counter++] = block_start_pos;
+            }
+        }
+
+        ///////////////////////
+        // Write the indices //
+        ///////////////////////
+        header.indices_offset = total_bytes;
+        std::vector<uint32_t> indices_wah(header.number_of_ssas);
+        std::vector<uint32_t> indices_sparse(header.number_of_ssas);
+
+        for (const auto& ir : this->internal_gt_records) {
+            size_t index_w = 0;
+            size_t index_s = 0;
+            for (size_t i = 0; i < ir.rearrangements.size(); ++i) {
+                if ((encoding_counter % this->RESET_SORT_BLOCK_LENGTH) == 0) {
+                    indices_wah[index_counter] = wah_index_offset;
+                    indices_sparse[index_counter] = sparse_index_offset;
+                    index_counter++;
+                }
+                if (ir.rearrangements[i]) {
+                    wah_index_offset += ir.wahs[index_w].size();
+                    index_w++;
+                } else {
+                    // Sparse is encoded number followed by entries
+                    sparse_index_offset += (ir.sparse_lines[index_s].sparse_encoding.size() + 1);
+                    index_s++;
+                }
+                encoding_counter++;
+            }
+        }
+
+        s.write(reinterpret_cast<const char*>(indices_wah.data()), indices_wah.size() * sizeof(decltype(indices_wah)::value_type));
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        header.indices_sparse_offset = total_bytes;
+        s.write(reinterpret_cast<const char*>(indices_sparse.data()), indices_sparse.size() * sizeof(decltype(indices_sparse)::value_type));
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sparse indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+
+        //////////////////////////////////
+        // Write the permutation arrays //
+        //////////////////////////////////
+        header.ssas_offset = total_bytes; // Not used in this compressor
+
+        ///////////////////////////////
+        // Write the compressed data //
+        ///////////////////////////////
+        header.wahs_offset = total_bytes;
+        for (const auto& ir : this->internal_gt_records) {
+            for (const auto& wah : ir.wahs) {
+                s.write(reinterpret_cast<const char*>(wah.data()), wah.size() * sizeof(decltype(wah.back())));
+            }
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "wah's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        ////////////////////////////
+        // Write the sample names //
+        ////////////////////////////
+        header.samples_offset = total_bytes;
+        for(const auto& sample : this->sample_list) {
+            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        ///////////////////////////////////
+        // Write the rearrangement track //
+        ///////////////////////////////////
+        header.rearrangement_track_offset = total_bytes;
+        #ifdef OLDVERSION___
+        #else
+        this->rearrangement_track.resize(this->variant_counter, false);
+        size_t _ = 0;
+        for (const auto& ir : this->internal_gt_records) {
+            for (const auto r : ir.rearrangements) {
+                this->rearrangement_track[_++] = r;
+            }
+        }
+        #endif
+        auto rt = wah::wah_encode2<uint16_t>(this->rearrangement_track);
+        s.write(reinterpret_cast<const char*>(rt.data()), rt.size() * sizeof(decltype(rt.back())));
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "rearrangement track " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        ///////////////////////////
+        // Write the sparse data //
+        ///////////////////////////
+        header.sparse_offset = total_bytes;
+
+        for (const auto& ir : this->internal_gt_records) {
+            for (const auto& sl : ir.sparse_lines) {
+                const auto& sparse = sl.sparse_encoding;
+                T number_of_positions = sparse.size();
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry " << number_of_positions << " ";
+                // Case where the REF allele is actually sparse
+                if (sl.sparse_allele == 0) {
+                    if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
+                    // Set the MSB Bit
+                    // This will always work as long as MAF is < 0.5
+                    // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
+                    /// @todo Check for this if user can set MAF
+                    number_of_positions |= (T)1 << (sizeof(T)*8-1);
+                }
+                if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
+                s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+                s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
+            }
+        }
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        // The approach below is not optimal at all but it works and only is here for compatibility
+
+        //////////////////
+        // MISSING DATA //
+        //////////////////
+        header.missing_offset = total_bytes;
+
+        uint32_t bm_counter = 0;
+        for (const auto& ir : this->internal_gt_records) {
+            if (ir.sparse_missing.size()) {
+                T number_missing = ir.sparse_missing.size();
+                s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
+                s.write(reinterpret_cast<const char*>(&number_missing), sizeof(T));
+                s.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Missing sparse entry at BM " << bm_counter << ", " << number_missing << " : ";
+                if (DEBUG_COMPRESSION) for (auto s : ir.sparse_missing) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
+            }
+            // BM index has to be used because of -r option
+            bm_counter += ir.rearrangements.size();
+        }
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        if (written_bytes) {
+            std::cout << "missing sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            header.has_missing = true;
+        }
+
+        ////////////////
+        // PHASE INFO //
+        ////////////////
+        header.phase_info_offset = total_bytes;
+
+        bm_counter = 0;
+        for (const auto& ir : this->internal_gt_records) {
+            const auto& spndp = ir.sparse_non_default_phasing;
+            if (spndp.size()) {
+                T qty = spndp.size();
+                s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
+                s.write(reinterpret_cast<const char*>(&qty), sizeof(T));
+                s.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
+                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Phase sparse entry at BM " << bm_counter << ", " << qty << " ";
+                if (DEBUG_COMPRESSION) for (auto s : spndp) {std::cerr << s << " ";}
+                if (DEBUG_COMPRESSION) std::cerr << std::endl;
+            }
+            // BM index has to be used because of -r option
+            bm_counter += ir.rearrangements.size();
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        if (written_bytes) {
+            std::cout << "non uniform phasing sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            header.non_uniform_phasing = true;
+        }
+        header.default_phased = this->default_phased;
+
+#endif
+
+        ///////////////////////////
+        // Rewrite Filled Header //
+        ///////////////////////////
+        s.seekp(0, std::ios_base::beg);
+        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+
+        s.close();
+    }
+};
+#endif
+
 class NewCompressor {
 public:
     void set_maf(double new_MAF) {MAF = new_MAF;}
@@ -655,8 +898,10 @@ public:
         // If not may haplotypes use a compressor that uses uint16_t as indices
         if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
             _compressor = std::make_unique<GtCompressorTemplate<uint16_t> >();
+            //_compressor = std::make_unique<Experimental<uint16_t> >();
         } else { // Else use a compressor that uses uint32_t as indices
             _compressor = std::make_unique<GtCompressorTemplate<uint32_t> >();
+            //_compressor = std::make_unique<Experimental<uint32_t> >();
         }
         _compressor->set_maf(MAF);
         _compressor->set_reset_sort_block_length(RESET_SORT_BLOCK_LENGTH);
