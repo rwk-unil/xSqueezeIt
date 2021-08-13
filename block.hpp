@@ -30,16 +30,16 @@ public:
 
     Block(size_t BLOCK_SIZE) : BLOCK_SIZE(BLOCK_SIZE) {}
 
-    enum Dictionnary_Keys : uint32_t { 
+    enum Dictionnary_Keys : uint32_t {
         KEY_UNUSED = (uint32_t)-1,
-        KEY_SORT = 0, 
+        KEY_SORT = 0,
         KEY_SELECT,
         KEY_WAH,
         KEY_SPARSE,
-        KEY_MISSING_TRACK,
-        KEY_MISSING,
-        KEY_PHASE_TRACK,
-        KEY_PHASE
+        //KEY_MISSING_TRACK,
+        //KEY_MISSING,
+        //KEY_PHASE_TRACK,
+        //KEY_PHASE
     };
 
 protected:
@@ -56,16 +56,16 @@ public:
         rearrangement_track.clear();
         wahs.clear();
         sparse_lines.clear();
-        missing.clear();
-        non_uniform_phasing.clear();
+        //missing.clear();
+        //non_uniform_phasing.clear();
         dictionnary.clear();
     }
 
     std::vector<bool> rearrangement_track;
     std::vector<std::vector<WAH_T> > wahs;
     std::vector<SparseGtLine<A_T> > sparse_lines;
-    std::map<uint32_t, std::vector<A_T> > missing; // Sorted map
-    std::map<uint32_t, std::vector<A_T> > non_uniform_phasing; // Sorted map
+    //std::map<uint32_t, std::vector<A_T> > missing; // Sorted map
+    //std::map<uint32_t, std::vector<A_T> > non_uniform_phasing; // Sorted map
 
     void write_to_file(std::fstream& s) {
         size_t block_start_pos = 0;
@@ -75,8 +75,8 @@ public:
         dictionnary.insert(std::pair(KEY_SELECT,-1)); // Key select
         dictionnary.insert(std::pair(KEY_WAH,-1)); // Key wah
         dictionnary.insert(std::pair(KEY_SPARSE,-1)); // Key sparse
-        dictionnary.insert(std::pair(KEY_MISSING,-1)); // Key missing
-        dictionnary.insert(std::pair(KEY_PHASE,-1)); // Key phase
+        //dictionnary.insert(std::pair(KEY_MISSING,-1)); // Key missing
+        //dictionnary.insert(std::pair(KEY_PHASE,-1)); // Key phase
 
         block_start_pos = s.tellp();
 
@@ -118,26 +118,26 @@ public:
             s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
             s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
         }
-        if (missing.size()) {
-            // Write missing
-            dictionnary[KEY_MISSING] = (uint32_t)((size_t)s.tellp()-block_start_pos);
-            for (const auto& kv : missing) {
-                A_T number = kv.second.size();
-                s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(kv.first));
-                s.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
-                s.write(reinterpret_cast<const char*>(kv.second.data()), kv.second.size() * sizeof(decltype(kv.second.back())));
-            }
-        }
-        if (non_uniform_phasing.size()) {
-            // Write phase
-            dictionnary[KEY_PHASE] = (uint32_t)((size_t)s.tellp()-block_start_pos);
-            for (const auto& kv : non_uniform_phasing) {
-                A_T number = kv.second.size();
-                s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(kv.first));
-                s.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
-                s.write(reinterpret_cast<const char*>(kv.second.data()), kv.second.size() * sizeof(decltype(kv.second.back())));
-            }
-        }
+        //if (missing.size()) {
+        //    // Write missing
+        //    dictionnary[KEY_MISSING] = (uint32_t)((size_t)s.tellp()-block_start_pos);
+        //    for (const auto& kv : missing) {
+        //        A_T number = kv.second.size();
+        //        s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(kv.first));
+        //        s.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
+        //        s.write(reinterpret_cast<const char*>(kv.second.data()), kv.second.size() * sizeof(decltype(kv.second.back())));
+        //    }
+        //}
+        //if (non_uniform_phasing.size()) {
+        //    // Write phase
+        //    dictionnary[KEY_PHASE] = (uint32_t)((size_t)s.tellp()-block_start_pos);
+        //    for (const auto& kv : non_uniform_phasing) {
+        //        A_T number = kv.second.size();
+        //        s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(kv.first));
+        //        s.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
+        //        s.write(reinterpret_cast<const char*>(kv.second.data()), kv.second.size() * sizeof(decltype(kv.second.back())));
+        //    }
+        //}
 
         block_end_pos = s.tellp();
 
