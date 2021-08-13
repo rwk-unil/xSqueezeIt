@@ -215,20 +215,46 @@ public:
 private:
     template <typename A_T = uint32_t, typename WAH_T = uint16_t>
     class DecompressPointer {
+    public:
+        virtual ~DecompressPointer() {};
+
+        virtual void seek(const size_t position) = 0;
+        virtual void advance() = 0;
+        virtual bool position_is_sparse() const = 0;
+
+        const std::vector<A_T>& get_ref_on_a() const {return a;}
+        const std::vector<bool>& get_ref_on_y() const {return y;}
+        const std::vector<A_T>& get_sparse_ref() const {return sparse;}
+        bool is_negated() const {return sparse_negated;}
+
+        size_t get_current_position() const {return current_position;}
+
+    protected:
+        size_t current_position = 0;
+        std::vector<A_T> a;
+        std::vector<A_T> b;
+
+        std::vector<bool> y; // Values as arranged by a, can be larger than N_HAPS
+        std::vector<A_T> sparse; // Values as sparse
+        bool sparse_negated;
+    };
+
+    template <typename A_T = uint32_t, typename WAH_T = uint16_t>
+    class DecompressPointerV2 : public DecompressPointer<A_T, WAH_T> {
     private:
         A_T* sparse_extract(A_T* s_p) {
             constexpr A_T MSB_BIT = (A_T)1 << (sizeof(A_T)*8-1);
             A_T num = *s_p;
             s_p++;
 
-            sparse_negated = (num & MSB_BIT);
+            this->sparse_negated = (num & MSB_BIT);
             num &= ~MSB_BIT; // Remove the bit !
 
-            sparse.clear();
-            if (DEBUG_DECOMP) std::cerr << "DEBUG : Position : " << current_position << " Extracted " << num << " Sparse values ";
+            this->sparse.clear();
+            if (DEBUG_DECOMP) std::cerr << "DEBUG : Position : " << this->current_position << " Extracted " << num << " Sparse values ";
             for (A_T i = 0; i < num; i++) {
                 if (DEBUG_DECOMP) std::cerr << *s_p << " ";
-                sparse.push_back(*s_p);
+                this->sparse.push_back(*s_p);
                 s_p++;
             }
             if (DEBUG_DECOMP) std::cerr << std::endl;
@@ -248,15 +274,15 @@ private:
         }
 
         void seek_sampled_arrangement(const size_t num = 0) {
-            std::iota(a.begin(), a.end(), 0);
-            current_position = arrangement_sample_rate * num;
+            std::iota(this->a.begin(), this->a.end(), 0);
+            this->current_position = arrangement_sample_rate * num;
 
             // Get pointers to the data
             wah_p = wah_origin_p + (indices_p[num]); // Pointer arithmetic handles sizeof(WAH_T)
             sparse_p = sparse_origin_p + (indices_sparse_p[num]);
 
-            if (rearrangement_track[current_position]) {
-                wah_p = wah2_extract(wah_p, y, N_HAPS); // Extract current values
+            if (rearrangement_track[this->current_position]) {
+                wah_p = wah2_extract(wah_p, this->y, N_HAPS); // Extract current values
             } else {
                 sparse_p = sparse_extract(sparse_p);
             }
@@ -265,11 +291,11 @@ private:
     public:
         // Decompress Pointer from memory mapped compressed file
         /// @todo pass sparse pointer
-        DecompressPointer(const size_t N_SITES, const size_t N_HAPS, WAH_T* wah_origin_p, uint32_t* indices_p, A_T* sparse_origin_p, uint32_t* indices_sparse_p, const size_t arrangement_sample_rate, const std::vector<bool>& rearrangement_track):
+        DecompressPointerV2(const size_t N_SITES, const size_t N_HAPS, WAH_T* wah_origin_p, uint32_t* indices_p, A_T* sparse_origin_p, uint32_t* indices_sparse_p, const size_t arrangement_sample_rate, const std::vector<bool>& rearrangement_track):
             N_SITES(N_SITES), N_HAPS(N_HAPS), wah_origin_p(wah_origin_p), indices_p(indices_p), sparse_origin_p(sparse_origin_p), indices_sparse_p(indices_sparse_p), arrangement_sample_rate(arrangement_sample_rate), rearrangement_track(rearrangement_track) {
-            a.resize(N_HAPS);
-            b.resize(N_HAPS);
-            y.resize(N_HAPS + sizeof(WAH_T)*8, 0); // Get some extra space
+            this->a.resize(N_HAPS);
+            this->b.resize(N_HAPS);
+            this->y.resize(N_HAPS + sizeof(WAH_T)*8, 0); // Get some extra space
 
             wah_p = wah_origin_p;
             sparse_p = sparse_origin_p;
@@ -278,11 +304,11 @@ private:
         }
 
         // Seek out a given position
-        void seek(const size_t position) {
-            if (position == current_position) { return; }
+        void seek(const size_t position) override {
+            if (position == this->current_position) { return; }
             size_t advance_steps = 0;
-            if ((position > current_position) and ((position - current_position) < arrangement_sample_rate)) {
-                advance_steps = position - current_position;
+            if ((position > this->current_position) and ((position - this->current_position) < arrangement_sample_rate)) {
+                advance_steps = position - this->current_position;
             } else {
                 size_t previous_arrangement = position / arrangement_sample_rate;
                 advance_steps = position % arrangement_sample_rate;
@@ -297,22 +323,22 @@ private:
         }
 
         // Advance and update inner data structures
-        void advance() {
+        void advance() override {
             private_advance();
         }
 
-        const std::vector<A_T>& get_ref_on_a() const {return a;}
-        const std::vector<bool>& get_ref_on_y() const {return y;}
-        const bool position_is_sparse() const {return !rearrangement_track[current_position];}
-        const std::vector<A_T>& get_sparse_ref() const {return sparse;}
-        const bool is_negated() const {return sparse_negated;}
-
-        size_t get_current_position() const {return current_position;}
+        //const std::vector<A_T>& get_ref_on_a() const {return a;}
+        //const std::vector<bool>& get_ref_on_y() const {return y;}
+        bool position_is_sparse() const override {return !rearrangement_track[this->current_position];}
+        //const std::vector<A_T>& get_sparse_ref() const {return sparse;}
+        //bool is_negated() const {return sparse_negated;}
+        //
+        //size_t get_current_position() const {return current_position;}
 
     protected:
 
         inline void private_advance(bool extract = true) {
-            if (current_position >= N_SITES) {
+            if (this->current_position >= N_SITES) {
                 std::cerr << "Advance called but already at end" << std::endl;
                 return;
             }
@@ -321,25 +347,25 @@ private:
             A_T v = 0;
 
             // Edge case
-            if (((current_position+1) % arrangement_sample_rate) == 0) {
-                std::iota(a.begin(), a.end(), 0);
+            if (((this->current_position+1) % arrangement_sample_rate) == 0) {
+                std::iota(this->a.begin(), this->a.end(), 0);
             } else {
-                if (rearrangement_track[current_position]) {
+                if (rearrangement_track[this->current_position]) {
                     // PBWT sort
                     for (size_t i = 0; i < N_HAPS; ++i) {
-                        if (y[i] == 0) {
-                            a[u++] = a[i];
+                        if (this->y[i] == 0) {
+                            this->a[u++] = this->a[i];
                         } else {
-                            b[v++] = a[i];
+                            this->b[v++] = this->a[i];
                         }
                     }
-                    std::copy(b.begin(), b.begin()+v, a.begin()+u);
+                    std::copy(this->b.begin(), this->b.begin()+v, this->a.begin()+u);
                 }
             }
-            if (current_position < N_SITES-1) {
-                if (rearrangement_track[current_position+1]) {
+            if (this->current_position < N_SITES-1) {
+                if (rearrangement_track[this->current_position+1]) {
                     // Optimisation : Only extract if needed to advance further
-                    wah_p = wah2_extract(wah_p, y, N_HAPS);
+                    wah_p = wah2_extract(wah_p, this->y, N_HAPS);
                     // (in V2 only rearrangement positions are in WAH, everything else is in sparse)
                 } else {
                     if (extract) {
@@ -349,7 +375,7 @@ private:
                     }
                 }
             }
-            current_position++;
+            this->current_position++;
         }
 
         // Constants, referencing memory mapped file
@@ -363,13 +389,13 @@ private:
 
         WAH_T* wah_p; // Gets updated by wah2_extract
         A_T* sparse_p;
-        size_t current_position = 0;
-        std::vector<A_T> a;
-        std::vector<A_T> b;
-
-        std::vector<bool> y; // Values as arranged by a, can be larger than N_HAPS
-        std::vector<A_T> sparse; // Values as sparse
-        bool sparse_negated;
+        //size_t current_position = 0;
+        //std::vector<A_T> a;
+        //std::vector<A_T> b;
+        //
+        //std::vector<bool> y; // Values as arranged by a, can be larger than N_HAPS
+        //std::vector<A_T> sparse; // Values as sparse
+        //bool sparse_negated;
         // Because WAH_T encodes values with multiples of sizeof(WAH_T)-1 bits
 
         // Binary track that informs us where rearrangements were performed
@@ -414,7 +440,7 @@ private:
             enable_select_samples(global_app_options.samples);
         }
 
-        auto dp = generate_decompress_pointer<A_T, WAH_T>();
+        std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp = generate_decompress_pointer<A_T, WAH_T>();
 
         if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
             if (global_app_options.regions != "") {
@@ -444,7 +470,7 @@ private:
     }
 
     template<const bool RECORD_NONLINEAR = false, typename A_T, typename WAH_T>
-    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, DecompressPointer<A_T, WAH_T>& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
+    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, std::unique_ptr<DecompressPointer<A_T, WAH_T> >& dp, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
         int *values = NULL;
         int count = 0;
         uint32_t bm_index = 0;
@@ -466,7 +492,7 @@ private:
                 }
                 // Non linear access (returns immediately if dp is already at correct position)
                 bm_index = values[0];
-                dp.seek(values[0]);
+                dp->seek(values[0]);
             } else {
                 bm_index = num_variants_extracted;
             }
@@ -475,30 +501,30 @@ private:
             bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
             // Set REF / first ALT
-            if (dp.position_is_sparse()) { /* SPARSE */
-                int32_t default_gt = dp.is_negated() ? 1 : 0;
-                int32_t sparse_gt = dp.is_negated() ? 0 : 1;
+            if (dp->position_is_sparse()) { /* SPARSE */
+                int32_t default_gt = dp->is_negated() ? 1 : 0;
+                int32_t sparse_gt = dp->is_negated() ? 0 : 1;
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     genotypes[i] = bcf_gt_unphased(default_gt) | DEFAULT_PHASED;
                 }
-                for (const auto& i : dp.get_sparse_ref()) {
+                for (const auto& i : dp->get_sparse_ref()) {
                     //if constexpr (DEBUG_DECOMP) std::cerr << "Setting variant at " << i << std::endl;
                     genotypes[i] = bcf_gt_unphased(sparse_gt) | DEFAULT_PHASED;
                 }
             } else { /* SORTED WAH */
-                auto& a = dp.get_ref_on_a();
-                auto& y = dp.get_ref_on_y();
+                auto& a = dp->get_ref_on_a();
+                auto& y = dp->get_ref_on_y();
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     genotypes[a[i]] = bcf_gt_unphased(y[i]) | DEFAULT_PHASED; /// @todo Phase
                 }
             }
-            dp.advance();
+            dp->advance();
             num_variants_extracted++;
 
             // If other ALTs (ALTs are 1 indexed, because 0 is REF)
             for (int alt_allele = 2; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-                if (dp.position_is_sparse()) { /* SPARSE */
-                    if (dp.is_negated()) { // There can only be one negated because must be more than all others combined
+                if (dp->position_is_sparse()) { /* SPARSE */
+                    if (dp->is_negated()) { // There can only be one negated because must be more than all others combined
                         // All non set positions are now filled
                         for (size_t i = 0; i < N_HAPS; ++i) {
                             // Only overwrite refs
@@ -506,7 +532,7 @@ private:
                                 genotypes[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
                             }
                         }
-                        for (const auto& i : dp.get_sparse_ref()) {
+                        for (const auto& i : dp->get_sparse_ref()) {
                             // Restore overwritten refs
                             if (bcf_gt_allele(genotypes[i]) == alt_allele) {
                                 genotypes[i] = bcf_gt_unphased(0) | DEFAULT_PHASED;
@@ -514,20 +540,20 @@ private:
                         }
                     } else {
                         // Fill normally
-                        for (const auto& i : dp.get_sparse_ref()) {
+                        for (const auto& i : dp->get_sparse_ref()) {
                             genotypes[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
                         }
                     }
                 } else { /* SORTED WAH */
-                    auto& a = dp.get_ref_on_a();
-                    auto& y = dp.get_ref_on_y();
+                    auto& a = dp->get_ref_on_a();
+                    auto& y = dp->get_ref_on_y();
                     for (size_t i = 0; i < N_HAPS; ++i) {
                         if (y[i]) {
                             genotypes[a[i]] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED; /// @todo Phase
                         }
                     }
                 }
-                dp.advance();
+                dp->advance();
                 num_variants_extracted++;
             }
 
@@ -585,7 +611,7 @@ private:
     }
 
     template <typename A_T, typename WAH_T>
-    inline DecompressPointer<A_T, WAH_T> generate_decompress_pointer(size_t offset = 0) {
+    inline std::unique_ptr<DecompressPointer<A_T, WAH_T> > generate_decompress_pointer(size_t offset = 0) {
         const size_t N_SITES = header.num_variants;
         const size_t N_HAPS = header.hap_samples;
 
@@ -596,8 +622,8 @@ private:
 
         const size_t arrangements_sample_rate = header.ss_rate;
 
-        DecompressPointer dp(N_SITES, N_HAPS, wah_origin_p, indices_p, sparse_origin_p, indices_sparse_p, arrangements_sample_rate, rearrangement_track);
-        dp.seek(offset);
+        std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp = std::make_unique<DecompressPointerV2<A_T, WAH_T> >(N_SITES, N_HAPS, wah_origin_p, indices_p, sparse_origin_p, indices_sparse_p, arrangements_sample_rate, rearrangement_track);
+        dp->seek(offset);
 
         return dp;
     }
