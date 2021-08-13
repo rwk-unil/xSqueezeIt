@@ -86,7 +86,8 @@ int main(int argc, const char *argv[]) {
                 std::cerr << "INFO : Indices is\t\t\t" << hdr.ssas_offset - hdr.indices_offset << " bytes" << std::endl;
                 std::cerr << "INFO : Subsampled permutation arrays is\t" << hdr.wahs_offset - hdr.ssas_offset << " bytes" << std::endl;
                 std::cerr << "INFO : WAH Genotype data is\t\t" << hdr.samples_offset - hdr.wahs_offset << " bytes" << std::endl;
-                std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
+                std::cerr << "INFO : Sparse Genotype data is\t\t TODO" << std::endl;
+                //std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
             }
         }
         std::cerr << std::endl;
@@ -123,6 +124,7 @@ int main(int argc, const char *argv[]) {
             if (opt.v2) {
                 NewCompressor c;
                 c.set_maf(opt.maf);
+                c.set_reset_sort_block_length(opt.reset_sort_block_length);
                 try {
                     c.compress_in_memory(filename);
                     std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;

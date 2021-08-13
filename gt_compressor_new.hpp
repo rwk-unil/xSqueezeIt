@@ -136,13 +136,13 @@ private:
     }
 
 public:
-    InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, const size_t MAC_THRESHOLD, size_t& variant_counter, const size_t RESET_SORT_RATE) :
+    InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, const size_t MAC_THRESHOLD, size_t& variant_counter, const size_t RESET_SORT_BLOCK_LENGTH) :
     PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased) {
         scan_genotypes(bcf_fri);
 
         // For all alt alleles (1 if bi-allelic variant site)
         for (int32_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
-            if ((variant_counter % RESET_SORT_RATE) == 0) {
+            if ((variant_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
                 // Restart from natural order
                 std::iota(a.begin(), a.end(), 0);
             }
@@ -224,18 +224,17 @@ public:
     virtual void save_result_to_file(std::string filename) = 0;
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
+    void set_reset_sort_block_length(size_t new_block_length) {RESET_SORT_BLOCK_LENGTH = new_block_length;}
 
     virtual ~GtCompressor() {}
 
     double MAF = 0.01;
+    size_t RESET_SORT_BLOCK_LENGTH = 8192;
 };
 
 template<typename T = uint32_t>
 class GtCompressorTemplate : public GtCompressor, protected BcfTraversal {
 public:
-
-    /// @todo Parameters
-    //GtCompressorTemplate(size_t RESET_SORT_RATE)
 
     void compress_in_memory(std::string filename) override {
         default_phased = seek_default_phased(filename);
@@ -276,8 +275,8 @@ public:
             .num_variants = (uint64_t)this->variant_counter,
             .block_size = (uint32_t)0,
             .number_of_blocks = (uint32_t)1, // This version is single block
-            .ss_rate = (uint32_t)RESET_SORT_RATE,
-            .number_of_ssas = (uint32_t)(variant_counter+RESET_SORT_RATE-1)/RESET_SORT_RATE,
+            .ss_rate = (uint32_t)RESET_SORT_BLOCK_LENGTH,
+            .number_of_ssas = (uint32_t)(variant_counter+(uint32_t)RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)RESET_SORT_BLOCK_LENGTH,
             .indices_offset = (uint32_t)-1, /* Set later */
             .ssas_offset = (uint32_t)-1, /* Set later */
             .wahs_offset = (uint32_t)-1, /* Set later */
@@ -316,7 +315,7 @@ public:
         uint32_t encoding_counter = 0;
         #ifdef OLDVERSION___
         for (const auto& ie : internal_encoding) {
-            if ((encoding_counter % RESET_SORT_RATE) == 0) {
+            if ((encoding_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
                 indices_wah[index_counter] = wah_index_offset;
                 indices_sparse[index_counter] = sparse_index_offset;
                 index_counter++;
@@ -334,7 +333,7 @@ public:
             size_t index_w = 0;
             size_t index_s = 0;
             for (size_t i = 0; i < ir.rearrangements.size(); ++i) {
-                if ((encoding_counter % RESET_SORT_RATE) == 0) {
+                if ((encoding_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
                     indices_wah[index_counter] = wah_index_offset;
                     indices_sparse[index_counter] = sparse_index_offset;
                     index_counter++;
@@ -560,6 +559,7 @@ protected:
         std::iota(a.begin(), a.end(), 0);
 
         internal_encoding.clear();
+        internal_gt_records.clear();
         rearrangement_track.clear();
         //missing_track.clear();
         //phase_track.clear();
@@ -579,7 +579,7 @@ protected:
             }
 
             // Reset the ordering (allows faster random access at the cost of file size)
-            if ((variant_counter % RESET_SORT_RATE) == 0) {
+            if ((variant_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
                 // Restart from natural order
                 std::iota(a.begin(), a.end(), 0);
             }
@@ -607,7 +607,7 @@ protected:
         }
         // The constructor does all the work
         try {
-        internal_gt_records.emplace_back(InternalGtRecord(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_RATE));
+        internal_gt_records.emplace_back(InternalGtRecord(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH));
         } catch (...) {
             std::cerr << "entry " << entry_counter << ", " << unique_id(bcf_fri.line) << " caused a problem" << std::endl;
             exit(-1);
@@ -623,7 +623,7 @@ protected:
     size_t PLOIDY = 2;
     T N_HAPS = 0;
     size_t MINOR_ALLELE_COUNT_THRESHOLD = 0;
-    const uint32_t RESET_SORT_RATE = 8192;
+    //const uint32_t RESET_SORT_BLOCK_LENGTH = 8192;
     const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
 
     std::vector<InternalGtLine<T> > internal_encoding;
@@ -643,6 +643,7 @@ protected:
 class NewCompressor {
 public:
     void set_maf(double new_MAF) {MAF = new_MAF;}
+    void set_reset_sort_block_length(size_t reset_sort_block_length) {RESET_SORT_BLOCK_LENGTH = reset_sort_block_length;}
 
     void compress_in_memory(std::string filename) {
         bcf_file_reader_info_t bcf_fri;
@@ -658,6 +659,7 @@ public:
             _compressor = std::make_unique<GtCompressorTemplate<uint32_t> >();
         }
         _compressor->set_maf(MAF);
+        _compressor->set_reset_sort_block_length(RESET_SORT_BLOCK_LENGTH);
         _compressor->compress_in_memory(filename);
     }
     void save_result_to_file(std::string filename) {
@@ -671,6 +673,7 @@ public:
 protected:
     std::unique_ptr<GtCompressor> _compressor = nullptr;
     double MAF = 0.01;
+    size_t RESET_SORT_BLOCK_LENGTH = 8192;
 };
 
 #endif /* __GT_COMPRESSOR_NEW_HPP__ */
