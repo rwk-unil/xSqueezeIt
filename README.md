@@ -42,7 +42,11 @@ mkdir output
 ```
 
 Options :
-- `--iota` allows to use natural ordering for checkpoints instead of saving the permutation arrays in the binary file, this results in smaller binary file for collection with many samples. This has no noticeable impact on speed.
+- `--V2` Compresses with version 3
+- `--V2` Compresses with version 2 (deprecated)
+- `--zstd` Compresses blocks with an extra zstd compression layer (only for version 3)
+- `--maf <value>` Sets the minor allele frequency (MAF) for the minor allele count (MAC) threshold that selects if a variant is encoded as sparse or word aligned hybrid (WAH), typical values are around 0.001 give or take an order of magnitude
+- `reset-sort-block-length <value>` Sets the size of the encoded blocks in number of variants. A bigger size can results in better compression, a smaller size can result in faster random access.
 
 ### Extraction
 
