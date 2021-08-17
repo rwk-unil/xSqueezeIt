@@ -495,13 +495,15 @@ protected:
 
 //#if 0
 template<typename T = uint32_t>
-class Experimental : public GtCompressorTemplate<T> {
+class GtCompressorV3 : public GtCompressorTemplate<T> {
 public:
 
+    GtCompressorV3(bool zstd_compression_on = false) : zstd_compression_on(zstd_compression_on) {}
+    void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     bool zstd_compression_on = false;
 
     void save_result_to_file(std::string filename) override {
-        std::cerr << "EXPERIMENTAL !" << std::endl;
+        std::cerr << "Compressing with V3 !" << std::endl;
 
         if (this->internal_gt_records.size() == 0) {
             std::cerr << "GtCompressor internal encoding is empty" << std::endl;
@@ -530,10 +532,10 @@ public:
             .ss_rate = (uint32_t)this->RESET_SORT_BLOCK_LENGTH,
             .number_of_ssas = (uint32_t)(this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH,
             .indices_offset = (uint32_t)-1, /* Set later */
-            .ssas_offset = (uint32_t)-1, /* Set later */
+            .ssas_offset = (uint32_t)-1, /* Unused */
             .wahs_offset = (uint32_t)-1, /* Set later */
             .samples_offset = (uint32_t)-1, /* Set later */
-            .rearrangement_track_offset = (uint32_t)-1, /* Set later */
+            .rearrangement_track_offset = (uint32_t)-1, /* Unused */
             .xcf_entries = (uint64_t)this->entry_counter,
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
@@ -559,6 +561,7 @@ public:
         //////////////////////
         // Write the blocks //
         //////////////////////
+        header.wahs_offset = total_bytes;
         std::vector<uint32_t> indices(header.number_of_ssas);
         size_t block_counter = 0;
 
@@ -591,11 +594,20 @@ public:
 
         // Last block
         indices[block_counter++] = (uint32_t)s.tellp();
-        block.write_to_file(s);
+        block.write_to_file(s, zstd_compression_on);
 
         if (block_counter != header.number_of_ssas) {
             std::cerr << "Something's wrong with the blocks !" << std::endl;
             throw "Bad blocks";
+        }
+
+        // Alignment padding...
+        size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
+        if (mod_uint32) {
+            size_t padding = sizeof(uint32_t) - mod_uint32;
+            for (size_t i = 0; i < padding; ++i) {
+                s.write("", sizeof(char));
+            }
         }
 
         written_bytes = size_t(s.tellp()) - total_bytes;
@@ -705,8 +717,11 @@ public:
 
 class NewCompressor {
 public:
+    NewCompressor(uint32_t version = 2) : VERSION(version) {}
+
     void set_maf(double new_MAF) {MAF = new_MAF;}
     void set_reset_sort_block_length(size_t reset_sort_block_length) {RESET_SORT_BLOCK_LENGTH = reset_sort_block_length;}
+    void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
 
     void compress_in_memory(std::string filename) {
         bcf_file_reader_info_t bcf_fri;
@@ -717,11 +732,17 @@ public:
 
         // If not may haplotypes use a compressor that uses uint16_t as indices
         if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-            _compressor = std::make_unique<GtCompressorTemplate<uint16_t> >();
-            //_compressor = std::make_unique<Experimental<uint16_t> >();
+            if (VERSION == 2) {
+                _compressor = std::make_unique<GtCompressorTemplate<uint16_t> >();
+            } else {
+                _compressor = std::make_unique<GtCompressorV3<uint16_t> >(zstd_compression_on);
+            }
         } else { // Else use a compressor that uses uint32_t as indices
-            _compressor = std::make_unique<GtCompressorTemplate<uint32_t> >();
-            //_compressor = std::make_unique<Experimental<uint32_t> >();
+            if (VERSION == 2) {
+                _compressor = std::make_unique<GtCompressorTemplate<uint32_t> >();
+            } else {
+                _compressor = std::make_unique<GtCompressorV3<uint32_t> >(zstd_compression_on);
+            }
         }
         _compressor->set_maf(MAF);
         _compressor->set_reset_sort_block_length(RESET_SORT_BLOCK_LENGTH);
@@ -736,9 +757,11 @@ public:
     }
 
 protected:
+    const uint32_t VERSION;
     std::unique_ptr<GtCompressor> _compressor = nullptr;
     double MAF = 0.01;
     size_t RESET_SORT_BLOCK_LENGTH = 8192;
+    bool zstd_compression_on = false;
 };
 
 #endif /* __GT_COMPRESSOR_NEW_HPP__ */
