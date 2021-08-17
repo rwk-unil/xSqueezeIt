@@ -76,7 +76,7 @@ public:
         }
 
         // Check version
-        if (header.version != THIS_VERSION) {
+        if (header.version != THIS_VERSION and header.version != THIS_VERSION+1) {
             std::cerr << "Bad version" << std::endl;
             throw "Bad version";
         }
@@ -126,9 +126,11 @@ public:
         }
 
         // Rearrangement track decompression
-        rearrangement_track.resize(header.num_variants + header.wah_bytes*8);
-        uint16_t* rt_p = (uint16_t*)((uint8_t*)file_mmap + header.rearrangement_track_offset);
-        wah2_extract<uint16_t>(rt_p, rearrangement_track, header.num_variants);
+        if (header.version == THIS_VERSION) {
+            rearrangement_track.resize(header.num_variants + header.wah_bytes*8);
+            uint16_t* rt_p = (uint16_t*)((uint8_t*)file_mmap + header.rearrangement_track_offset);
+            wah2_extract<uint16_t>(rt_p, rearrangement_track, header.num_variants);
+        }
 
         bool use_ppas = !header.iota_ppa;
         if (use_ppas) {
@@ -241,7 +243,7 @@ private:
 
     template <typename A_T = uint32_t, typename WAH_T = uint16_t>
     class DecompressPointerV2 : public DecompressPointer<A_T, WAH_T> {
-    private:
+    protected:
         A_T* sparse_extract(A_T* s_p) {
             constexpr A_T MSB_BIT = (A_T)1 << (sizeof(A_T)*8-1);
             A_T num = *s_p;
@@ -273,7 +275,7 @@ private:
             return s_p;
         }
 
-        void seek_sampled_arrangement(const size_t num = 0) {
+        virtual void seek_sampled_arrangement(const size_t num = 0) {
             std::iota(this->a.begin(), this->a.end(), 0);
             this->current_position = arrangement_sample_rate * num;
 
@@ -303,6 +305,8 @@ private:
             seek_sampled_arrangement();
         }
 
+        virtual ~DecompressPointerV2() {}
+
         // Seek out a given position
         void seek(const size_t position) override {
             if (position == this->current_position) { return; }
@@ -327,17 +331,21 @@ private:
             private_advance();
         }
 
-        //const std::vector<A_T>& get_ref_on_a() const {return a;}
-        //const std::vector<bool>& get_ref_on_y() const {return y;}
-        bool position_is_sparse() const override {return !rearrangement_track[this->current_position];}
-        //const std::vector<A_T>& get_sparse_ref() const {return sparse;}
-        //bool is_negated() const {return sparse_negated;}
-        //
-        //size_t get_current_position() const {return current_position;}
+        virtual bool position_is_sparse() const override {return !rearrangement_track[this->current_position];}
 
     protected:
 
-        inline void private_advance(bool extract = true) {
+        DecompressPointerV2(const size_t N_SITES, const size_t N_HAPS, const size_t arrangement_sample_rate) :
+            N_SITES(N_SITES), N_HAPS(N_HAPS), wah_origin_p(nullptr), indices_p(nullptr), sparse_origin_p(nullptr), indices_sparse_p(nullptr), arrangement_sample_rate(arrangement_sample_rate), rearrangement_track(__rt__), __rt__(0) {
+            this->a.resize(N_HAPS);
+            this->b.resize(N_HAPS);
+            this->y.resize(N_HAPS + sizeof(WAH_T)*8, 0); // Get some extra space
+
+            wah_p = nullptr;
+            sparse_p = nullptr;
+        }
+
+        virtual inline void private_advance(bool extract = true) {
             if (this->current_position >= N_SITES) {
                 std::cerr << "Advance called but already at end" << std::endl;
                 return;
@@ -399,7 +407,138 @@ private:
         // Because WAH_T encodes values with multiples of sizeof(WAH_T)-1 bits
 
         // Binary track that informs us where rearrangements were performed
+    private:
         const std::vector<bool>& rearrangement_track;
+        std::vector<bool> __rt__;
+    };
+
+    template <typename A_T = uint32_t, typename WAH_T = uint16_t>
+    class DecompressPointerV3 : public DecompressPointerV2<A_T, WAH_T> {
+    public:
+        DecompressPointerV3(const size_t N_SITES, const size_t N_HAPS, const size_t arrangement_sample_rate, uint32_t *indices, void *file_mmap_p, bool compressed) :
+        DecompressPointerV2<A_T, WAH_T>(N_SITES, N_HAPS, arrangement_sample_rate), indices(indices), file_mmap_p(file_mmap_p), compressed(compressed) {
+            seek_sampled_arrangement();
+        }
+
+        virtual ~DecompressPointerV3() {
+            if (compressed and block) {
+                free(block);
+            }
+        }
+
+        bool position_is_sparse() const override {return !select_track[this->current_position % this->arrangement_sample_rate]; }
+
+    protected:
+        void seek_sampled_arrangement(const size_t num = 0) override {
+            std::iota(this->a.begin(), this->a.end(), 0);
+            this->current_position = this->arrangement_sample_rate * num;
+
+            // Find out the block offset
+            size_t offset = indices[num];
+
+            if (compressed) {
+                size_t compressed_block_size = *(uint32_t*)(((uint8_t*)file_mmap_p) + offset);
+                size_t uncompressed_block_size = *(uint32_t*)(((uint8_t*)file_mmap_p) + offset + sizeof(uint32_t));
+                void *block_ptr = ((uint8_t*)file_mmap_p) + offset + sizeof(uint32_t)*2;
+                //std::cerr << "Compressed block found, compressed size : " << compressed_block_size << ", uncompressed size : " << uncompressed_block_size << std::endl;
+                if (block) {
+                    free(block);
+                    block = NULL;
+                }
+                block = malloc(uncompressed_block_size);
+                if (!block) {
+                    std::cerr << "Failed to allocate memory to decompress block" << std::endl;
+                    throw "Failed to allocate memory";
+                }
+                auto result = ZSTD_decompress(block, uncompressed_block_size, block_ptr, compressed_block_size);
+                if (ZSTD_isError(result)) {
+                    std::cerr << "Failed to decompress block" << std::endl;
+                    std::cerr << "Error : " << ZSTD_getErrorName(result) << std::endl;
+                    throw "Failed to decompress block";
+                }
+            } else {
+                // Set block pointer
+                block = ((uint8_t*)file_mmap_p) + offset;
+            }
+
+            // Fill dictionnary
+            Block::fill_dictionnary(block, dictionnary);
+
+            // Get pointers to the data
+            this->wah_p = (WAH_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_WAH]);
+            this->sparse_p = (A_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_SPARSE]);
+
+            if (dictionnary.find(Block::Dictionnary_Keys::KEY_SMALL_BLOCK) != dictionnary.end()) {
+                block_length = dictionnary[Block::Dictionnary_Keys::KEY_SMALL_BLOCK];
+            } else {
+                block_length = this->arrangement_sample_rate;
+            }
+
+            select_track.resize(block_length + sizeof(WAH_T)*8);  // With some extra space because of WAH alignment
+            WAH_T* st_p = (WAH_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_SELECT]);
+            wah2_extract<WAH_T>(st_p, select_track, block_length);
+            select_track.reserve(block_length);
+
+            if (select_track[0]) {
+                this->wah_p = wah2_extract(this->wah_p, this->y, this->N_HAPS); // Extract current values
+            } else {
+                this->sparse_p = this->sparse_extract(this->sparse_p);
+            }
+        }
+
+        inline void private_advance(bool extract = true) override {
+            if (this->current_position >= this->N_SITES) {
+                std::cerr << "Advance called but already at end" << std::endl;
+                return;
+            }
+
+            A_T u = 0;
+            A_T v = 0;
+
+            size_t next_position = this->current_position+1;
+
+            // Edge case
+            if ((next_position % this->arrangement_sample_rate) == 0) {
+                // Because block may need to be decompressed
+                seek_sampled_arrangement(next_position / this->arrangement_sample_rate);
+            } else {
+                if (select_track[this->current_position % this->arrangement_sample_rate]) {
+                    // PBWT sort
+                    for (size_t i = 0; i < this->N_HAPS; ++i) {
+                        if (this->y[i] == 0) {
+                            this->a[u++] = this->a[i];
+                        } else {
+                            this->b[v++] = this->a[i];
+                        }
+                    }
+                    std::copy(this->b.begin(), this->b.begin()+v, this->a.begin()+u);
+                }
+
+                if (this->current_position < this->N_SITES-1) {
+                    if (select_track[next_position % this->arrangement_sample_rate]) {
+                        // Optimisation : Only extract if needed to advance further
+                        this->wah_p = wah2_extract(this->wah_p, this->y, this->N_HAPS);
+                        // (in V2 only rearrangement positions are in WAH, everything else is in sparse)
+                    } else {
+                        if (extract) {
+                            this->sparse_p = this->sparse_extract(this->sparse_p);
+                        } else {
+                            this->sparse_p = this->sparse_advance_pointer(this->sparse_p);
+                        }
+                    }
+                }
+            }
+            this->current_position = next_position;
+        }
+
+        std::unordered_map<uint32_t, uint32_t> dictionnary;
+        // Pointer to current block
+        uint32_t *indices;
+        void *block = NULL;
+        size_t block_length;
+        std::vector<bool> select_track;
+        void *file_mmap_p;
+        const bool compressed;
     };
 
     template<typename A_T>
@@ -614,15 +753,22 @@ private:
     inline std::unique_ptr<DecompressPointer<A_T, WAH_T> > generate_decompress_pointer(size_t offset = 0) {
         const size_t N_SITES = header.num_variants;
         const size_t N_HAPS = header.hap_samples;
-
-        WAH_T* wah_origin_p = (WAH_T*)((uint8_t*)file_mmap + header.wahs_offset);
-        A_T* sparse_origin_p = (A_T*)((uint8_t*)file_mmap + header.sparse_offset);
-        uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
-        uint32_t* indices_sparse_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_sparse_offset);
-
         const size_t arrangements_sample_rate = header.ss_rate;
 
-        std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp = std::make_unique<DecompressPointerV2<A_T, WAH_T> >(N_SITES, N_HAPS, wah_origin_p, indices_p, sparse_origin_p, indices_sparse_p, arrangements_sample_rate, rearrangement_track);
+        std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp = nullptr;
+
+        if (header.version == 3) {
+            bool compressed = header.zstd;
+            dp = std::make_unique<DecompressPointerV3<A_T, WAH_T> >(N_SITES, N_HAPS, arrangements_sample_rate, (uint32_t*)((uint8_t*)file_mmap + header.indices_offset), file_mmap, compressed);
+        } else {
+            WAH_T* wah_origin_p = (WAH_T*)((uint8_t*)file_mmap + header.wahs_offset);
+            A_T* sparse_origin_p = (A_T*)((uint8_t*)file_mmap + header.sparse_offset);
+            uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
+            uint32_t* indices_sparse_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_sparse_offset);
+
+            dp = std::make_unique<DecompressPointerV2<A_T, WAH_T> >(N_SITES, N_HAPS, wah_origin_p, indices_p, sparse_origin_p, indices_sparse_p, arrangements_sample_rate, rearrangement_track);
+        }
+
         dp->seek(offset);
 
         return dp;
