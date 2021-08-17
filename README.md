@@ -119,7 +119,7 @@ In this snippet we can also see the signle `BIN_MATRIX_POS` sample with a `BM` e
 
 Where BM increases from 103 to 105 because the previous variant has two ALT_ALLELES A and T.
 
-The `BM` entry allows to extract GT data directly from a region query on the BCF, this is needed to achieve constant time random access, because variants overlapping a region may not be contiguous (e.g., with indels).
+The `BM` entry allows to extract GT data directly from a region query on the BCF, this is needed to achieve constant time random access. This also helps when because overlapping a region may not be contiguous (e.g., with indels).
 
 ## File Format Description
 
