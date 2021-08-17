@@ -19,6 +19,8 @@ public:
         app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
         app.add_flag("--no-sort", no_sort, "DEBUG - No PBWT sort");
         app.add_flag("--v2", v2, "DEBUG - New version");
+        app.add_flag("--v3", v3, "DEBUG - New version");
+        app.add_flag("--zstd", zstd, "DEBUG - Compress blocks with zstd");
         app.add_option("--maf", maf, "DEBUG - New version MAF");
         app.add_option("--reset-sort-block-length", reset_sort_block_length, "DEBUG - New version reset sort block length");
 
@@ -67,6 +69,8 @@ public:
     bool verify = false;
     bool iota = false;
     bool v2 = false;
+    bool v3 = false;
+    bool zstd = false;
     double maf = 0.01;
     size_t reset_sort_block_length = 8192;
     bool no_sort = false;

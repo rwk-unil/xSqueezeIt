@@ -121,10 +121,11 @@ int main(int argc, const char *argv[]) {
             }
         });
         auto compress_thread = std::thread([&]{
-            if (opt.v2) {
-                NewCompressor c;
+            if (opt.v2 or opt.v3) {
+                NewCompressor c(opt.v3 ? 3 : 2);
                 c.set_maf(opt.maf);
                 c.set_reset_sort_block_length(opt.reset_sort_block_length);
+                c.set_zstd_compression_on(opt.zstd);
                 try {
                     c.compress_in_memory(filename);
                     std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
@@ -160,6 +161,7 @@ int main(int argc, const char *argv[]) {
             exit(-1);
         }
 
+        /// @todo this only works for V1 !
         if (opt.verify) { // Slow (because requires decompression and verification)
             create_index_file(variant_file);
             Decompressor d(ofname, variant_file);
@@ -192,7 +194,7 @@ int main(int argc, const char *argv[]) {
 
         std::string variant_file(filename + "_var.bcf");
         create_index_file(variant_file);
-        if (opt.v2) {
+        if (opt.v2 or opt.v3) {
             NewDecompressor d(filename, variant_file);
             d.decompress(ofname);
         } else {
