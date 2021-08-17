@@ -81,6 +81,47 @@ Options :
 ./console_app -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
 ```
 
+### Explore the "variant-only" generated file
+
+The compressor generates a BCF file without the GT data (so variants only) and a binary file with the compressed GT data. This way the BCF file for the variants can still be explored and used.
+```
+# ./console_app <-c|-x> -f <input file> -o <output file>
+
+# Compression :
+./console_app -c -f /path/to/my/data/chr20.bcf -o chr20.bin
+# This will output two files
+# chr20.bin which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
+# chr20.bin_var.bcf which is the variant data, can be opened with bcftools
+
+bcftools view chr20.bin_var.bcf | less
+##fileformat=VCFv4.1
+##FILTER=<ID=PASS,Description="All filters passed">
+##fileDate=20150218
+...
+##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT Binary Matrix">
+##bcftools_viewCommand=view tmp.bin_var.bcf; Date=Tue Aug 17 16:06:34 2021
+#CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  BIN_MATRIX_POS
+20      60343   rs527639301     G       A       100     PASS    AC=1;AF=0.000199681;AN=50
+08;NS=2504;DP=20377;EAS_AF=0;AMR_AF=0.0014;AFR_AF=0;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP   BM      0
+20      60419   rs538242240     A       G       100     PASS    AC=1;AF=0.000199681;AN=5008;NS=2504;DP=19865;EAS_AF=0;AMR_AF=0;AFR_AF=0;EUR_AF=0;SAS_AF=0.001;AA=.|||;VT=SNP    BM      1
+20      60479   rs149529999     C       T       100     PASS    AC=17;AF=0.00339457;AN=5008;NS=2504;DP=20218;EAS_AF=0;AMR_AF=0.0043;AFR_AF=0.0106;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP      BM      2
+```
+
+For example here the AC, AF, AB, etc. entries have not been modified, so they can already be used for some computations, since the BCF file is much smaller than the original one it will faster to process.
+
+This also shows that the compressor keeps all the information that is sometimes lost with other compressors.
+
+In this snippet we can also see the signle `BIN_MATRIX_POS` sample with a `BM` entry. This corresponds to the position of the variant(s) in the binary matrix that is encoded/compressed in the binary file. This allows for random access to the GT data from a given variant in this BCF file. This number is simply a counter of ALT_ALLELES encountered. In the snippet above it increases from 0 to 1 to 2 etc. Multi-allelic variant sites will increase this counter by the number of ALT_ALLELES. For example :
+
+```
+20      64139   rs186497980     G       A,T     100     PASS    AC=2,2;AF=0.000399361,0.000399361;AN=5008;NS=2504;DP=20791;EAS_AF=0,0;AMR_AF=0,0;AFR_AF=0,0.0008;EUR_AF=0,0.001;SAS_AF=0.002,0;AA=.|||;VT=SNP;MULTI_ALLELIC     BM      103
+20      64150   rs7274499       C       A       100     PASS    AC=102;AF=0.0203674;AN=5008;NS=2504;DP=20555;EAS_AF=0;AMR_AF=0.0058;AFR_AF=0.0741;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP      BM      105
+```
+
+Where BM increases from 103 to 105 because the previous variant has two ALT_ALLELES A and T.
+
+The `BM` entry allows to extract GT data directly from a region query on the BCF, this is needed to achieve constant time random access, because variants overlapping a region may not be contiguous (e.g., with indels).
+
 ## File Format Description
 
 ### Version 3
