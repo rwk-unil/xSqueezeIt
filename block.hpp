@@ -43,8 +43,21 @@ public:
         KEY_SORT = 0,
         KEY_SELECT,
         KEY_WAH,
-        KEY_SPARSE
+        KEY_SPARSE,
+        KEY_SMALL_BLOCK
     };
+
+    static void fill_dictionnary(void *block, std::unordered_map<uint32_t, uint32_t>& dict) {
+        dict.clear();
+        uint32_t* ptr = (uint32_t*)block;
+        size_t _ = 0;
+        // While there is a dictionnary entry
+        while(ptr[_] != KEY_UNUSED and ptr[_+1] != KEY_UNUSED) {
+            // Update dictionnary
+            dict[ptr[_]] = ptr[_+1];
+            _ += 2;
+        }
+    }
 
 protected:
     const size_t BLOCK_SIZE;
@@ -67,7 +80,7 @@ public:
     std::vector<std::vector<WAH_T> > wahs;
     std::vector<SparseGtLine<A_T> > sparse_lines;
 
-    void write_to_file(std::fstream& os, bool compressed = true) {
+    void write_to_file(std::fstream& os, bool compressed) {
         // Funky as f...
         char *tmpname = strdup("/tmp/tmpfileXXXXXX");
         int fd = mkstemp(tmpname); /// @todo check return code
@@ -80,12 +93,15 @@ public:
         size_t block_start_pos = 0;
         size_t block_end_pos = 0;
 
+        block_start_pos = s.tellp();
+
         dictionnary.insert(std::pair(KEY_SORT,-1)); // Key sort
         dictionnary.insert(std::pair(KEY_SELECT,-1)); // Key select
         dictionnary.insert(std::pair(KEY_WAH,-1)); // Key wah
         dictionnary.insert(std::pair(KEY_SPARSE,-1)); // Key sparse
-
-        block_start_pos = s.tellp();
+        if (this->rearrangement_track.size() < BLOCK_SIZE) {
+            dictionnary.insert(std::pair(KEY_SMALL_BLOCK, this->rearrangement_track.size()));
+        }
 
         // Write dictionnary
         for (const auto& kv : dictionnary) {
@@ -163,15 +179,30 @@ public:
             uint32_t size = (uint32_t)file_size;
             uint32_t compressed_size = (uint32_t)result;
             size_t start = os.tellp();
+            (void)start;
             os.write(reinterpret_cast<const char*>(&compressed_size), sizeof(uint32_t));
             os.write(reinterpret_cast<const char*>(&size), sizeof(uint32_t));
             os.write(reinterpret_cast<const char*>(output_buffer), result);
+
             size_t stop = os.tellp();
-            std::cerr << "compressed block of " << stop-start << " bytes written" << std::endl;
+            (void)stop;
+            //std::cerr << "Start : " << start << " stop : " << stop << std::endl;
+            //std::cerr << "compressed block of " << stop-start << " bytes written" << std::endl;
             free(output_buffer);
             munmap(file_mmap, file_size);
         } else {
-            std::cerr << "block of " << block_end_pos-block_start_pos << " bytes written" << std::endl;
+            //std::cerr << "block of " << block_end_pos-block_start_pos << " bytes written" << std::endl;
+        }
+
+        // Alignment padding...
+        size_t mod_uint32 = size_t(os.tellp()) % sizeof(uint32_t);
+        //std::cerr << "mod : " << mod_uint32 << std::endl;
+        if (mod_uint32) {
+            size_t padding = sizeof(uint32_t) - mod_uint32;
+            for (size_t i = 0; i < padding; ++i) {
+                //std::cerr << "A byte of padding was written" << std::endl;
+                os.write("", sizeof(char));
+            }
         }
         close(fd);
         fs::remove(filename); // Delete temp file
