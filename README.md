@@ -79,18 +79,91 @@ Options :
 
 ## File Format Description
 
-### Version 1
+### Version 3
+
+#### File organization
+
+This compressor takes an input BCF file and outputs two files :
+
+1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These field are unaltered (other compressors often replace fields with `.` (missing))
+2) A binary file with the "GT" information encoded
+
+Technical details :
+
+the BCF file has a single "sample" `BIN_MATRIX_POS` with a single field `BM` which contains the position of the variant in the "binary matrix" of all variants when encoded as "one-hot" (this is so that multi-allelic variant sites can be encoded efficiently).
+
+The encoded file format has the following organization
+
+| Header                         |
+|--------------------------------|
+| GT Data Blocks                 |
+| Block indices for random access|
+| Sample ID's                    |
+| Missing positions as sparse    |
+| Non standard phase as sparse   |
+
+The header is the main entry point to the file and other data can be accessed from there (offsets to other entries given in header).
+
+##### Blocks
+
+GT Data blocks encode a given number of variants, the offset of each block in the file is given by the block indices, this allows for constant time random access to a block.
+
+The blocks can be compressed with zstd https://github.com/facebook/zstd, a bit in the header indicates if this is the case. If the blocks are compressed two 32-bit words precede each block in memory to indicate the compressed and uncompressed sizes.
+
+Each (uncompressed) block has the following hierarchy :
+
+| Dictionnary |
+|-------------|
+| Data        |
+
+###### Data
+where data are filled with :
+
+| WAH encoded genotypes    |
+| Sparse encoded genotypes |
+| Binary encoding track    |
+| Binary sort track        |
+
+- WAH encoded genotypes are Word Aligned Hybrid encoded genotypes ordered given the sample order until the binary sort track position is "true" where the haplotypes are then reordered given the current variant (Positional Burrows Wheeler Transform).
+- Sparse encoded genotypes are the id's of the haplotypes that have the minor allele. (Can be ref or alt, if ref, the number of sparse encodings has MSB bit set, this bit is not used to encode the minor allele, because minor allele means that less than 50% of all haplotypes carry that allele).
+- The binary encoding track maps each variant to either a WAH encoding or a sparse encoding.
+- The sort track indicates if the following WAH encoded genotypes ordering must be updated by the current variant (PBWT).
+Note : the encoding and sort track can be the same track.
+
+###### Dictionnary
+The dictionnary is a dictionnary with 32-bit keys and 32-bit values. Terminated by a {-1,-1} key pair ({0xFFFF'FFFF, 0xFFFF'FFFF}).
+
+The dictionnary allows to store the following information :
+- Block size, if the block has a smaller size (needed for the last block, because the number of variants is not necesarrily a multiple of block length) this information is put in the dictionnary.
+- Offset of the WAH encoded data.
+- Offset of the Sparse encoded data.
+- Offset of the encoding track.
+- Offset of the sort track.
+- Other information, if needed by later extension to the format.
+
+##### Sample ID's
+A sequence of null terminated strings corresponding to the sample ID's of the input BCF file.
+
+##### Missing positions as sparse
+Contains a map of variants positions that have samples with a missing entry "." in BCF/VCF. The samples that have missing entries are encoded as sparse (i.e., list of sample haplotypes that show a missing allele).
+
+##### Non standard phase
+The compressor will check out a portion of the input BCF file to see if most samples are phased or unphased. Based on the result the format assumes that most other entries will have samples that are also phased (or unphased).
+
+For each variant where there are samples that are not phased in a mostly phased file (respectively phased in a mostly unphased file). The positions of the samples will be encoded as sparse.
+
+These encoded variant site are then stored in a map as for the missing positions above.
+
+#### Notes
+
+- The missing and non standard phase maps are there to support files that are not entirely phased or unphased as well as files with missing data. Theses files are however not the main focus of this compressor, therefore not much care has been put in the encoding of this. Therefore files with lots of missing data or mixed phase will not benefit from good compression ratios.
+- - Improving on this encoding or adding a second compression layer as e.g., zstd could improve this.
+
+### Version 2
 
 **DEPRECATED**
 
-- Uses reverse prefix sort, as in the Positional Burrows Wheeler Transform (PBWT), to group related haplotypes together.
-- Only uses variants with MAF > 0.01 for sorting
-- Can store permutation arrays for random access (costly if many samples) every 8192 variants
-- Can reset the sort for faster random access every 8192 variants
-  - The sort being reset reduces compression of genotype data but this is offset by the fact that     permutation arrays are not stored
-- Encodes the genotype data with Word Aligned Hybrid (WAH) on 16-bits
-
-### Version 2
+But still supported by compressor / decompressor
 
 #### File organization
 
@@ -205,11 +278,22 @@ Bi-allelic sites with minor allele frequency (MAF) above a given threshold are e
 
 The condition track represents if a given bi-allelic variant is saved as WAH or as Sparse, as well as, if the variant is used to sort the data.
 
+### Version 1
+
+**DEPRECATED**
+
+- Uses reverse prefix sort, as in the Positional Burrows Wheeler Transform (PBWT), to group related haplotypes together.
+- Only uses variants with MAF > 0.01 for sorting
+- Can store permutation arrays for random access (costly if many samples) every 8192 variants
+- Can reset the sort for faster random access every 8192 variants
+  - The sort being reset reduces compression of genotype data but this is offset by the fact that     permutation arrays are not stored
+- Encodes the genotype data with Word Aligned Hybrid (WAH) on 16-bits
+
 ## Notes / TODO
 
 - Rename the compressor (currently named console_app ...)
-- Only outputs data as phased for the moment
-- Handle missing
+- ~~Only outputs data as phased for the moment~~ Done !
+- ~~Handle missing~~ Done !
 - ~~Only supports bi-allelic sites for the moment~~ Done !
     - (not needed anymore) Convert multi-allelic VCF/BCF to bi-allelic with bcftools :  
       ```shell
@@ -218,7 +302,7 @@ The condition track represents if a given bi-allelic variant is saved as WAH or 
 
 ## Further works
 
-- Extraction
-- Filtering
-- Based on the block compression scheme for faster access
+- ~~Extraction~~Done !
+- ~~Filtering~~ Done !
+- ~~Based on the block compression scheme for faster access~~ Done !
 - ~~Based on permutation sub sampling for faster / parallel access~~ Done !
