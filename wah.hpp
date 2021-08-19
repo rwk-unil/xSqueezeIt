@@ -151,31 +151,6 @@ namespace wah {
         constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
         constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
 
-        // TODO : Rewrite without resizing
-#define __RESIZING 0
-#if __RESIZING
-        bits.clear();
-        T word;
-        while(bits.size() < size) {
-            word = *wah_p;
-            if (word & WAH_HIGH_BIT) {
-                if (word & WAH_COUNT_1_BIT) {
-                    // Expand with ones
-                    bits.resize(bits.size() + (word & WAH_MAX_COUNTER)*WAH_BITS, 1);
-                } else {
-                    // Expand with zeroes
-                    bits.resize(bits.size() + (word & WAH_MAX_COUNTER)*WAH_BITS, 0);
-                }
-            } else {
-                // Expand with value
-                for (size_t j = 0; j < WAH_BITS; ++j) {
-                    bits.push_back(word & 1); // May not be the most effective way
-                    word >>= 1;
-                }
-            }
-            wah_p++;
-        }
-#else
         T word;
         size_t bit_position = 0;
         while(bit_position < size) {
@@ -204,7 +179,6 @@ namespace wah {
             }
             wah_p++;
         }
-#endif
 
     return wah_p;
     }
