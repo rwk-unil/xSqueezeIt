@@ -245,6 +245,7 @@ namespace wah {
         return res;
     }
 
+#if 0
     // Allows to get samples, requires initial permutations a, length in max columns, pointer to WAH2 data
     template <typename AET = size_t, typename WAH_T = uint16_t>
     class DecompressPointer {
@@ -335,6 +336,7 @@ namespace wah {
         WAH_T* wah_origin;
         Wah2State_t state;
     };
+#endif
 
     /*
     * Strategy : Allow a maximum block size (this will also reduce the RAM burden)
