@@ -34,6 +34,8 @@
 #include <string>
 #include <memory>
 
+#include "block.hpp"
+
 #ifndef DEBUGGG
 static constexpr bool DEBUG_COMPRESSION = false;
 #else
@@ -56,24 +58,6 @@ inline void pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, con
     }
     std::copy(b.begin(), b.begin()+v, a.begin()+u);
 }
-
-template<typename T = uint32_t>
-class SparseGtLine {
-public:
-    SparseGtLine() {}
-
-    SparseGtLine(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t sparse_allele) : index(index), sparse_allele(sparse_allele) {
-        for (int32_t i = 0; i < ngt; ++i) {
-            if (bcf_gt_allele(gt_array[i]) == sparse_allele) {
-                sparse_encoding.push_back(i);
-            }
-        }
-    }
-
-    size_t index = 0;
-    int32_t sparse_allele = 0;
-    std::vector<T> sparse_encoding;
-};
 
 template<typename T = uint32_t>
 class InternalGtRecord {
@@ -490,8 +474,6 @@ protected:
 
     std::vector<std::string> sample_list;
 };
-
-#include "block.hpp"
 
 //#if 0
 template<typename T = uint32_t>

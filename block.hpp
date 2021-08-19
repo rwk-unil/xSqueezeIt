@@ -33,6 +33,27 @@
 #include <unistd.h>
 namespace fs = std::filesystem;
 
+#include "wah.hpp"
+using namespace wah;
+
+template<typename T = uint32_t>
+class SparseGtLine {
+public:
+    SparseGtLine() {}
+
+    SparseGtLine(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t sparse_allele) : index(index), sparse_allele(sparse_allele) {
+        for (int32_t i = 0; i < ngt; ++i) {
+            if (bcf_gt_allele(gt_array[i]) == sparse_allele) {
+                sparse_encoding.push_back(i);
+            }
+        }
+    }
+
+    size_t index = 0;
+    int32_t sparse_allele = 0;
+    std::vector<T> sparse_encoding;
+};
+
 class Block {
 public:
 
