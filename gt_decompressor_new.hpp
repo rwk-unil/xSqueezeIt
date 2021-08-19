@@ -48,7 +48,6 @@ static constexpr bool DEBUG_DECOMP = false;
 static constexpr bool DEBUG_DECOMP = true;
 #endif
 
-
 class NewDecompressor {
 public:
 
