@@ -537,6 +537,8 @@ public:
             throw "PLOIDY ERROR";
         }
 
+        N_HAPS = header.hap_samples;
+
         dp = generate_decompress_pointer();
     }
 
@@ -611,7 +613,7 @@ protected:
 
     std::unordered_map<size_t, std::vector<size_t> > missing_map;
     std::unordered_map<size_t, std::vector<size_t> > non_default_phase_map;
-    int32_t DEFAULT_PHASED = 0;
+    int32_t DEFAULT_PHASED;
 
     std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp;
 };

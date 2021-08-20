@@ -35,6 +35,7 @@ public:
     }
 
     std::vector<std::string>& get_sample_list() {return sample_list;}
+    const header_t& get_header_ref() const {return header;}
 
 protected:
     std::unique_ptr<AccessorInternals> internals;

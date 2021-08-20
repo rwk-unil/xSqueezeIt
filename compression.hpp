@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <vector>
 #include <fstream>
+#include <iostream>
 
 typedef struct compress_file_arg_t {
     size_t      samples_block_size   = 10000;
@@ -256,6 +257,7 @@ struct header_s {
 
 typedef struct header_s header_t;
 
+template<typename _ = uint32_t> /// @todo remove template, this is lazyness...
 void print_header_info(const header_t& header) {
     std::cerr << "Version : " << header.version << std::endl;
     std::cerr << "Ploidy : " << (size_t)header.ploidy << std::endl;
@@ -277,6 +279,7 @@ void print_header_info(const header_t& header) {
     std::cerr << "GT Data WAH encoded : " << header.samples_offset - header.wahs_offset << " bytes" << std::endl;
 }
 
+template<typename _ = uint32_t> /// @todo remove template, this is lazyness...
 int fill_header_from_file(const std::string filename, header_t& header) {
     std::fstream s(filename, s.binary | s.in);
     if (!s.is_open()) {
