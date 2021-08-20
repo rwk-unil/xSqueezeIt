@@ -17,10 +17,10 @@ TARGET := console_app
 SOURCE := console_app.cpp
 OBJ := $(SOURCE:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
-CPP_SOURCES += lz4.c
+#CPP_SOURCES += lz4.c
 CPP_OBJS := $(CPP_SOURCES:.cpp=.o)
 CPP_OBJS := $(CPP_OBJS:.c=.o)
-OBJS := xcf.o bcf_traversal.o $(OBJ)
+OBJS := xcf.o bcf_traversal.o Accessor.o $(OBJ)
 DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
