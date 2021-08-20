@@ -296,7 +296,7 @@ protected:
         select_track.resize(block_length + sizeof(WAH_T)*8);  // With some extra space because of WAH alignment
         WAH_T* st_p = (WAH_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_SELECT]);
         wah2_extract<WAH_T>(st_p, select_track, block_length);
-        select_track.reserve(block_length);
+        select_track.resize(block_length);
 
         if (select_track[0]) {
             this->wah_p = wah2_extract(this->wah_p, this->y, this->N_HAPS); // Extract current values
