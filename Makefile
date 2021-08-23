@@ -2,7 +2,7 @@ HTSLIB_PATH := ./htslib/
 
 # C++ Compiler
 CXX=g++
-INCLUDE_DIRS=-I . -I $(HTSLIB_PATH)/htslib -I $(BENCHMARK_PATH)/include
+INCLUDE_DIRS=-I include -I $(HTSLIB_PATH)/htslib -I $(BENCHMARK_PATH)/include
 #EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
 CXXFLAGS=-O3 -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
@@ -17,7 +17,6 @@ TARGET := console_app
 SOURCE := console_app.cpp
 OBJ := $(SOURCE:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
-#CPP_SOURCES += lz4.c
 CPP_OBJS := $(CPP_SOURCES:.cpp=.o)
 CPP_OBJS := $(CPP_OBJS:.c=.o)
 OBJS := xcf.o bcf_traversal.o Accessor.o $(OBJ)
@@ -27,7 +26,6 @@ DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 BENCHMARK_EXECUTABLE := main_bench
 BENCHMARK_SOURCE := main_bench.cpp
 BENCHMARK_OBJ := $(BENCHMARK_SOURCE:.cpp=.o)
-BENCHMARK_OBJ += lz4.o
 
 # Rules
 all : $(TARGET) $(DEPENDENCIES)
