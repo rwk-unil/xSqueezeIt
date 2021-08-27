@@ -56,5 +56,6 @@ Options :
 ```shell
 # Or pipe directly into bcftools (some examples) :
 ./squishit -x -f output/chr20.bin | bcftools view | less
+./squishit -x -f output/chr20.bin | bcftools view -s HG00111,NA12878 | less
 ./squishit -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
 ```
