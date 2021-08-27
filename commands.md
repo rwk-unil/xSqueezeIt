@@ -5,7 +5,7 @@
 ### Compression
 
 ```shell
-# ./console_app <-c|-x> -f <input file> -o <output file>
+# ./squishit <-c|-x> -f <input file> -o <output file>
 ```
 
 ```shell
@@ -24,20 +24,20 @@ Options :
 
 ```shell
 # Extraction :
-./console_app -x -f output/chr20.bin -o output/chr20.bcf # To BCF
+./squishit -x -f output/chr20.bin -o output/chr20.bcf # To BCF
 ```
 
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
+./squishit -x -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./squishit -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
 ```
 
 #### Region extraction
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./console_app -x -r "20:200000-200100" -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+./squishit -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./squishit -x -r "20:200000-200100" -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
 # The above command is much faster than decompressing and using -r in bcftools
 # because only the chosen regions are decompressed, both generate the same result
 ```
@@ -45,14 +45,14 @@ Options :
 #### Sample extraction
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./console_app -x -s HG00101,NA12878 -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+./squishit -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./squishit -x -s HG00101,NA12878 -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
 ```
 
 ### Pipe into bcftools
 
 ```shell
 # Or pipe directly into bcftools (some examples) :
-./console_app -x -f output/chr20.bin | bcftools view | less
-./console_app -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
+./squishit -x -f output/chr20.bin | bcftools view | less
+./squishit -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
 ```
