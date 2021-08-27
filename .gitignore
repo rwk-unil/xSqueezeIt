@@ -10,6 +10,7 @@
 *.log
 *.xlsx
 *.png
+*.stc
 
 # Ignore folders that start with
 tmp*/**
