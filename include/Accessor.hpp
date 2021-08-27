@@ -40,6 +40,12 @@ public:
 		return ss.str();
     }
 
+    static std::string get_variant_filename(const std::string& fname) {
+        std::stringstream ss;
+		ss << fname << "_var.bcf";
+		return ss.str();
+    }
+
     std::vector<std::string>& get_sample_list() {return sample_list;}
     const header_t& get_header_ref() const {return header;}
 
