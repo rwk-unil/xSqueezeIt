@@ -11,6 +11,8 @@
 ```shell
 # Compression :
 ./squishit -c -f /path/to/my/data/chr20.bcf -o output/chr20.bin
+# Extraction :
+./squishit -x -f output/chr20.bin -o output/chr20.bcf # To BCF
 ```
 
 Options :
