@@ -34,6 +34,12 @@ public:
         internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
     }
 
+    std::string get_variant_filename() {
+        std::stringstream ss;
+		ss << filename << "_var.bcf";
+		return ss.str();
+    }
+
     std::vector<std::string>& get_sample_list() {return sample_list;}
     const header_t& get_header_ref() const {return header;}
 
