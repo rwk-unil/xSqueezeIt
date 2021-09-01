@@ -42,7 +42,6 @@ public:
 
 		// extraction is done by having the accessor seek the data at "BM"
 		int count = 0;
-        int *values = (int*)malloc(sizeof(int));
 		int ret = bcf_unpack(line, BCF_UN_ALL);
 		if (ret) { std::cerr << "bcf_unpack error" << std::endl; }
 		if (bcf_get_format_int32(hdr, line, "BM", &values, &count) < 1) {
@@ -52,7 +51,6 @@ public:
 
         fill_genotype_array((int32_t*)*gt_arr, ngt, line->n_allele, values[0]);
 
-        free(values);
         return ngt;
     }
 
@@ -77,6 +75,7 @@ protected:
     std::string filename;
     header_t header;
     std::vector<std::string> sample_list;
+    int *values{NULL};
 };
 
 #endif /* __ACCESSOR_HPP__ */

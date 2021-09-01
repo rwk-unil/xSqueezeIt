@@ -61,6 +61,12 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
         std::cerr << "Unsupported access type" << std::endl;
         throw "Unsupported A_T";
     }
+
+    values = (int*)malloc(sizeof(int));
 }
 
-Accessor::~Accessor() {}
+Accessor::~Accessor() {
+    if (values) {
+        free(values);
+    }
+}
