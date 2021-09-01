@@ -29,12 +29,14 @@
 #include "compression.hpp"
 #include "xcf.hpp"
 #include "block.hpp"
+#include "make_unique.hpp"
 
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-#include <filesystem>
+//#include <filesystem>
 #include "wah.hpp"
 
 #ifndef DEBUGGG
@@ -466,7 +468,12 @@ public:
             throw "Bad version";
         }
 
-        file_size = std::filesystem::file_size(filename); // Thank you C++17
+        {
+            struct stat st;
+            stat(filename.c_str(), &st);
+            file_size = st.st_size;
+        }
+        //file_size = std::filesystem::file_size(filename); // Thank you C++17
         fd = open(filename.c_str(), O_RDONLY, 0);
         if (fd < 0) {
             std::cerr << "Failed to open file " << filename << std::endl;
@@ -585,14 +592,14 @@ protected:
 
         if (header.version == 3) {
             bool compressed = header.zstd;
-            dp = std::make_unique<DecompressPointerV3<A_T, WAH_T> >(N_SITES, N_HAPS, arrangements_sample_rate, (uint32_t*)((uint8_t*)file_mmap + header.indices_offset), file_mmap, compressed);
+            dp = make_unique<DecompressPointerV3<A_T, WAH_T> >(N_SITES, N_HAPS, arrangements_sample_rate, (uint32_t*)((uint8_t*)file_mmap + header.indices_offset), file_mmap, compressed);
         } else {
             WAH_T* wah_origin_p = (WAH_T*)((uint8_t*)file_mmap + header.wahs_offset);
             A_T* sparse_origin_p = (A_T*)((uint8_t*)file_mmap + header.sparse_offset);
             uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_offset);
             uint32_t* indices_sparse_p = (uint32_t*)((uint8_t*)file_mmap + header.indices_sparse_offset);
 
-            dp = std::make_unique<DecompressPointerV2<A_T, WAH_T> >(N_SITES, N_HAPS, wah_origin_p, indices_p, sparse_origin_p, indices_sparse_p, arrangements_sample_rate, rearrangement_track);
+            dp = make_unique<DecompressPointerV2<A_T, WAH_T> >(N_SITES, N_HAPS, wah_origin_p, indices_p, sparse_origin_p, indices_sparse_p, arrangements_sample_rate, rearrangement_track);
         }
 
         dp->seek(offset);

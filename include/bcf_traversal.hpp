@@ -30,6 +30,10 @@
 
 #include <random>
 
+#if __cplusplus < 201703L
+#   define constexpr
+#endif
+
 /// @todo Clean the usage of PLOIDY !
 
 class BcfTraversal {
@@ -149,7 +153,7 @@ class BcfMatrix {
 public:
     BcfMatrix() {};
     BcfMatrix(std::string filename) : filename(filename) {
-        BcfFillMatrix bfm(matrix);
+        BcfFillMatrix<T> bfm(matrix);
         bfm.fill_matrix_from_file(filename);
     }
     virtual ~BcfMatrix() {}

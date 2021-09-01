@@ -38,8 +38,6 @@ extern GlobalAppOptions global_app_options;
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <filesystem>
-
 using namespace wah;
 
 class NewDecompressor {

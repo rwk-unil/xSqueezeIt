@@ -54,9 +54,9 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
     s.close();
 
     if (header.aet_bytes == 2) {
-        internals = std::make_unique<AccessorInternalsTemplate<uint16_t> >(filename);
+        internals = make_unique<AccessorInternalsTemplate<uint16_t> >(filename);
     } else if (header.aet_bytes == 4) {
-        internals = std::make_unique<AccessorInternalsTemplate<uint32_t> >(filename);
+        internals = make_unique<AccessorInternalsTemplate<uint32_t> >(filename);
     } else {
         std::cerr << "Unsupported access type" << std::endl;
         throw "Unsupported A_T";

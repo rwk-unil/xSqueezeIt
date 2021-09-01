@@ -27,6 +27,7 @@
 #include "xcf.hpp"
 #include "wah.hpp"
 #include "compression.hpp"
+#include "make_unique.hpp"
 
 #include <algorithm>
 #include <numeric>

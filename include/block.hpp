@@ -24,14 +24,20 @@
 #define __BLOCK_HPP__
 
 #include <unordered_map>
-#include <filesystem>
 #include <iostream>
 #include <zstd.h>
 #include <string>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#if __cplusplus >= 201703L
+#include <filesystem>
 namespace fs = std::filesystem;
+using fs::remove;
+#else
+#include <stdio.h>
+#endif
 
 #include "wah.hpp"
 using namespace wah;
@@ -82,7 +88,7 @@ public:
 
 protected:
     const size_t BLOCK_SIZE;
-    std::unordered_map<Dictionnary_Keys, uint32_t> dictionnary;
+    std::unordered_map<uint32_t, uint32_t> dictionnary;
 };
 
 template <typename A_T, typename WAH_T = uint16_t>
@@ -116,12 +122,12 @@ public:
 
         block_start_pos = s.tellp();
 
-        dictionnary.insert(std::pair(KEY_SORT,-1)); // Key sort
-        dictionnary.insert(std::pair(KEY_SELECT,-1)); // Key select
-        dictionnary.insert(std::pair(KEY_WAH,-1)); // Key wah
-        dictionnary.insert(std::pair(KEY_SPARSE,-1)); // Key sparse
+        dictionnary[KEY_SORT] = -1;
+        dictionnary[KEY_SELECT] = -1;
+        dictionnary[KEY_WAH] = -1;
+        dictionnary[KEY_SPARSE] = -1;
         if (this->rearrangement_track.size() < BLOCK_SIZE) {
-            dictionnary.insert(std::pair(KEY_SMALL_BLOCK, this->rearrangement_track.size()));
+            dictionnary[KEY_SMALL_BLOCK] = this->rearrangement_track.size();
         }
 
         // Write dictionnary
@@ -226,8 +232,86 @@ public:
             }
         }
         close(fd);
-        fs::remove(filename); // Delete temp file
+        remove(filename.c_str()); // Delete temp file
     }
 };
+
+#if 0
+class BinaryMatrixBlock : public Block {
+public:
+    BinaryMatrixBlock(size_t BLOCK_SIZE, const size_t N_HAPS) :
+    Block(BLOCK_SIZE), N_HAPS(N_HAPS) {
+    }
+
+    template<typename A_T, typename WAH_T>
+    load_from_memory(void *addr, bool compressed) {
+        void *block;
+        if (compressed) {
+            size_t compressed_block_size = *(uint32_t*)addr;
+            size_t uncompressed_block_size = *(uint32_t*)((uint8_t*)addr + sizeof(uint32_t));
+            void *block_ptr = (uint8_t*)addr + sizeof(uint32_t)*2;
+            //std::cerr << "Compressed block found, compressed size : " << compressed_block_size << ", uncompressed size : " << uncompressed_block_size << std::endl;
+            if (block) {
+                free(block);
+                block = NULL;
+            }
+            block = malloc(uncompressed_block_size);
+            if (!block) {
+                std::cerr << "Failed to allocate memory to decompress block" << std::endl;
+                throw "Failed to allocate memory";
+            }
+            auto result = ZSTD_decompress(block, uncompressed_block_size, block_ptr, compressed_block_size);
+            if (ZSTD_isError(result)) {
+                std::cerr << "Failed to decompress block" << std::endl;
+                std::cerr << "Error : " << ZSTD_getErrorName(result) << std::endl;
+                throw "Failed to decompress block";
+            }
+        } else {
+            // Set block pointer
+            block = addr;
+        }
+
+        // Fill dictionnary
+        Block::fill_dictionnary(block, dictionnary);
+
+        // Get pointers to the data
+        WAH_T* wah_p = (WAH_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_WAH]);
+        A_T* sparse_p = (A_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_SPARSE]);
+
+        if (dictionnary.find(Block::Dictionnary_Keys::KEY_SMALL_BLOCK) != dictionnary.end()) {
+            block_length = dictionnary[Block::Dictionnary_Keys::KEY_SMALL_BLOCK];
+        } else {
+            block_length = BLOCK_SIZE;
+        }
+
+        binary_matrix.clear();
+
+        std::vector<bool> select_track(block_length + sizeof(WAH_T)*8);  // With some extra space because of WAH alignment
+        WAH_T* st_p = (WAH_T*)((uint8_t*)block + dictionnary[Block::Dictionnary_Keys::KEY_SELECT]);
+        wah2_extract<WAH_T>(st_p, select_track, block_length);
+        select_track.resize(block_length);
+
+        std::vector<bool> y(N_HAPS);
+        SparseBoolVec sbv();
+        for (size_t i = 0; i < block_length; ++i) {
+            binary_matrix.push_back(std::vector<bool>(N_HAPS));
+            if (select_track[i]) {
+                wah_p = wah2_extract(wah_p, y, N_HAPS);
+            } else {
+
+            }
+        }
+        //if (select_track[0]) {
+        //    this->wah_p = wah2_extract(this->wah_p, y, N_HAPS); // Extract current values
+        //} else {
+        //    this->sparse_p = sparse_extract(sparse_p);
+        //}
+    }
+protected:
+    const size_t N_HAPS;
+    size_t block_length; // Effective block length
+    std::vector<std::vector<bool> > binary_matrix;
+}
+#endif
 
 #endif /* __BLOCK_HPP__ */
