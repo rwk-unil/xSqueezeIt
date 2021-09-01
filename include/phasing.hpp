@@ -202,7 +202,7 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
     std::iota(a.begin(), a.end(), 0);
     std::vector<size_t> b(N_HAPS);
 
-    size_t line = 0;
+    //size_t line = 0;
     while(bcf_next_line(bcf_fri)) {
         uint32_t minor_allele_count = 0;
         bcf1_t *rec = bcf_fri.line;
@@ -662,9 +662,6 @@ protected:
                 new_haplotypes[sample.hap_B]++;
                 newly_phased.push_back(i);
             }
-
-            next_sample:
-            ;
         }
         update_sets();
     }
@@ -824,9 +821,9 @@ void new_phase_xcf(const std::string& ifname, const std::string& ofname) {
     int ret = bcf_hdr_write(fp, hdr);
 
     const size_t PLOIDY = 2;
-    const double MAF = 0.01;
+    //const double MAF = 0.01;
     const size_t N_HAPS = bcf_fri.n_samples * PLOIDY;
-    const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * MAF;
+    //const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * MAF;
 
     std::vector<size_t> a(N_HAPS);
     std::iota(a.begin(), a.end(), 0);
