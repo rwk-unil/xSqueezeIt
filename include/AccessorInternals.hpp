@@ -378,17 +378,17 @@ public:
             int32_t default_gt = dp->is_negated() ? 1 : 0;
             int32_t sparse_gt = dp->is_negated() ? 0 : 1;
             for (size_t i = 0; i < N_HAPS; ++i) {
-                gt_arr[i] = bcf_gt_unphased(default_gt) | DEFAULT_PHASED;
+                gt_arr[i] = bcf_gt_unphased(default_gt) | ((i & 1) & DEFAULT_PHASED);
             }
             for (const auto& i : dp->get_sparse_ref()) {
                 //if constexpr (DEBUG_DECOMP) std::cerr << "Setting variant at " << i << std::endl;
-                gt_arr[i] = bcf_gt_unphased(sparse_gt) | DEFAULT_PHASED;
+                gt_arr[i] = bcf_gt_unphased(sparse_gt) | ((i & 1) & DEFAULT_PHASED);
             }
         } else { /* SORTED WAH */
             auto& a = dp->get_ref_on_a();
             auto& y = dp->get_ref_on_y();
             for (size_t i = 0; i < N_HAPS; ++i) {
-                gt_arr[a[i]] = bcf_gt_unphased(y[i]) | DEFAULT_PHASED; /// @todo Phase
+                gt_arr[a[i]] = bcf_gt_unphased(y[i]) | ((a[i] & 1) & DEFAULT_PHASED); /// @todo Phase
             }
         }
         dp->advance();
@@ -401,19 +401,19 @@ public:
                     for (size_t i = 0; i < N_HAPS; ++i) {
                         // Only overwrite refs
                         if (bcf_gt_allele(gt_arr[i]) == 0) {
-                            gt_arr[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
+                            gt_arr[i] = bcf_gt_unphased(alt_allele) | ((i & 1) & DEFAULT_PHASED);
                         }
                     }
                     for (const auto& i : dp->get_sparse_ref()) {
                         // Restore overwritten refs
                         if (bcf_gt_allele(gt_arr[i]) == alt_allele) {
-                            gt_arr[i] = bcf_gt_unphased(0) | DEFAULT_PHASED;
+                            gt_arr[i] = bcf_gt_unphased(0) | ((i & 1) & DEFAULT_PHASED);
                         }
                     }
                 } else {
                     // Fill normally
                     for (const auto& i : dp->get_sparse_ref()) {
-                        gt_arr[i] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED;
+                        gt_arr[i] = bcf_gt_unphased(alt_allele) | ((i & 1) & DEFAULT_PHASED);
                     }
                 }
             } else { /* SORTED WAH */
@@ -421,7 +421,7 @@ public:
                 auto& y = dp->get_ref_on_y();
                 for (size_t i = 0; i < N_HAPS; ++i) {
                     if (y[i]) {
-                        gt_arr[a[i]] = bcf_gt_unphased(alt_allele) | DEFAULT_PHASED; /// @todo Phase
+                        gt_arr[a[i]] = bcf_gt_unphased(alt_allele) | ((a[i] & 1) & DEFAULT_PHASED); /// @todo Phase
                     }
                 }
             }
@@ -431,7 +431,7 @@ public:
         // Set missing info
         if (missing_map.find(position) != missing_map.end()) {
             for (auto pos : missing_map.at(position)) {
-                gt_arr[pos] = bcf_gt_missing | DEFAULT_PHASED;
+                gt_arr[pos] = bcf_gt_missing | ((pos & 1) & DEFAULT_PHASED);
             }
         }
 
