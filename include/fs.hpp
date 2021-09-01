@@ -9,7 +9,7 @@
     #include <stdio.h> // Has remove()
     #include <sys/stat.h>
     namespace fs {
-        size_t file_size(const std::string& filename) {
+        inline size_t file_size(const std::string& filename) {
             struct stat st;
             if (stat(filename.c_str(), &st) < 0) {
                 std::cerr << "Size of file : " << filename << " could not be determined !" << std::endl;
@@ -19,7 +19,7 @@
             }
         }
 
-        bool exists(const std::string& filename) {
+        inline bool exists(const std::string& filename) {
             struct stat st;
             return stat(filename.c_str(), &st) == 0;
         }
