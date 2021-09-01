@@ -31,13 +31,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#if __cplusplus >= 201703L
-#include <filesystem>
-namespace fs = std::filesystem;
-using fs::remove;
-#else
-#include <stdio.h>
-#endif
+#include "fs.hpp"
 
 #include "wah.hpp"
 using namespace wah;

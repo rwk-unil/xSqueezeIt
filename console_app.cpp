@@ -22,12 +22,9 @@
 
 
 #include <iostream>
-#include <filesystem>
+#include "fs.hpp"
 #include <thread>
-namespace fs = std::filesystem;
 
-#include "gt_compressor.hpp"
-#include "gt_decompressor.hpp"
 #include "gt_compressor_new.hpp"
 #include "gt_decompressor_new.hpp"
 #include "time.hpp"
@@ -135,17 +132,7 @@ int main(int argc, const char *argv[]) {
                     fail = true;
                 }
             } else {
-                Compressor c;
-                c.set_ppa_use(!opt.iota);
-                c.set_sort(!opt.no_sort);
-                try {
-                    c.compress_in_memory(filename);
-                    std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
-                    c.save_result_to_file(ofname);
-                } catch (const char* e) {
-                    std::cerr << e << std::endl;
-                    fail = true;
-                }
+                std::cerr << "Version 1 is no longer supported" << std::endl;
             }
         });
 
@@ -163,6 +150,8 @@ int main(int argc, const char *argv[]) {
 
         /// @todo this only works for V1 !
         if (opt.verify) { // Slow (because requires decompression and verification)
+            std::cerr << "Verify is disabled for the moment, decompress and diff..." << std::endl;
+            #if 0
             create_index_file(variant_file);
             Decompressor d(ofname, variant_file);
             std::string verify_file(ofname + "_verify.bcf");
@@ -178,6 +167,7 @@ int main(int argc, const char *argv[]) {
                 fs::remove(verify_file);
                 fs::remove(verify_file + ".csi");
             }
+            #endif
         }
 
     } else if (opt.decompress) {
@@ -198,8 +188,7 @@ int main(int argc, const char *argv[]) {
             NewDecompressor d(filename, variant_file);
             d.decompress(ofname);
         } else {
-            Decompressor d(filename, variant_file);
-            d.decompress(ofname);
+            std::cerr << "Version 1 is no longer supported" << std::endl;
         }
     } else {
         std::cerr << "Choose either to compress or decompress" << std::endl << std::endl;

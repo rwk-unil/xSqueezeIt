@@ -33,10 +33,9 @@
 
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
-//#include <filesystem>
+#include "fs.hpp"
 #include "wah.hpp"
 
 #ifndef DEBUGGG
@@ -468,12 +467,7 @@ public:
             throw "Bad version";
         }
 
-        {
-            struct stat st;
-            stat(filename.c_str(), &st);
-            file_size = st.st_size;
-        }
-        //file_size = std::filesystem::file_size(filename); // Thank you C++17
+        file_size = fs::file_size(filename);
         fd = open(filename.c_str(), O_RDONLY, 0);
         if (fd < 0) {
             std::cerr << "Failed to open file " << filename << std::endl;

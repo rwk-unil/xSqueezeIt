@@ -28,6 +28,7 @@ extern GlobalAppOptions global_app_options;
 
 #include "compression.hpp"
 #include "xcf.hpp"
+#include "make_unique.hpp"
 
 #include "Accessor.hpp"
 
@@ -39,6 +40,12 @@ extern GlobalAppOptions global_app_options;
 #include <unistd.h>
 
 using namespace wah;
+
+#if __cplusplus < 201703L
+#define CONSTEXPR_IF
+#else
+#define CONSTEXPR_IF constexpr
+#endif
 
 class NewDecompressor {
 public:
@@ -149,7 +156,7 @@ private:
         while(bcf_next_line(bcf_fri)) {
             bcf1_t *rec = bcf_fri.line;
 
-            if constexpr (RECORD_NONLINEAR) {
+            if CONSTEXPR_IF (RECORD_NONLINEAR) {
                 bcf_unpack(rec, BCF_UN_ALL);
                 int ngt = bcf_get_format_int32(bcf_fri.sr->readers[0].header, rec, "BM", &values, &count);
                 if (ngt < 1) {

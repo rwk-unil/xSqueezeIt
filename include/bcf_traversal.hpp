@@ -30,10 +30,6 @@
 
 #include <random>
 
-#if __cplusplus < 201703L
-#   define constexpr
-#endif
-
 /// @todo Clean the usage of PLOIDY !
 
 class BcfTraversal {
@@ -161,7 +157,7 @@ public:
     template<const bool verbose = false>
     bool compare(const BcfMatrix& other) const {
         if (matrix.size() != other.matrix.size()) {
-            if constexpr (verbose) {
+            if (verbose) {
                 std::cerr << "Matrices differ in size" << std::endl;
             }
             return false;
@@ -169,14 +165,14 @@ public:
 
         for (size_t i = 0; i < matrix.size(); ++i) {
             if (matrix.at(i).size() != other.matrix.at(i).size()) {
-                if constexpr (verbose) {
+                if (verbose) {
                     std::cerr << "Matrices differ in size at " << i << std::endl;
                 }
                 return false;
             }
             for (size_t j = 0; j < matrix.at(i).size(); ++j) {
                 if (matrix.at(i).at(j) != other.matrix.at(i).at(j)) {
-                    if constexpr (verbose) {
+                    if (verbose) {
                         std::cerr << "Matrices differ at " << i << "," << j << std::endl;
                     }
                     return false;
