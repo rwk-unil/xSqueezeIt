@@ -34,6 +34,28 @@ public:
         internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
     }
 
+    int get_genotypes(const bcf_hdr_t *hdr, bcf1_t *line, void **gt_arr, int *gt_arr_size) {
+        size_t ngt = header.hap_samples; /// @todo ploidy
+
+		if (!*gt_arr) *gt_arr = malloc(sizeof(int)*ngt);
+        *gt_arr_size = ngt;
+
+		// extraction is done by having the accessor seek the data at "BM"
+		int count = 0;
+        int *values = (int*)malloc(sizeof(int));
+		int ret = bcf_unpack(line, BCF_UN_ALL);
+		if (ret) { std::cerr << "bcf_unpack error" << std::endl; }
+		if (bcf_get_format_int32(hdr, line, "BM", &values, &count) < 1) {
+			std::cerr << "Failed to retrieve binary matrix index position (BM key)" << std::endl;
+			throw "BM key value not found";
+		}
+
+        fill_genotype_array((int32_t*)*gt_arr, ngt, line->n_allele, values[0]);
+
+        free(values);
+        return ngt;
+    }
+
     std::string get_variant_filename() {
         std::stringstream ss;
 		ss << filename << "_var.bcf";
@@ -47,6 +69,7 @@ public:
     }
 
     std::vector<std::string>& get_sample_list() {return sample_list;}
+    size_t get_number_of_samples() const {return sample_list.size();}
     const header_t& get_header_ref() const {return header;}
 
 protected:
