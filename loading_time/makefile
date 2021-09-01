@@ -4,7 +4,7 @@ HTSLIB_PATH := ../htslib/
 CXX=g++
 INCLUDE_DIRS=-I . -I ../include -I $(HTSLIB_PATH)/htslib
 #EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
-CXXFLAGS=-O3 -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
+CXXFLAGS=-O3 -g -Wall -std=c++11 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
 LD=g++
 LIBS=-lpthread -lhts -lzstd

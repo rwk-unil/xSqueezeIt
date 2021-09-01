@@ -17,6 +17,7 @@ void load_from_bcf(std::string& filename) {
 }
 
 void load_from_bin(std::string& filename) {
+    std::cout << "Loading gt data from file " << filename << "\n";
     NewLoader nl(filename);
     auto start = std::chrono::steady_clock::now();
     nl.decompress();
