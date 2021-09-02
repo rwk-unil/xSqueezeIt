@@ -19,3 +19,9 @@ make
 # Lockstep loader test
 # Files have the same GT data
 ```
+
+```shell
+./lockstep_loader --file1 chr20.bin --file2 chr20_small.bcf
+# Lockstep loader test
+# Files don't have the same variants !
+```
