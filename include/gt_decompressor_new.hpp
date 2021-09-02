@@ -30,7 +30,7 @@ extern GlobalAppOptions global_app_options;
 #include "xcf.hpp"
 #include "make_unique.hpp"
 
-#include "Accessor.hpp"
+#include "accessor.hpp"
 
 #include "vcf.h"
 #include "hts.h"

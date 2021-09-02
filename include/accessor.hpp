@@ -22,7 +22,7 @@
 #ifndef __ACCESSOR_HPP__
 #define __ACCESSOR_HPP__
 
-#include "AccessorInternals.hpp"
+#include "accessor_internals.hpp"
 
 class Accessor {
 public:

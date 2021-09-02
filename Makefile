@@ -18,7 +18,7 @@ OBJ := $(SOURCE:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
 CPP_OBJS := $(CPP_SOURCES:.cpp=.o)
 CPP_OBJS := $(CPP_OBJS:.c=.o)
-OBJS := xcf.o bcf_traversal.o Accessor.o $(OBJ)
+OBJS := xcf.o bcf_traversal.o accessor.o $(OBJ)
 DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 

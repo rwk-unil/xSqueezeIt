@@ -19,8 +19,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  ******************************************************************************/
-#ifndef __ACCESSORINTERNALS_HPP__
-#define __ACCESSORINTERNALS_HPP__
+#ifndef __ACCESSOR_INTERNALS_HPP__
+#define __ACCESSOR_INTERNALS_HPP__
 
 #include <iostream>
 
@@ -619,4 +619,4 @@ protected:
     std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp;
 };
 
-#endif /* __ACCESSORINTERNALS_HPP__ */
+#endif /* __ACCESSOR_INTERNALS_HPP__ */
