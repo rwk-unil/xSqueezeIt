@@ -68,6 +68,7 @@ make
 ## Run
 
 ### Compression
+- `-c,--compress`
 
 ```shell
 # ./squishit <-c|-x> -f <input file> -o <output file>
@@ -81,13 +82,13 @@ mkdir output
 ```
 
 Options :
-- `--V3` Compresses with version 3
-- `--V2` Compresses with version 2 (deprecated)
 - `--zstd` Compresses blocks with an extra zstd compression layer (only for version 3)
 - `--maf <value>` Sets the minor allele frequency (MAF) for the minor allele count (MAC) threshold that selects if a variant is encoded as sparse or word aligned hybrid (WAH), typical values are around 0.001 give or take an order of magnitude
 - `reset-sort-block-length <value>` Sets the size of the encoded blocks in number of variants. A bigger size can results in better compression, a smaller size can result in faster random access.
+- `--V3` Compresses with version 3- `--V2` Compresses with version 2 (deprecated)
 
 ### Extraction
+- `-x,--extract`
 
 ```shell
 # Extraction (requires both files generated above) :
@@ -96,6 +97,8 @@ Options :
 ```
 
 #### Region extraction
+- `-r,--regions <regions>`
+
 ```shell
 # Extraction (requires both files generated above) :
 ./squishit -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
@@ -105,6 +108,8 @@ Options :
 ```
 
 #### Sample extraction
+- `-s,--samples <samples>`
+
 ```shell
 # Extraction (requires both files generated above) :
 ./squishit -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
