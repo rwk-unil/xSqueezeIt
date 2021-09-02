@@ -1,16 +1,15 @@
-HTSLIB_PATH := ./htslib/
+HTSLIB_PATH := ./htslib
+ZSTD_PATH := ./zstd/lib
 
 # C++ Compiler
 CXX=g++
-INCLUDE_DIRS=-I include -I $(HTSLIB_PATH)/htslib -I $(BENCHMARK_PATH)/include
+INCLUDE_DIRS=-I include -I $(HTSLIB_PATH)/htslib -I $(ZSTD_PATH)
 #EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
 CXXFLAGS=-O3 -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
 LD=g++
 LIBS=-lpthread -lhts -lzstd
-LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH)
-# Debugger
-XDB=gdb
+LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
 
 # Project specific :
 TARGET := squishit
@@ -23,17 +22,8 @@ OBJS := xcf.o bcf_traversal.o Accessor.o $(OBJ)
 DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
-BENCHMARK_EXECUTABLE := main_bench
-BENCHMARK_SOURCE := main_bench.cpp
-BENCHMARK_OBJ := $(BENCHMARK_SOURCE:.cpp=.o)
-
 # Rules
 all : $(TARGET) $(DEPENDENCIES)
-
-# Make and open in debugger
-# TODO : Handle the debug flags !
-debug : $(TARGET)
-	$(XDB) ./$(TARGET)
 
 # Link the target
 $(TARGET) : $(OBJS)
