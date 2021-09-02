@@ -1,8 +1,12 @@
 # VCF / BCF Compressor
 
-VCF / BCF Genotype data compressor based on positional Burrows-Wheeler transform (PBWT) and 16-bit Word Aligned Hybrid (WAH) encoding.
+VCF / BCF Genotype data compressor based on sparse representation for rare variants and positional Burrows-Wheeler transform (PBWT) followed by 16-bit Word Aligned Hybrid (WAH) encoding for common variants. (Minor Allele Frequency threshold is selectable for rare/common variants).
 
-Variants are left in BCF format, genotype data is custom encoded. The genotype data can then be further compressed with standard tools such as gzip.
+Variant information is left in BCF format to remain compatible with HTSLIB / BCFTools, genotype data is custom encoded as described above. The encoded genotype data can then optionnaly be further compressed with zstd https://github.com/facebook/zstd/.
+
+<img src="images/compression_rates.png" alt="compression rates" width="600"/>
+
+<img src="images/loading_times.png" alt="loading times" width="600"/>
 
 ## Build
 
