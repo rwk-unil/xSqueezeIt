@@ -26,7 +26,7 @@
 #include "compression.hpp"
 #include "xcf.hpp"
 
-#include "Accessor.hpp"
+#include "accessor.hpp"
 
 #include "vcf.h"
 #include "hts.h"
