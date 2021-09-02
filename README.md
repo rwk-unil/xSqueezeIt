@@ -4,9 +4,44 @@ VCF / BCF Genotype data compressor based on sparse representation for rare varia
 
 Variant information is left in BCF format to remain compatible with HTSLIB / BCFTools, genotype data is custom encoded as described above. The encoded genotype data can then optionnaly be further compressed with zstd https://github.com/facebook/zstd/.
 
+## Example results
+
+### Compression
+
+Compressing chromosomes 1-22 of 1000 Genomes Phase 3 (1KGP3) https://www.internationalgenome.org/category/phase-3/ (2504 samples, 5008 haplotypes, >88M variants) and chromosomes 1-22 of Haplotype Reference Consortium (HRC) https://www.nature.com/articles/ng.3643 (64976 haplotypes, >39M variants).
+
 <img src="images/compression_rates.png" alt="compression rates" width="600"/>
 
+### Loading
+
+Loading of the data from file format :
+
 <img src="images/loading_times.png" alt="loading times" width="600"/>
+
+HTSlib is used to get the genotype data into an array for each variant entry (record). With squishit the genotype data is extracted from the binary compressed file.
+
+Normal loading with HTSlib and traditional BCF :
+```C
+bcf_sr_add_reader(reader, "chr20.bcf");
+...
+while (bcf_sr_next_line (reader)) { // While there are records in the BCF
+    ...
+    bcf_get_genotypes(header, line, &genotype_array, &ngt); // HTSlib
+    ...
+}
+```
+
+Loading genotype data from SquishIt binary file and associated BCF variant info file :
+```C
+Accessor accessor("chr20.bin"); // SquishIt binary compressed file
+bcf_sr_add_reader(reader, accessor.get_variant_filename());
+...
+while (bcf_sr_next_line (reader)) { // While there are records in the BCF
+    ...
+    accessor->get_genotypes(header, line, &genotype_array, &ngt);
+    ...
+}
+```
 
 ## Build
 
