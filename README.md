@@ -31,11 +31,11 @@ make
 ### Compression
 
 ```shell
-# ./console_app <-c|-x> -f <input file> -o <output file>
+# ./squishit <-c|-x> -f <input file> -o <output file>
 mkdir output
 
 # Compression :
-./console_app -c -f /path/to/my/data/chr20.bcf -o output/chr20.bin
+./squishit -c -f /path/to/my/data/chr20.bcf -o output/chr20.bin
 # This will output two files in output
 # output/chr20.bin which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
 # output/chr20.bin_var.bcf which is the variant data, can be opened with bcftools
@@ -52,15 +52,15 @@ Options :
 
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./console_app -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
+./squishit -x -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./squishit -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
 ```
 
 #### Region extraction
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./console_app -x -r "20:200000-200100" -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+./squishit -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./squishit -x -r "20:200000-200100" -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
 # The above command is much faster than decompressing and using -r in bcftools
 # because only the chosen regions are decompressed, both generate the same result
 ```
@@ -68,27 +68,27 @@ Options :
 #### Sample extraction
 ```shell
 # Extraction (requires both files generated above) :
-./console_app -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./console_app -x -s HG00101,NA12878 -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+./squishit -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
+./squishit -x -s HG00101,NA12878 -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
 ```
 
 ### Pipe into bcftools
 
 ```shell
 # Or pipe directly into bcftools (some examples) :
-./console_app -x -f output/chr20.bin | bcftools view | less
-./console_app -x -f output/chr20.bin | bcftools view -s HG00111,NA12878 | less
-./console_app -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
+./squishit -x -f output/chr20.bin | bcftools view | less
+./squishit -x -f output/chr20.bin | bcftools view -s HG00111,NA12878 | less
+./squishit -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
 ```
 
 ### Explore the "variant-only" generated file
 
 The compressor generates a BCF file without the GT data (so variants only) and a binary file with the compressed GT data. This way the BCF file for the variants can still be explored and used.
 ```
-# ./console_app <-c|-x> -f <input file> -o <output file>
+# ./squishit <-c|-x> -f <input file> -o <output file>
 
 # Compression :
-./console_app -c -f /path/to/my/data/chr20.bcf -o chr20.bin
+./squishit -c -f /path/to/my/data/chr20.bcf -o chr20.bin
 # This will output two files
 # chr20.bin which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
 # chr20.bin_var.bcf which is the variant data, can be opened with bcftools
@@ -335,7 +335,7 @@ The condition track represents if a given bi-allelic variant is saved as WAH or 
 
 ## Notes / TODO
 
-- Rename the compressor (currently named console_app ...)
+- ~~Rename the compressor (currently named console_app ...)~~ Done !
 - ~~Only outputs data as phased for the moment~~ Done !
 - ~~Handle missing~~ Done !
 - ~~Only supports bi-allelic sites for the moment~~ Done !

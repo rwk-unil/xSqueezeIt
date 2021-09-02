@@ -23,7 +23,7 @@
 #ifndef __DECOMPRESSOR_NEW_HPP__
 #define __DECOMPRESSOR_NEW_HPP__
 
-#include "console_app.hpp"
+#include "squishit.hpp"
 extern GlobalAppOptions global_app_options;
 
 #include "compression.hpp"

@@ -32,7 +32,7 @@
 // Getting some insights (remove for release)
 #include "sandbox.hpp"
 
-#include "console_app.hpp"
+#include "squishit.hpp"
 GlobalAppOptions global_app_options;
 
 int main(int argc, const char *argv[]) {

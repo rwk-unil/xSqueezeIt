@@ -13,8 +13,8 @@ LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH)
 XDB=gdb
 
 # Project specific :
-TARGET := console_app
-SOURCE := console_app.cpp
+TARGET := squishit
+SOURCE := squishit.cpp
 OBJ := $(SOURCE:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
 CPP_OBJS := $(CPP_SOURCES:.cpp=.o)
