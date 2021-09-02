@@ -155,8 +155,6 @@ private:
 
     // Throws
     void decompress_checks() {
-        // This being a template does not help ...
-        // Because decompression depends on file type
         if (header.aet_bytes != 2 && header.aet_bytes != 4) {
             /// @todo
             throw "Unsupported AET size";
