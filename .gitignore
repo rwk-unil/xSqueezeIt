@@ -19,6 +19,7 @@ temp*/**
 # Ignore these executables
 console_app
 main
+squishit
 
 # Mac OS index files
 .DS_Store
