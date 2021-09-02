@@ -4,6 +4,8 @@ VCF / BCF Genotype data compressor based on sparse representation for rare varia
 
 Variant information is left in BCF format to remain compatible with HTSLIB / BCFTools, genotype data is custom encoded as described above. The encoded genotype data can then optionnaly be further compressed with zstd https://github.com/facebook/zstd/.
 
+The compressor was realized with haploid/diploid data in mind. Polyploid samples with ploidy > 2 are not supported yet. The compressor supports multi-allelic variant sites. The main goal is to provide an alternative file format for storing large reference panels, to reduce loading times and if possible speed-up computation (e.g., with computation on the encoded data directly).
+
 ## Example results
 
 ### Compression
