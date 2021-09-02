@@ -12,14 +12,15 @@ public:
         //app.add_option("-O, --output-type", O, "output type b|u|z|v");
         app.add_flag("-c,--compress", compress, "Compress");
         app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
+        app.add_flag("-d,--decompress", decompress, "Decompress");
         app.add_flag("-i,--info", info, "Get info on file");
-        app.add_flag("--wait", wait, "DEBUG - wait for int input");
-        app.add_flag("--verify", verify, "DEBUG - verify");
+        //app.add_flag("--wait", wait, "DEBUG - wait for int input");
+        //app.add_flag("--verify", verify, "DEBUG - verify");
 
-        app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
-        app.add_flag("--no-sort", no_sort, "DEBUG - No PBWT sort");
-        app.add_flag("--v2", v2, "DEBUG - New version");
-        app.add_flag("--v3", v3, "DEBUG - New version");
+        //app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
+        //app.add_flag("--no-sort", no_sort, "DEBUG - No PBWT sort");
+        app.add_flag("--v2", v2, "DEPRECATED - Version 2");
+        //app.add_flag("--v3", v3, "DEBUG - New version");
         app.add_flag("--zstd", zstd, "DEBUG - Compress blocks with zstd");
         app.add_option("--maf", maf, "DEBUG - New version MAF");
         app.add_option("--reset-sort-block-length", reset_sort_block_length, "DEBUG - New version reset sort block length");
@@ -69,7 +70,7 @@ public:
     bool verify = false;
     bool iota = false;
     bool v2 = false;
-    bool v3 = false;
+    bool v3 = true;
     bool zstd = false;
     double maf = 0.01;
     size_t reset_sort_block_length = 8192;
