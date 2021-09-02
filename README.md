@@ -51,6 +51,7 @@ This build requires GCC 8+ because modern C++17 features are used.
 # Clone
 git clone https://github.com/rwk-unil/pbwt_exp.git #TODO Public repo
 cd pbwt_exp
+
 # Clone and build htslib (if you already have htslib set Makefile accordingly and skip)
 git submodule update --init htslib
 cd htslib
@@ -61,9 +62,22 @@ make
 sudo make install
 sudo ldconfig
 cd ..
+
+# Clone and build zstd (if you already have zstd set Makefile accordingly and skip)
+git clone https://github.com/facebook/zstd.git
+cd zstd
+make
+cd ..
+
 # Build application
 make
 ```
+
+### Dependencies
+This software depends on :
+- `htslib` https://github.com/samtools/htslib
+- `zstd` https://github.com/facebook/zstd/
+
 
 ## Run
 
