@@ -1,4 +1,4 @@
-# VCF / BCF Compressor
+# Squish It VCF / BCF Compressor
 
 VCF / BCF Genotype data compressor based on sparse representation for rare variants and positional Burrows-Wheeler transform (PBWT) followed by 16-bit Word Aligned Hybrid (WAH) encoding for common variants. (Minor Allele Frequency threshold is selectable for rare/common variants).
 
