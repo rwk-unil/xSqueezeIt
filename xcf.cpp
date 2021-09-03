@@ -86,7 +86,7 @@ static void initialize_bcf_file_reader_common(bcf_file_reader_info_t& bcf_fri, c
 void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::string& filename) {
     bcf_fri.sr = bcf_sr_init();
     bcf_fri.sr->collapse = COLLAPSE_NONE;
-    bcf_fri.sr->require_index = 1;
+    bcf_fri.sr->require_index = 0;
 
     initialize_bcf_file_reader_common(bcf_fri, filename);
 }
