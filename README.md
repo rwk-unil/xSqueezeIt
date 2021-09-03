@@ -224,6 +224,8 @@ Each (uncompressed) block has the following hierarchy :
 ###### Data
 where data are filled with :
 
+| Data                     |
+|--------------------------|
 | WAH encoded genotypes    |
 | Sparse encoded genotypes |
 | Binary encoding track    |
