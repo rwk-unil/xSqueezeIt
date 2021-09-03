@@ -32,7 +32,7 @@
 // Getting some insights (remove for release)
 #include "sandbox.hpp"
 
-#include "squishit.hpp"
+#include "xsqueezeit.hpp"
 GlobalAppOptions global_app_options;
 
 int main(int argc, const char *argv[]) {

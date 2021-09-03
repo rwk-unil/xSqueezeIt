@@ -1,7 +1,7 @@
 #ifndef __SANDBOX_HPP__
 #define __SANDBOX_HPP__
 
-#include "squishit.hpp"
+#include "xsqueezeit.hpp"
 
 // Getting some insights (remove for release)
 #include "transforms.hpp"

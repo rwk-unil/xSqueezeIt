@@ -46,8 +46,8 @@ function exit_fail_rm_tmp {
 
 # --reset-sort-block-length 65536
 # --reset-sort-block-length 1024
-../../squishit -c --v2 --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILANEM}"; exit_fail_rm_tmp; }
-../../squishit -x --v2 -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILANEM}"; exit_fail_rm_tmp; }
+../../xsqueezeit -c --v2 --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILANEM}"; exit_fail_rm_tmp; }
+../../xsqueezeit -x --v2 -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILANEM}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }
 

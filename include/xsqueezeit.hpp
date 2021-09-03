@@ -1,5 +1,5 @@
-#ifndef __CONSOLE_APP_HPP__
-#define __CONSOLE_APP_HPP__
+#ifndef __XSQUEEZEIT_HPP__
+#define __XSQUEEZEIT_HPP__
 
 #include "CLI11.hpp"
 
@@ -58,7 +58,7 @@ public:
         app.add_option("-t,--targets", targets, ""); //"Similar as -r, --regions, but the next position is accessed by streaming the whole VCF/BCF rather than using the tbi/csi index. Both -r and -t options can be applied simultaneously: -r uses the index to jump to a region and -t discards positions which are not in the targets. Unlike -r, targets can be prefixed with "^" to request logical complement. For example, "^X,Y,MT" indicates that sequences X, Y and MT should be skipped. Yet another difference between the -t/-T and -r/-R is that -r/-R checks for proper overlaps and considers both POS and the end position of an indel, while -t/-T considers the POS coordinate only. Note that -t cannot be used in combination with -T.");
         app.add_option("-T,--targets-file", targets_file, ""); // "Same -t, --targets, but reads regions from a file. Note that -T cannot be used in combination with -t.\nWith the call -C alleles command, third column of the targets file must be comma-separated list of alleles, starting with the reference allele. Note that the file must be compressed and indexed.");
     }
-    CLI::App app{"SquishIt - VCF/BCF Compressor"};
+    CLI::App app{"xSqueezeIt - VCF/BCF Compressor"};
 
     std::string filename = "-";
     std::string ofname = "-";
@@ -106,4 +106,4 @@ public:
     std::string targets_file = "";
 };
 
-#endif /* __CONSOLE_APP_HPP__ */
+#endif /* __XSQUEEZEIT_HPP__ */

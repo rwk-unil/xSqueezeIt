@@ -12,8 +12,8 @@ LIBS=-lpthread -lhts -lzstd
 LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
 
 # Project specific :
-TARGET := squishit
-SOURCE := squishit.cpp
+TARGET := xsqueezeit
+SOURCE := xsqueezeit.cpp
 OBJ := $(SOURCE:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
 CPP_OBJS := $(CPP_SOURCES:.cpp=.o)

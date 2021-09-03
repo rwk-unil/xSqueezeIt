@@ -33,9 +33,9 @@ while (bcf_sr_next_line (reader)) { // While there are records in the BCF
 }
 ```
 
-Loading genotype data from SquishIt binary file and associated BCF variant info file :
+Loading genotype data from xSqueezeIt binary file and associated BCF variant info file :
 ```C
-Accessor accessor("chr20.bin"); // SquishIt binary compressed file
+Accessor accessor("chr20.bin"); // xSqueezeIt binary compressed file
 bcf_sr_add_reader(reader, accessor.get_variant_filename());
 ...
 while (bcf_sr_next_line (reader)) { // While there are records in the BCF
