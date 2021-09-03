@@ -112,10 +112,6 @@ private:
         htsFile* fp = NULL;
         bcf_hdr_t* hdr = NULL;
 
-        if (global_app_options.samples != "") {
-            enable_select_samples(global_app_options.samples);
-        }
-
         if ((global_app_options.regions != "") or (global_app_options.regions_file != "")) {
             if (global_app_options.regions != "") {
                 //std::cerr << "regions is set to : " << global_app_options.regions << std::endl;
@@ -280,9 +276,16 @@ private:
             throw "Number of samples doesn't match";
         }
 
+        if (global_app_options.samples != "") {
+            enable_select_samples(global_app_options.samples);
+        }
+
         if (samples_to_use.size() == 0) {
-            std::cerr << "No samples selected" << std::endl;
-            throw "No samples selected";
+            std::cerr << "No samples to extract" << std::endl;
+            std::cerr << "Available samples are : ";
+            for (const auto& s : sample_list) std::cerr << s << " ";
+            std::cerr << std::endl;
+            throw "No samples found";
         }
     }
 

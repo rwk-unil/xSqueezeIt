@@ -119,11 +119,11 @@ int main(int argc, const char *argv[]) {
         });
         auto compress_thread = std::thread([&]{
             if (opt.v2 or opt.v3) {
-                NewCompressor c(opt.v2 ? 2 : 3);
-                c.set_maf(opt.maf);
-                c.set_reset_sort_block_length(opt.reset_sort_block_length);
-                c.set_zstd_compression_on(opt.zstd);
                 try {
+                    NewCompressor c(opt.v2 ? 2 : 3);
+                    c.set_maf(opt.maf);
+                    c.set_reset_sort_block_length(opt.reset_sort_block_length);
+                    c.set_zstd_compression_on(opt.zstd);
                     c.compress_in_memory(filename);
                     std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
                     c.save_result_to_file(ofname);
@@ -185,8 +185,13 @@ int main(int argc, const char *argv[]) {
         std::string variant_file(filename + "_var.bcf");
         create_index_file(variant_file);
         if (opt.v2 or opt.v3) {
-            NewDecompressor d(filename, variant_file);
-            d.decompress(ofname);
+            try {
+                NewDecompressor d(filename, variant_file);
+                d.decompress(ofname);
+            } catch (const char* e) {
+                std::cerr << e << std::endl;
+                exit(-1);
+            }
         } else {
             std::cerr << "Version 1 is no longer supported" << std::endl;
         }
