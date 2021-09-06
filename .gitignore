@@ -17,9 +17,8 @@ tmp*/**
 temp*/**
 
 # Ignore these executables
-console_app
+xsqueezeit
 main
-squishit
 
 # Mac OS index files
 .DS_Store
