@@ -22,6 +22,7 @@ public:
         app.add_flag("--v2", v2, "DEPRECATED - Version 2");
         //app.add_flag("--v3", v3, "DEBUG - New version");
         app.add_flag("--zstd", zstd, "V3 - Compress blocks with zstd");
+        app.add_option("--zstd-level,--zl", zstd_compression_level, "V3 - zstd compression level");
         app.add_option("--maf", maf, "V3 - Minor Allele Frequency threshold");
         app.add_option("--variant-block-length", reset_sort_block_length, "V3 - variant block length");
 
@@ -72,6 +73,7 @@ public:
     bool v2 = false;
     bool v3 = true;
     bool zstd = false;
+    int  zstd_compression_level = 7; // Some acceptable default value
     double maf = 0.01;
     size_t reset_sort_block_length = 8192;
     bool no_sort = false;

@@ -481,9 +481,11 @@ template<typename T = uint32_t>
 class GtCompressorV3 : public GtCompressorTemplate<T> {
 public:
 
-    GtCompressorV3(bool zstd_compression_on = false) : zstd_compression_on(zstd_compression_on) {}
+    GtCompressorV3(bool zstd_compression_on = false, int zstd_compression_level = 7) : zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level) {}
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
+    void set_zstd_compression_level(int level) {zstd_compression_level = level;}
     bool zstd_compression_on = false;
+    int  zstd_compression_level = 7; // Some acceptable default value
 
     void save_result_to_file(std::string filename) override {
         std::cerr << "Compressing with V3 !" << std::endl;
@@ -559,7 +561,7 @@ public:
                 if ((i % this->RESET_SORT_BLOCK_LENGTH) == 0) {
                     if (i) {
                         indices[block_counter++] = (uint32_t)s.tellp();
-                        block.write_to_file(s, zstd_compression_on);
+                        block.write_to_file(s, zstd_compression_on, zstd_compression_level);
                     }
                     block.reset();
                 }
@@ -577,7 +579,7 @@ public:
 
         // Last block
         indices[block_counter++] = (uint32_t)s.tellp();
-        block.write_to_file(s, zstd_compression_on);
+        block.write_to_file(s, zstd_compression_on, zstd_compression_level);
 
         if (block_counter != header.number_of_ssas) {
             std::cerr << "Something's wrong with the blocks !" << std::endl;
@@ -705,6 +707,7 @@ public:
     void set_maf(double new_MAF) {MAF = new_MAF;}
     void set_reset_sort_block_length(size_t reset_sort_block_length) {RESET_SORT_BLOCK_LENGTH = reset_sort_block_length;}
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
+    void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
     void compress_in_memory(std::string filename) {
         bcf_file_reader_info_t bcf_fri;
@@ -718,13 +721,13 @@ public:
             if (VERSION == 2) {
                 _compressor = make_unique<GtCompressorTemplate<uint16_t> >();
             } else {
-                _compressor = make_unique<GtCompressorV3<uint16_t> >(zstd_compression_on);
+                _compressor = make_unique<GtCompressorV3<uint16_t> >(zstd_compression_on, zstd_compression_level);
             }
         } else { // Else use a compressor that uses uint32_t as indices
             if (VERSION == 2) {
                 _compressor = make_unique<GtCompressorTemplate<uint32_t> >();
             } else {
-                _compressor = make_unique<GtCompressorV3<uint32_t> >(zstd_compression_on);
+                _compressor = make_unique<GtCompressorV3<uint32_t> >(zstd_compression_on, zstd_compression_level);
             }
         }
         _compressor->set_maf(MAF);
@@ -745,6 +748,7 @@ protected:
     double MAF = 0.01;
     size_t RESET_SORT_BLOCK_LENGTH = 8192;
     bool zstd_compression_on = false;
+    int zstd_compression_level = 7;
 };
 
 #endif /* __GT_COMPRESSOR_NEW_HPP__ */

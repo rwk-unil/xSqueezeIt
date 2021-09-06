@@ -101,7 +101,7 @@ public:
     std::vector<std::vector<WAH_T> > wahs;
     std::vector<SparseGtLine<A_T> > sparse_lines;
 
-    void write_to_file(std::fstream& os, bool compressed) {
+    void write_to_file(std::fstream& os, bool compressed, int compression_level) {
         // Funky as f...
         char *tmpname = strdup("/tmp/tmpfileXXXXXX");
         int fd = mkstemp(tmpname); /// @todo check return code
@@ -190,7 +190,7 @@ public:
                 throw "Failed to compress block";
             }
 
-            auto result = ZSTD_compress(output_buffer, output_buffer_size, file_mmap, file_size, 7 /* Compression level 1-ZSTD_maxCLevel() */);
+            auto result = ZSTD_compress(output_buffer, output_buffer_size, file_mmap, file_size, compression_level);
             if (ZSTD_isError(result)) {
                 std::cerr << "Failed to compress file" << std::endl;
                 std::cerr << "Error : " << ZSTD_getErrorName(result) << std::endl;

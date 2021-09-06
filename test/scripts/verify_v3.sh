@@ -3,6 +3,7 @@
 ZSTD=""
 REGIONS=""
 SAMPLES=""
+ZSTD_LEVEL=""
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -30,6 +31,11 @@ case $key in
     --zstd)
     ZSTD="--zstd"
     shift # past argument
+    ;;
+    --zstd-level)
+    ZSTD_LEVEL="--zstd-level $2"
+    shift # past argument
+    shift # past value
     ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
@@ -61,7 +67,7 @@ function exit_fail_rm_tmp {
 
 # --variant-block-length 65536
 # --variant-block-length 1024
-../../xsqueezeit -c ${ZSTD} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
+../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
 ../../xsqueezeit -x ${REGIONS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }

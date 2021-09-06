@@ -124,6 +124,7 @@ int main(int argc, const char *argv[]) {
                     c.set_maf(opt.maf);
                     c.set_reset_sort_block_length(opt.reset_sort_block_length);
                     c.set_zstd_compression_on(opt.zstd);
+                    c.set_zstd_compression_level(opt.zstd_compression_level);
                     c.compress_in_memory(filename);
                     std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
                     c.save_result_to_file(ofname);
