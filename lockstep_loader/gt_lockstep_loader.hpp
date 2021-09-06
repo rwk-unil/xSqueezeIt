@@ -25,6 +25,7 @@
 
 #include "compression.hpp"
 #include "xcf.hpp"
+#include "fs.hpp"
 
 #include "accessor.hpp"
 
@@ -81,9 +82,18 @@ public:
     void lockstep_load() {
         bcf_srs_t *sr = bcf_sr_init();
         sr->collapse = COLLAPSE_NONE;
-        sr->require_index = 1;
-        bcf_sr_add_reader (sr, bcf_filename1.c_str());
-        bcf_sr_add_reader (sr, bcf_filename2.c_str());
+        sr->require_index = 1; // Must be set when number of readers is > 1
+        int ret = 0;
+        ret = bcf_sr_add_reader (sr, bcf_filename1.c_str());
+        if (ret == 0) {
+            std::cerr << "Could not load file : " << bcf_filename1 << std::endl;
+            exit(-1);
+        }
+        ret = bcf_sr_add_reader (sr, bcf_filename2.c_str());
+        if (ret == 0) {
+            std::cerr << "Could not load file : " << bcf_filename2 << std::endl;
+            exit(-1);
+        }
         int ngt_1 = 0;
         int ngt_arr_1 = 0;
         int ngt_2 = 0;
