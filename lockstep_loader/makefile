@@ -16,12 +16,13 @@ TARGET := lockstep_loader
 SOURCE := main.cpp
 OBJ := $(SOURCE:.cpp=.o)
 OBJS := ../xcf.o ../bcf_traversal.o ../accessor.o $(OBJ)
+DEPENDENCIES := $(SOURCE:.cpp=.d)
 
 # Rules
 all : $(TARGET) $(DEPENDENCIES)
 
 # Link the target
-$(TARGET) : $(OBJS)
+$(TARGET) : $(OBJS) $(OBJ)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # Do not include the depency rules for "clean"
