@@ -1,5 +1,15 @@
 #!/bin/bash
 
+if ! command -v realpath &> /dev/null
+then
+    realpath() {
+        [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+    }
+fi
+
+# Get the path of this script
+SCRIPTPATH=$(realpath  $(dirname "$0"))
+
 ZSTD=""
 REGIONS=""
 SAMPLES=""
@@ -67,8 +77,8 @@ function exit_fail_rm_tmp {
 
 # --variant-block-length 65536
 # --variant-block-length 1024
-../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
-../../xsqueezeit -x ${REGIONS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -x ${REGIONS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }
 

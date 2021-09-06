@@ -1,5 +1,15 @@
 #!/bin/bash
 
+if ! command -v realpath &> /dev/null
+then
+    realpath() {
+        [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+    }
+fi
+
+# Get the path of this script
+SCRIPTPATH=$(realpath  $(dirname "$0"))
+
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
@@ -46,8 +56,8 @@ function exit_fail_rm_tmp {
 
 # --reset-sort-block-length 65536
 # --reset-sort-block-length 1024
-../../xsqueezeit -c --v2 --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILANEM}"; exit_fail_rm_tmp; }
-../../xsqueezeit -x --v2 -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILANEM}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -c --v2 --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILANEM}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -x --v2 -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILANEM}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }
 
