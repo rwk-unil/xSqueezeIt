@@ -406,7 +406,7 @@ public:
                     }
                     for (const auto& i : dp->get_sparse_ref()) {
                         // Restore overwritten refs
-                        if (bcf_gt_allele(gt_arr[i]) == alt_allele) {
+                        if (bcf_gt_allele(gt_arr[i]) == (int)alt_allele) {
                             gt_arr[i] = bcf_gt_unphased(0) | ((i & 1) & DEFAULT_PHASED);
                         }
                     }
