@@ -34,7 +34,7 @@ fi
 
 echo "FILENAME        = ${FILENAME}"
 
-TMPDIR=$(mktemp -d -t gtcompressor) || { echo "Failed to create temporary directory"; exit 1; }
+TMPDIR=$(mktemp -d -t xsqt_XXXXXX) || { echo "Failed to create temporary directory"; exit 1; }
 
 echo "Temporary director : ${TMPDIR}"
 
