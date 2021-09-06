@@ -394,7 +394,7 @@ public:
         dp->advance();
 
         // If other ALTs (ALTs are 1 indexed, because 0 is REF)
-        for (int alt_allele = 2; alt_allele < n_alleles; ++alt_allele) {
+        for (size_t alt_allele = 2; alt_allele < n_alleles; ++alt_allele) {
             if (dp->position_is_sparse()) { /* SPARSE */
                 if (dp->is_negated()) { // There can only be one negated because must be more than all others combined
                     // All non set positions are now filled

@@ -109,7 +109,7 @@ public:
         scan_genotypes(bcf_fri);
 
         // For all alt alleles (1 if bi-allelic variant site)
-        for (int32_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
+        for (size_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
             if ((variant_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
                 // Restart from natural order
                 std::iota(a.begin(), a.end(), 0);

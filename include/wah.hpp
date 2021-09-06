@@ -351,15 +351,15 @@ namespace wah {
     template <typename T = uint8_t>
     inline std::vector<T> wah_encode(std::vector<bool>& bits) {
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
-        // Wahbit
-        //             ,\
-        //             \\\,_
-        //              \` ,\
-        //         __,.-" =__)
-        //       ."        )
-        //    ,_/   ,    \/\_
-        //    \_|    )_-\ \_-`
-        //jgs    `-----` `--`  By Joan Stark
+        /* Wahbit
+         *             ,\
+         *             \\\,_
+         *              \` ,\
+         *         __,.-" =__)
+         *       ."        )
+         *    ,_/   ,    \/\_
+         *    \_|    )_-\ \_-`
+         *jgs    `-----` `--`  By Joan Stark */
         // 0b1000'0000 for 8b
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
         // 0b0111'1111 for 8b
@@ -452,15 +452,15 @@ namespace wah {
     inline std::vector<T> wah_encode2(std::vector<bool>& bits) {
         // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
-        // Wahbit
-        //             ,\
-        //             \\\,_
-        //              \` ,\
-        //         __,.-" =__)
-        //       ."        )
-        //    ,_/   ,    \/\_
-        //    \_|    )_-\ \_-`
-        //jgs    `-----` `--`  By Joan Stark
+        /* Wahbit
+         *             ,\
+         *             \\\,_
+         *              \` ,\
+         *         __,.-" =__)
+         *       ."        )
+         *    ,_/   ,    \/\_
+         *    \_|    )_-\ \_-`
+         *jgs    `-----` `--`  By Joan Stark */
         // 0b1000'0000 for 8b
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
         // 0b0011'1111 for 8b

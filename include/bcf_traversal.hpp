@@ -49,7 +49,7 @@ protected:
 
     bcf_file_reader_info_t bcf_fri;
     int ngt = 0;
-    int line_max_ploidy = 0;
+    size_t line_max_ploidy = 0;
 };
 
 class BcfTransformer : public BcfTraversal {

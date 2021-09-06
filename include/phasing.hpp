@@ -192,6 +192,10 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
 
     // Write the header to the new file
     int ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header !" << std::endl;
+        throw "File write error";
+    }
 
     const size_t PLOIDY = 2;
     const double MAF = 0.01;
@@ -643,7 +647,7 @@ protected:
         for (auto& i : unphased_samples) {
             auto& sample = samples[i];
 
-            T candidate;
+            T candidate = 0;
             size_t candidate_score = 0;
             bool can_be_phased = false;
             for (auto& hap : new_haplotypes) {
@@ -682,7 +686,7 @@ protected:
         auto& sample = samples[i];
 
         // Find best candidate (smallest hamming distance on hom sites)
-        T best_candidate;
+        T best_candidate = 0;
         size_t closest = std::numeric_limits<size_t>::max();
         size_t score = 0;
         for (const auto& hap : haplotypes) {
@@ -819,6 +823,10 @@ void new_phase_xcf(const std::string& ifname, const std::string& ofname) {
 
     // Write the header to the new file
     int ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header !" << std::endl;
+        throw "File write error";
+    }
 
     const size_t PLOIDY = 2;
     //const double MAF = 0.01;

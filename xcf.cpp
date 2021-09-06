@@ -161,9 +161,9 @@ inline void extract_next_variant_and_update_bcf_sr(std::vector<bool>& samples, b
             }
         } // Else is already unpacked (when multiple ALT alleles)
 
-        for (int i = 0; i < bcf_fri.n_samples; ++i) {
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
             int32_t* ptr = (bcf_fri.gt_arr) + i * 2; /* line_max_ploidy */
-            for (int j = 0; j < 2 /* ploidy */; ++j) {
+            for (size_t j = 0; j < 2 /* ploidy */; ++j) {
                 bool a = (bcf_gt_allele(ptr[j]) == alt_allele);
                 samples[i*2+j] = a;
             }
@@ -381,6 +381,10 @@ void unphase_xcf(const std::string& ifname, const std::string& ofname) {
 
     // Write the header to the new file
     int ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header !" << std::endl;
+        throw "File write error";
+    }
 
     while(bcf_next_line(bcf_fri)) {
         const int32_t PLOIDY = 2;
@@ -406,6 +410,10 @@ void unphase_xcf(const std::string& ifname, const std::string& ofname) {
         bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
 
         ret = bcf_write1(fp, hdr, rec);
+        if (ret < 0) {
+            std::cerr << "Failed to write record !" << std::endl;
+            throw "File write error";
+        }
     }
 
     // Close / Release ressources
@@ -436,6 +444,10 @@ void unphase_xcf_random(const std::string& ifname, const std::string& ofname) {
 
     // Write the header to the new file
     int ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header !" << std::endl;
+        throw "File write error";
+    }
 
     while(bcf_next_line(bcf_fri)) {
         const int32_t PLOIDY = 2;
@@ -466,6 +478,10 @@ void unphase_xcf_random(const std::string& ifname, const std::string& ofname) {
         bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
 
         ret = bcf_write1(fp, hdr, rec);
+        if (ret < 0) {
+            std::cerr << "Failed to write record !" << std::endl;
+            throw "File write error";
+        }
     }
 
     // Close / Release ressources
@@ -491,6 +507,10 @@ void sprinkle_missing_xcf(const std::string& ifname, const std::string& ofname) 
 
     // Write the header to the new file
     int ret = bcf_hdr_write(fp, hdr);
+    if (ret < 0) {
+        std::cerr << "Failed to write header !" << std::endl;
+        throw "File write error";
+    }
 
     std::random_device rd;  // Will be used to obtain a seed for the random number engine
     std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
@@ -527,6 +547,10 @@ void sprinkle_missing_xcf(const std::string& ifname, const std::string& ofname) 
         bcf_update_genotypes(hdr, rec, bcf_fri.gt_arr, bcf_hdr_nsamples(hdr) * PLOIDY);
 
         ret = bcf_write1(fp, hdr, rec);
+        if (ret < 0) {
+            std::cerr << "Failed to write record !" << std::endl;
+            throw "File write error";
+        }
     }
 
     // Close / Release ressources
