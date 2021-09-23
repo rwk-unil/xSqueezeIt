@@ -1,0 +1,62 @@
+/*******************************************************************************
+ * Copyright (C) 2021 Rick Wertenbroek, University of Lausanne (UNIL),
+ * University of Applied Sciences and Arts Wester Switzerland (HES-SO),
+ * School of Management and Engineering Vaud (HEIG-VD).
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ ******************************************************************************/
+
+/**
+ * @file c_api.cpp
+ * @author Rick Wertenbroek
+ * @date 23 Sep 2021
+ * @brief C API for xSqueezeIt
+ *
+ */
+
+#include "c_api.h"
+
+#include "xsi_mixed_vcf.hpp"
+
+extern "C" {
+    Xcf *xcf_new() {
+        return (Xcf *)new Xcf();
+    }
+
+    // void c_xcf_add_reader(c_xcf *x, bcf_sr_t* reader, int reader_id) {
+    //     reinterpret_cast<Xcf*>(x)->add_reader(reader, reader_id);
+    // }
+
+    void c_xcf_add_readers(c_xcf *x, bcf_srs_t* readers) {
+        reinterpret_cast<Xcf*>(x)->add_readers(readers);
+    }
+
+    void c_xcf_update_readers(c_xcf *x, bcf_srs_t* readers) {
+        reinterpret_cast<Xcf*>(x)->add_readers(readers);
+    }
+
+    int c_xcf_get_genotypes(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst) {
+        return reinterpret_cast<Xcf*>(x)->get_genotypes(reader_id, hdr, line, dst, ndst);
+    }
+
+    void c_xcf_delete(c_xcf *x) {
+        delete reinterpret_cast<Xcf*>(x);
+    }
+
+}
