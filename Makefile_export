@@ -19,7 +19,7 @@ DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
 # Rules
 all : $(CPP_OBJS)
-	ar -rsv libxsqueezit.a $^
+	ar -rsv libxsqueezeit.a $^
 
 # Do not include the depency rules for "clean"
 ifneq ($(MAKECMDGOALS),clean)
