@@ -4,6 +4,7 @@
 *.csi
 *.bcf
 *.o
+*.a
 *.d
 *.macs
 *.txt
@@ -15,6 +16,7 @@
 # Ignore folders that start with
 tmp*/**
 temp*/**
+xsqueezeit_export/**
 
 # Ignore these executables
 xsqueezeit
