@@ -90,12 +90,12 @@ public:
         sr->collapse = COLLAPSE_NONE;
         sr->require_index = 1; // Must be set when number of readers is > 1
         int ret = 0;
-        ret = bcf_sr_add_reader (sr, bcf_filename1.c_str());
+        ret = bcf_sr_add_reader(sr, bcf_filename1.c_str());
         if (ret == 0) {
             std::cerr << "Could not load file : " << bcf_filename1 << std::endl;
             exit(-1);
         }
-        ret = bcf_sr_add_reader (sr, bcf_filename2.c_str());
+        ret = bcf_sr_add_reader(sr, bcf_filename2.c_str());
         if (ret == 0) {
             std::cerr << "Could not load file : " << bcf_filename2 << std::endl;
             exit(-1);
@@ -111,7 +111,7 @@ public:
 
         int nset = 0;
         size_t record = 0;
-        while ((nset = bcf_sr_next_line (sr))) {
+        while ((nset = bcf_sr_next_line(sr))) {
             if (nset == 2) {
                 line1 = bcf_sr_get_line(sr, 0);
 			    line2 = bcf_sr_get_line(sr, 1);
