@@ -1,3 +1,4 @@
+# TODO : Set this path accordingly
 HTSLIB_PATH := ../htslib
 ZSTD_PATH := ../zstd/lib
 
