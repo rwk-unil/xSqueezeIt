@@ -35,8 +35,8 @@
 #include "xsi_mixed_vcf.hpp"
 
 extern "C" {
-    Xcf *xcf_new() {
-        return (Xcf *)new Xcf();
+    c_xcf *c_xcf_new() {
+        return (c_xcf *)new Xcf();
     }
 
     // void c_xcf_add_reader(c_xcf *x, bcf_sr_t* reader, int reader_id) {
