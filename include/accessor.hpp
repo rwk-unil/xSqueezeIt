@@ -73,7 +73,7 @@ public:
         if (pos != std::string::npos) {
             filename.erase(pos, filename.length());
         } else {
-            std::cerr << "Cannot convert filename " << filename << std::endl;
+            //std::cerr << "Cannot convert filename " << filename << std::endl;
             throw "Cannot convert filename";
         }
 
