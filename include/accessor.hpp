@@ -54,6 +54,7 @@ public:
         return ngt;
     }
 
+    /// @todo All these dependencies on the filenames are dirty and should be fixed ...
     std::string get_variant_filename() {
         std::stringstream ss;
 		ss << filename << "_var.bcf";
@@ -64,6 +65,19 @@ public:
         std::stringstream ss;
 		ss << fname << "_var.bcf";
 		return ss.str();
+    }
+
+    static std::string get_filename_from_variant_file(const std::string& fname) {
+        std::string filename(fname);
+        auto pos = filename.find("_var.bcf");
+        if (pos != std::string::npos) {
+            filename.erase(pos, filename.length());
+        } else {
+            std::cerr << "Cannot convert filename " << filename << std::endl;
+            throw "Cannot convert filename";
+        }
+
+        return filename;
     }
 
     std::vector<std::string>& get_sample_list() {return sample_list;}
