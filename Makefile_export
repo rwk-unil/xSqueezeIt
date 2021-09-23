@@ -1,5 +1,5 @@
-HTSLIB_PATH := ./htslib
-ZSTD_PATH := ./zstd/lib
+HTSLIB_PATH := ../htslib
+ZSTD_PATH := ../zstd/lib
 
 # C++ Compiler
 CXX=g++
@@ -12,22 +12,14 @@ LIBS=-lpthread -lhts -lzstd
 LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
 
 # Project specific :
-TARGET := xsqueezeit
-SOURCE := xsqueezeit.cpp
-OBJ := $(SOURCE:.cpp=.o)
 CPP_SOURCES := $(wildcard *.cpp)
 CPP_OBJS := $(CPP_SOURCES:.cpp=.o)
-CPP_OBJS := $(CPP_OBJS:.c=.o)
-OBJS := xcf.o bcf_traversal.o accessor.o c_api.o xsi_mixed_vcf.o $(OBJ)
 DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
 # Rules
-all : $(TARGET) $(DEPENDENCIES)
-
-# Link the target
-$(TARGET) : $(OBJS)
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+all : $(CPP_OBJS)
+	ar -rsv libxsqueezit.a $^
 
 # Do not include the depency rules for "clean"
 ifneq ($(MAKECMDGOALS),clean)
@@ -37,8 +29,6 @@ endif
 # Compile
 %.o : %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-%.o : %.c
-	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Rule to generate the dependency files
 %.d : %.cpp
@@ -46,20 +36,11 @@ endif
 %.d : %.c
 	$(CXX) $(INCLUDE_DIRS) -MG -MP -MM -MT '$(@:.d=.o)' $< -MF $@
 
-EXPORT_DIR := xsqueezeit_export
-
-package-sources : xcf.cpp bcf_traversal.cpp accessor.cpp c_api.cpp xsi_mixed_vcf.cpp
-	mkdir -p $(EXPORT_DIR)/include
-	cp $^ $(EXPORT_DIR)
-	rm $(EXPORT_DIR)/$<
-	for dep in $(^:.cpp=.d); do for file in $$(sed -n 's/\(^include.*\):/\1/p' $${dep}); do cp $${file} $(EXPORT_DIR)/include ; done ; done
-	cp Makefile_export $(EXPORT_DIR)/Makefile
-
 # Remove artifacts
 clean :
-	rm -f $(OBJS) $(TARGET) $(DEPENDENCIES)
-	rm -rf $(EXPORT_DIR)
+	rm -f $(CPP_OBJS) $(DEPENDENCIES)
+	rm -f libxsqueezeit.a
 
 # Rules that don't generate artifacts
 .PHONY :
-	all clean debug package-sources
+	all clean
