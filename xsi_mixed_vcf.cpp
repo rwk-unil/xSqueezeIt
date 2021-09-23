@@ -58,7 +58,7 @@ bool Xcf::reader_file_is_xsi(bcf_sr_t* reader) {
 
 void Xcf::add_reader(bcf_sr_t* reader, int reader_id) {
     if (reader_id >= entries.size()) {
-        entries.resize(reader_id-1);
+        entries.resize(reader_id);
     }
 
     // Check if reader is for xSqueezeit file
