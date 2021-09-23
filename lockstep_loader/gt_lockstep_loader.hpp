@@ -27,6 +27,8 @@
 #include "xcf.hpp"
 #include "fs.hpp"
 
+#include "c_api.h"
+
 #include "accessor.hpp"
 
 #include "vcf.h"
@@ -47,9 +49,10 @@ public:
         if (filename1.substr(filename1.find_last_of(".") + 1) == "bcf") {
             bcf_filename1 = filename1;
         } else if (filename1.substr(filename1.find_last_of(".") + 1) == "bin") {
-            file1_is_stc = true;
-            accessor1 = std::make_unique<Accessor>(filename1);
-            bcf_filename1 = accessor1->get_variant_filename();
+            // file1_is_stc = true;
+            // accessor1 = std::make_unique<Accessor>(filename1);
+            // bcf_filename1 = accessor1->get_variant_filename();
+            bcf_filename1 = Accessor::get_variant_filename(filename1);
         } else {
             std::cerr << "Unrecognized file type\n";
             exit(-1);
@@ -58,9 +61,10 @@ public:
         if (filename2.substr(filename2.find_last_of(".") + 1) == "bcf") {
             bcf_filename2 = filename2;
         } else if (filename2.substr(filename2.find_last_of(".") + 1) == "bin") {
-            file2_is_stc = true;
-            accessor2 = std::make_unique<Accessor>(filename2);
-            bcf_filename2 = accessor2->get_variant_filename();
+            // file2_is_stc = true;
+            // accessor2 = std::make_unique<Accessor>(filename2);
+            // bcf_filename2 = accessor2->get_variant_filename();
+            bcf_filename2 = Accessor::get_variant_filename(filename2);
         } else {
             std::cerr << "Unrecognized file type\n";
             exit(-1);
@@ -81,6 +85,8 @@ public:
 
     void lockstep_load() {
         bcf_srs_t *sr = bcf_sr_init();
+        c_xcf_p = c_xcf_new();
+
         sr->collapse = COLLAPSE_NONE;
         sr->require_index = 1; // Must be set when number of readers is > 1
         int ret = 0;
@@ -101,6 +107,8 @@ public:
         bcf1_t* line1 = NULL;
         bcf1_t* line2 = NULL;
 
+        c_xcf_add_readers(c_xcf_p, sr);
+
         int nset = 0;
         size_t record = 0;
         while ((nset = bcf_sr_next_line (sr))) {
@@ -111,16 +119,18 @@ public:
                     std::cerr << "The files don't have the same number of alleles at record " << record << std::endl;
                     exit(-1);
                 } else {
-                    if (file1_is_stc) {
-                        ngt_1 = accessor1->get_genotypes(sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
-                    } else {
-                        ngt_1 = bcf_get_genotypes(sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
-                    }
-                    if (file2_is_stc) {
-                        ngt_2 = accessor2->get_genotypes(sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
-                    } else {
-                        ngt_2 = bcf_get_genotypes(sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
-                    }
+                    ngt_1 = c_xcf_get_genotypes(c_xcf_p, 0, sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
+                    ngt_2 = c_xcf_get_genotypes(c_xcf_p, 1, sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
+                    // if (file1_is_stc) {
+                    //     ngt_1 = accessor1->get_genotypes(sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
+                    // } else {
+                    //     ngt_1 = bcf_get_genotypes(sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
+                    // }
+                    // if (file2_is_stc) {
+                    //     ngt_2 = accessor2->get_genotypes(sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
+                    // } else {
+                    //     ngt_2 = bcf_get_genotypes(sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
+                    // }
                     if (ngt_1 != ngt_2) {
                         std::cerr << "The files don't have the same number of extracted genotypes at record " << record << std::endl;
                     }
@@ -147,17 +157,21 @@ public:
         }
 
         std::cerr << "Files have the same GT data" << std::endl;
+        c_xcf_delete(c_xcf_p);
+        c_xcf_p = NULL;
     }
 
 protected:
     std::string bcf_filename1;
     std::string bcf_filename2;
 
-    bool file1_is_stc = false;
-    bool file2_is_stc = false;
+    // bool file1_is_stc = false;
+    // bool file2_is_stc = false;
 
-    std::unique_ptr<Accessor> accessor1 = nullptr;
-    std::unique_ptr<Accessor> accessor2 = nullptr;
+    // std::unique_ptr<Accessor> accessor1 = nullptr;
+    // std::unique_ptr<Accessor> accessor2 = nullptr;
+
+    c_xcf* c_xcf_p = NULL;
 
     int32_t* genotypes1{NULL};
     int32_t* genotypes2{NULL};

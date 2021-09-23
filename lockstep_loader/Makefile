@@ -15,7 +15,7 @@ LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
 TARGET := lockstep_loader
 SOURCE := main.cpp
 OBJ := $(SOURCE:.cpp=.o)
-OBJS := ../xcf.o ../bcf_traversal.o ../accessor.o $(OBJ)
+OBJS := ../xcf.o ../bcf_traversal.o ../accessor.o ../xsi_mixed_vcf.o ../c_api.o $(OBJ)
 DEPENDENCIES := $(SOURCE:.cpp=.d)
 
 # Rules
