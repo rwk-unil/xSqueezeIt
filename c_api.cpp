@@ -51,6 +51,26 @@ extern "C" {
         reinterpret_cast<Xcf*>(x)->add_readers(readers);
     }
 
+    /// @todo make this more robust / cleaner
+    int c_xcf_nsamples(const char* fname) {
+        try {
+            auto filename = Accessor::get_filename_from_variant_file(fname);
+            if (fs::exists(filename)) {
+                return Accessor(filename).get_number_of_samples();
+            }
+        } catch (...) {}
+
+        bcf_srs_t *sr = bcf_sr_init();
+        int ret = bcf_sr_add_reader(sr, fname);
+        if (!ret) {
+            bcf_sr_destroy(sr);
+            return 0;
+        }
+        int nsamples = bcf_hdr_nsamples(sr->readers[0].header);
+        bcf_sr_destroy(sr);
+        return nsamples;
+    }
+
     int c_xcf_get_genotypes(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst) {
         return reinterpret_cast<Xcf*>(x)->get_genotypes(reader_id, hdr, line, dst, ndst);
     }

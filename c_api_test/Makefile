@@ -21,6 +21,7 @@ clean :
 	rm -rf *.o
 	rm -rf *.d
 	rm -f main
+	rm -f libxsqueezeit.a
 
 .PHONY :
 	all clean xsqueezeit_export

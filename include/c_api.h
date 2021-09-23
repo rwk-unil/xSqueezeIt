@@ -66,6 +66,12 @@ void c_xcf_add_readers(c_xcf *x, bcf_srs_t* readers);
 void c_xcf_update_readers(c_xcf *x, bcf_srs_t* readers);
 
 /**
+ * @brief Get the number of samples from file
+ * 
+ */
+int c_xcf_nsamples(const char* fname);
+
+/**
  * @brief equivalent with bcf_get_genotypes but also compatible with xSqueezeIt format
  *        This function will check if the given reader (id) is VCF/BCF or xSqueezeIt in
  *        the Xcf class and call the appropriate methods accordingly

@@ -35,6 +35,9 @@ int main(int argc, char** argv) {
     int records = 0;
     const int FIRST_READER = 0;
 
+    // The number of samples for xSqueezeIt is not in the variant file header, so a specific method is needed
+    printf("The number of samples in %s is %d\n", argv[1], c_xcf_nsamples(argv[1]));
+
     while ((nset = bcf_sr_next_line(sr))) {
         line = bcf_sr_get_line(sr, FIRST_READER);
 
