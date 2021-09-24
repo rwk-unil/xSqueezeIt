@@ -120,7 +120,7 @@ mkdir output
 Options :
 - `--zstd` Compresses blocks with an extra zstd compression layer (only for version 3)
 - `--maf <value>` Sets the minor allele frequency (MAF) for the minor allele count (MAC) threshold that selects if a variant is encoded as sparse or word aligned hybrid (WAH), typical values are around 0.001 give or take an order of magnitude
-- `--reset-sort-block-length <value>` Sets the size of the encoded blocks in number of variants. A bigger size can results in better compression, a smaller size can result in faster random access.
+- `--variant-block-length <value>` Sets the size of the encoded blocks in number of variants. A bigger size can results in better compression, a smaller size can result in faster random access.
 - `--V3` Compresses with version 3 (default)
 - `--V2` Compresses with version 2 (deprecated)
 
