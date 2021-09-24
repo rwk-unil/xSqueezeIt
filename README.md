@@ -4,9 +4,13 @@ VCF / BCF Genotype data compressor based on sparse representation for rare varia
 
 Variant information is left in BCF format to remain compatible with HTSLIB / BCFTools, genotype data is custom encoded as described above. The encoded genotype data can then optionnaly be further compressed with zstd https://github.com/facebook/zstd/.
 
-The compressor was realized with haploid/diploid data in mind. Polyploid samples with ploidy > 2 are not supported yet, mixed ploidy samples are not supported yet either. The compressor supports multi-allelic variant sites. The main goal is to provide an alternative file format for storing large reference panels, to reduce loading times and if possible speed-up computation (e.g., with computation on the encoded data directly).
+The compressor was realized with haploid/diploid genotype data in mind (human population genetics data). The compressor supports multi-allelic variant sites. Polyploid samples with ploidy > 2 are not supported yet, mixed ploidy samples are not supported yet either. The main goal is to provide an alternative file format for storing large reference panels, to reduce loading times and if possible speed-up computation (e.g., with computation on the encoded data directly).
 
 ## Example results
+
+### SHAPEIT4
+
+The `dev` branch on the repository https://github.com/rwk-unil/shapeit4/tree/dev illustrates integration of xSqueezeIt file format support in SHAPEIT4. This serves as an example of how to add xSqueezeIt support in existing tools.
 
 ### Compression
 
@@ -47,6 +51,8 @@ while (bcf_sr_next_line (reader)) { // While there are records in the BCF
 
 ## Build
 
+### Building the xSqueezeIt command line tool
+
 This build requires GCC 8+ because modern C++17 features are used.
 
 ```shell
@@ -74,6 +80,20 @@ cd ..
 # Build application
 make
 ```
+
+### Generating the xSqueezeIt support library
+
+In order to add support for xSqueezeIt into other software it can be exported as sources to build a library.
+
+```shell
+make package-sources
+```
+
+This will generate a directory named `xsqueezeit_export` which provides a Makefile to build the `libxsqueezeit` library. The library is built with `g++` but provides a C API as well. To integrate into a C application include the file `include/c_api.h` in you sources and link with `libxsqueezeit.a` using `g++`.
+
+An example is given in the `c_api_test` directory, where a simple C program (`main.c` file) is compiled with `cc` (`gcc`) and linked with the library using `g++`.
+
+Integration into C++ software allows to access the C++ internal API, through any of the `.hpp` files. Since this is the internal API it is not necessarily the easiest to use, but C++ programs can use the C API as well, which is well suited if they use HTSLIB because it is very similar. For an example see : https://github.com/rwk-unil/shapeit4/blob/dev/src/io/genotype_reader2.cpp (which is the genotype reader source of SHAPEIT4 with optional support for xSqueezeIt (` #ifdef __XSI__`).
 
 ### Dependencies
 This software depends on :
