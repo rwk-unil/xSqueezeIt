@@ -1,16 +1,26 @@
 # TODO : Set this path accordingly
-HTSLIB_PATH := ../htslib
-ZSTD_PATH := ../zstd/lib
+ifeq ($(HTSLIB_LIB),)
+HTSLIB_LIB := ../htslib
+endif
+ifeq ($(HTSLIB_INC),)
+HTSLIB_INC := ../htslib/htslib
+endif
+ifeq ($(ZSTD_LIB),)
+ZSTD_LIB := ../zstd/lib
+endif
+ifeq ($(ZSTD_INC),)
+ZSTD_INC := ../zstd/lib
+endif
 
 # C++ Compiler
 CXX=g++
-INCLUDE_DIRS=-I include -I $(HTSLIB_PATH)/htslib -I $(ZSTD_PATH)
+INCLUDE_DIRS=-I include -I $(HTSLIB_INC) -I $(ZSTD_INC)
 #EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
 CXXFLAGS=-O3 -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
 LD=g++
 LIBS=-lpthread -lhts -lzstd
-LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
+LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_LIB) -L $(ZSTD_LIB)
 
 # Project specific :
 CPP_SOURCES := $(wildcard *.cpp)
