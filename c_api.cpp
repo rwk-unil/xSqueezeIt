@@ -51,6 +51,10 @@ extern "C" {
         reinterpret_cast<Xcf*>(x)->add_readers(readers);
     }
 
+    const char* c_xcf_sample_name(c_xcf *x, int reader_id, const bcf_hdr_t* hdr, int sample_id) {
+        return reinterpret_cast<Xcf*>(x)->sample_name(reader_id, hdr, sample_id);
+    }
+
     /// @todo make this more robust / cleaner
     int c_xcf_nsamples(const char* fname) {
         try {
@@ -71,7 +75,7 @@ extern "C" {
         return nsamples;
     }
 
-    int c_xcf_get_genotypes(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst) {
+    int __c__xcf__get__genotypes__void(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst) {
         return reinterpret_cast<Xcf*>(x)->get_genotypes(reader_id, hdr, line, dst, ndst);
     }
 

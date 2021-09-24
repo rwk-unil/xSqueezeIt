@@ -82,6 +82,14 @@ void Xcf::update_readers(bcf_srs_t* readers) {
     add_readers(readers);
 }
 
+const char *Xcf::sample_name(int reader_id, const bcf_hdr_t* hdr, int sample_id) {
+    if (entries[reader_id].is_xsi) {
+        return entries[reader_id].accessor->get_sample_list()[sample_id].c_str();
+    } else {
+        return hdr->samples[sample_id];
+    }
+}
+
 int Xcf::get_genotypes(int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst) {
     if (entries[reader_id].is_xsi) {
         return entries[reader_id].accessor->get_genotypes(hdr, line, dst, ndst);

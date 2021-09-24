@@ -50,6 +50,7 @@ public:
     void add_readers(bcf_srs_t* readers);
     void update_readers(bcf_srs_t* readers);
 
+    const char *sample_name(int reader_id, const bcf_hdr_t *hdr, int sample_id);
     int get_genotypes(int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst);
 protected:
     void add_reader(bcf_sr_t* reader, int reader_id);

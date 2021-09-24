@@ -66,6 +66,12 @@ void c_xcf_add_readers(c_xcf *x, bcf_srs_t* readers);
 void c_xcf_update_readers(c_xcf *x, bcf_srs_t* readers);
 
 /**
+ * @brief Get the sample name
+ * 
+ */
+const char* c_xcf_sample_name(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, int sample_id);
+
+/**
  * @brief Get the number of samples from file
  * 
  */
@@ -77,7 +83,8 @@ int c_xcf_nsamples(const char* fname);
  *        the Xcf class and call the appropriate methods accordingly
  * 
  */
-int c_xcf_get_genotypes(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst);
+#define c_xcf_get_genotypes(x,reader_id,hdr,line,dst,ndst) __c__xcf__get__genotypes__void(x,reader_id,hdr,line,(void**)(dst),ndst)
+int __c__xcf__get__genotypes__void(c_xcf *x, int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst);
 
 /**
  * @brief Deallocates the given Xcf class
