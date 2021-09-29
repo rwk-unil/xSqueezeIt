@@ -29,6 +29,9 @@ all : $(TARGET) $(DEPENDENCIES)
 $(TARGET) : $(OBJS)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+xsqueezeit_standalone : $(OBJS) $(OBJ)
+	$(LD) $(LDFLAGS) -static -static-libgcc -static-libstdc++ $^ $(LIBS) -o $@
+
 # Do not include the depency rules for "clean"
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPENDENCIES)
