@@ -30,8 +30,7 @@ $(TARGET) : $(OBJS)
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 xsqueezeit_standalone : $(OBJS) $(OBJ)
-#	$(LD) $(LDFLAGS) $^ ./htslib/libhts.a -pthread -static -static-libgcc -static-libstdc++ -o $@ -Wl,-Bstatic $(LIBS) -lz -lbz2 -llzma -lcurl -ldeflate -lzstd
-	$(LD) $(LDFLAGS) $^ ./htslib/libhts.a ./zstd/lib/libzstd.a -pthread -static -static-libgcc -static-libstdc++ -o $@ -Wl,-Bstatic $(LIBS) -lz -lbz2 -llzma -lcurl -ldeflate
+	$(LD) $(LDFLAGS) $^ $(HTSLIB_PATH)/libhts.a $(ZSTD_PATH)/libzstd.a -pthread -static -static-libgcc -static-libstdc++ -o $@ -Wl,-Bstatic $(LIBS) -lz -lbz2 -llzma -lcurl -ldeflate
 
 # Do not include the depency rules for "clean"
 ifneq ($(MAKECMDGOALS),clean)
