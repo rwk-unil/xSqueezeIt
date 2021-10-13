@@ -53,5 +53,4 @@ clean :
 	rm -f libxsqueezeit.a
 
 # Rules that don't generate artifacts
-.PHONY :
-	all clean
+.PHONY : all clean

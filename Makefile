@@ -64,5 +64,4 @@ clean :
 	rm -rf $(EXPORT_DIR)
 
 # Rules that don't generate artifacts
-.PHONY :
-	all clean debug package-sources
+.PHONY : all clean debug package-sources
