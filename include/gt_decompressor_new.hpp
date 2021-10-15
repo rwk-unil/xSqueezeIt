@@ -291,7 +291,7 @@ private:
 
     inline void create_output_file(const std::string& ofname, htsFile* &fp, bcf_hdr_t* &hdr) {
         // Open the output file
-        fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : "wu"); // "-" for stdout
+        fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : (global_app_options.fast_pipe ? "wbu" : "wu")); // "-" for stdout
         if (fp == NULL) {
             std::cerr << "Could not open " << bcf_nosamples << std::endl;
             throw "File open error";

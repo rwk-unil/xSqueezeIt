@@ -9,6 +9,7 @@ public:
     GlobalAppOptions() {
         app.add_option("-f,--file", filename, "Input file name, default is stdio");
         app.add_option("-o,--output", ofname, "Output file name, default is stdio");
+        app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs binary instead of text when writing to stdout");
         //app.add_option("-O, --output-type", O, "output type b|u|z|v");
         app.add_flag("-c,--compress", compress, "Compress");
         app.add_flag("-d,--decompress", decompress, "Decompress");
@@ -63,6 +64,7 @@ public:
 
     std::string filename = "-";
     std::string ofname = "-";
+    bool fast_pipe = false;
     //char O = 'u';
     bool compress = false;
     bool decompress = false;
