@@ -182,6 +182,11 @@ time xsqueezeit -d -f chr1.xsi -s "NA12878,HG00100,HG00101,HG00102,HG00103" -p |
 
 Running without the `-p` option will result in longer execution times because of the unnecessary xsi->VCF (in xSqueezeIt) and VCF->BCF conversions (in BCFTools). Compared to xsi->(uncompressed)BCF that can directly be processed by BCFTools.
 
+xSqueezeIt **without** `-p` pipe into BCFTools - (Do not do this, better to use `-p` when piping) :
+```shell
+time xsqueezeit -d -f chr1.xsi -s "NA12878,HG00100,HG00101,HG00102,HG00103" | bcftools roh -G30 --AF-dflt 0.4 > results.txt
+# 8:42.54 total
+```
 ### Explore the "variant-only" generated file
 
 The compressor generates a BCF file without the GT data (so variants only) and a binary file with the compressed GT data. This way the BCF file for the variants can still be explored and used.
