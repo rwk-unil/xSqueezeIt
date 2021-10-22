@@ -162,6 +162,26 @@ Options :
 ./xsqueezeit -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
 ```
 
+The default output of `xsqueezeit` on `stdout` is plain VCF to be human readable, in order to make the above operations faster the `-p` option can be passed to `xsqueezeit` in order to output uncompressed BCF which is the fastest to pipe into BCFTools as mentioned in their [documentation](https://samtools.github.io/bcftools/bcftools.html#common_options) :
+
+> "Output compressed BCF (b), uncompressed BCF (u), compressed VCF (z), uncompressed VCF (v). Use the -Ou option when piping between bcftools subcommands to speed up performance by removing unnecessary compression/decompression and VCF←→BCF conversion."
+
+Combining this with sample extraction can even speed up analysis for examples running `bcftools roh` (run of homozigosity) :
+
+With BCFTools :
+```shell
+time bcftools roh -G30 --AF-dflt 0.4 chr1.bcf -s "NA12878,HG00100,HG00101,HG00102,HG00103" > results.txt
+# 3:28.22 total
+```
+
+xSqueezeIt with `-p` pipe into BCFTools :
+```shell
+time xsqueezeit -d -f chr1.xsi -s "NA12878,HG00100,HG00101,HG00102,HG00103" -p | bcftools roh -G30 --AF-dflt 0.4 > results.txt
+# 1:16.78 total
+```
+
+Running wihtout the `-p` option will result in longer execution times because of the unnecessary xsi->VCF (in xSqueezeIt) and VCF->BCF conversions (in BCFTools). Compared to xsi->(uncompressed)BCF that can directly be processed by BCFTools.
+
 ### Explore the "variant-only" generated file
 
 The compressor generates a BCF file without the GT data (so variants only) and a binary file with the compressed GT data. This way the BCF file for the variants can still be explored and used.
