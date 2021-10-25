@@ -126,6 +126,39 @@ namespace wah {
     } Wah2State_t;
 
     template<typename T = uint16_t>
+    inline size_t wah2_advance_pointer_count_ones(T*& wah_p, size_t size) {
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
+        constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
+        constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
+        T word;
+        size_t count = 0;
+        size_t bit_position = 0;
+            while(bit_position < size) {
+            word = *wah_p;
+            if (word & WAH_HIGH_BIT) {
+                auto counter = (word & WAH_MAX_COUNTER)*WAH_BITS;
+                bit_position += counter;
+                if (word & WAH_COUNT_1_BIT) {
+                    count += counter;
+                }
+            } else {
+                bit_position += WAH_BITS;
+                //count += std::popcount(word); // C++20
+                count += __builtin_popcount(word);
+            }
+            wah_p++;
+        }
+        return count;
+    }
+
+    template<typename T = uint16_t>
+    inline size_t wah2_count_ones(const T*& wah_p, size_t size) {
+        T* p = wah_p;
+        return wah2_advance_pointer_count_ones(p, size);
+    }
+
+    template<typename T = uint16_t>
     inline void wah2_advance_pointer(T*& wah_p, size_t size) {
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
@@ -180,7 +213,7 @@ namespace wah {
             wah_p++;
         }
 
-    return wah_p;
+        return wah_p;
     }
 
     // This is a stream based on the current wah pointer and state
