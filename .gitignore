@@ -2,7 +2,9 @@
 *.csv
 *.bin
 *.csi
+*.tbi
 *.bcf
+*.vcf
 *.o
 *.a
 *.d
@@ -12,6 +14,9 @@
 *.xlsx
 *.png
 *.stc
+*.xsi
+*_gt
+*_db
 
 # Ignore folders that start with
 tmp*/**
