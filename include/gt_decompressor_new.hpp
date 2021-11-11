@@ -41,11 +41,7 @@ extern GlobalAppOptions global_app_options;
 
 using namespace wah;
 
-#if __cplusplus < 201703L
-#define CONSTEXPR_IF
-#else
-#define CONSTEXPR_IF constexpr
-#endif
+#include "constexpr.hpp"
 
 class NewDecompressor {
 public:
