@@ -20,6 +20,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
+#include "constexpr.hpp"
+
 #ifndef __WAH_HPP__
 #define __WAH_HPP__
 
@@ -177,12 +179,15 @@ namespace wah {
     }
 
     // Note that bits should be padded to accomodate the last encoding (easiest is to add sizeof(T))
-    template<typename T = uint16_t>
-    inline T* wah2_extract(T* wah_p, std::vector<bool>& bits, size_t size) {
+    template<typename T = uint16_t, bool DO_COUNT = false>
+    static inline T* wah2_extract_template(T* wah_p, std::vector<bool>& bits, size_t size, size_t& count) {
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS;
         constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
         constexpr T WAH_MAX_COUNTER = (WAH_HIGH_BIT>>1)-1;
+        if CONSTEXPR_IF (DO_COUNT) {
+            count = 0;
+        }
 
         T word;
         size_t bit_position = 0;
@@ -195,6 +200,9 @@ namespace wah {
                     for (size_t _ = bit_position; _ < stop; ++_) {
                         bits[_] = 1;
                     }
+                    if CONSTEXPR_IF (DO_COUNT) {
+                        count += (word & WAH_MAX_COUNTER)*WAH_BITS;
+                    }
                 } else {
                     // Expand with zeroes
                     for (size_t _ = bit_position; _ < stop; ++_) {
@@ -206,6 +214,9 @@ namespace wah {
                 // Expand with value
                 for (size_t _ = bit_position; _ < bit_position+WAH_BITS; ++_) {
                     bits[_] = word & 1; // May not be the most effective way
+                    if CONSTEXPR_IF (DO_COUNT) {
+                        count += word & 1;
+                    }
                     word >>= 1;
                 }
                 bit_position += WAH_BITS;
@@ -214,6 +225,18 @@ namespace wah {
         }
 
         return wah_p;
+    }
+
+    // Note that bits should be padded to accomodate the last encoding (easiest is to add sizeof(T))
+    template<typename T = uint16_t>
+    inline T* wah2_extract(T* wah_p, std::vector<bool>& bits, size_t size) {
+        size_t _;
+        return wah2_extract_template<T>(wah_p, bits, size, _);
+    }
+
+    template<typename T = uint16_t>
+    inline T* wah2_extract_count_ones(T* wah_p, std::vector<bool>& bits, size_t size, size_t& count) {
+        return wah2_extract_template<T, true>(wah_p, bits, size, count);
     }
 
     // This is a stream based on the current wah pointer and state
