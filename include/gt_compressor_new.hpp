@@ -446,7 +446,7 @@ protected:
         }
         // The constructor does all the work
         try {
-        internal_gt_records.emplace_back(InternalGtRecord<T>(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH));
+            internal_gt_records.emplace_back(InternalGtRecord<T>(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH));
         } catch (...) {
             std::cerr << "entry " << entry_counter << ", " << unique_id(bcf_fri.line) << " caused a problem" << std::endl;
             exit(-1);
