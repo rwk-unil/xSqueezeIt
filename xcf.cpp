@@ -21,6 +21,7 @@
  ******************************************************************************/
 
 #include "xcf.hpp"
+#include "fs.hpp"
 
 bool has_extension(const std::string& filename, const std::string& extension) {
     const std::regex ext_regex(std::string(".+\\") + extension);
@@ -620,7 +621,7 @@ std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifna
  *        in the matrix, which can be used to decompress the missing data.
  *
  * */
-size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname) {
+size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname) {
     // Input file
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
@@ -637,6 +638,11 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
     bcf_hdr_t *hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
     bcf_hdr_add_sample(hdr, "BIN_MATRIX_POS");
     bcf_hdr_append(hdr, "##FORMAT=<ID=BM,Number=1,Type=Integer,Description=\"Position in GT Binary Matrix\">");
+
+    if (xsi_fname.compare("")) {
+        bcf_hdr_append(hdr, std::string("##XSI=").append(std::string(basename((char*)xsi_fname.c_str()))).c_str());
+    }
+
     if (bcf_hdr_sync(hdr) < 0) {
         std::cerr << "bcf_hdr_sync() failed ... oh well" << std::endl;
     }

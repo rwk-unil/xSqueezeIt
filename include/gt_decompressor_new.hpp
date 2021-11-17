@@ -296,6 +296,8 @@ private:
         // Duplicate the header from the bcf with the variant info
         hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
         bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");
+        // Remove XSI entry
+        bcf_hdr_remove(hdr, BCF_HL_GEN, "XSI");
 
         // Add the samples to the header
         if(bcf_hdr_set_samples(hdr, NULL, 0) < 0) {
