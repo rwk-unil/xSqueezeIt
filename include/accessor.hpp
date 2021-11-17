@@ -34,6 +34,12 @@ public:
         internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
     }
 
+    void fill_allele_counts(size_t n_alleles, size_t position) {
+        internals->fill_allele_counts(n_alleles, position);
+    }
+
+    inline const std::vector<size_t>& get_allele_counts() const {return internals->get_allele_counts();}
+
     int get_genotypes(const bcf_hdr_t *hdr, bcf1_t *line, void **gt_arr, int *gt_arr_size) {
         size_t ngt = header.hap_samples; /// @todo ploidy
 

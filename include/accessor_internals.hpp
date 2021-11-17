@@ -60,6 +60,7 @@ public:
     bool is_negated() const {return sparse_negated;}
 
     size_t get_current_position() const {return current_position;}
+    size_t get_current_position_ones() const {return count_ones;}
 
 protected:
     size_t current_position = 0;
@@ -69,6 +70,8 @@ protected:
     std::vector<bool> y; // Values as arranged by a, can be larger than N_HAPS
     std::vector<A_T> sparse; // Values as sparse
     bool sparse_negated;
+
+    size_t count_ones = 0;
 };
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
@@ -90,6 +93,8 @@ protected:
             s_p++;
         }
         if (DEBUG_DECOMP) std::cerr << std::endl;
+
+        this->count_ones = (this->sparse_negated ? this->N_HAPS-num : num);
 
         return s_p;
     }
@@ -114,7 +119,7 @@ protected:
         sparse_p = sparse_origin_p + (indices_sparse_p[num]);
 
         if (rearrangement_track[this->current_position]) {
-            wah_p = wah2_extract(wah_p, this->y, N_HAPS); // Extract current values
+            wah_p = wah2_extract_count_ones(wah_p, this->y, N_HAPS, this->count_ones); // Extract current values
         } else {
             sparse_p = sparse_extract(sparse_p);
         }
@@ -203,7 +208,7 @@ protected:
         if (this->current_position < N_SITES-1) {
             if (rearrangement_track[this->current_position+1]) {
                 // Optimisation : Only extract if needed to advance further
-                wah_p = wah2_extract(wah_p, this->y, N_HAPS);
+                wah_p = wah2_extract_count_ones(wah_p, this->y, N_HAPS, this->count_ones);
                 // (in V2 only rearrangement positions are in WAH, everything else is in sparse)
             } else {
                 if (extract) {
@@ -300,7 +305,7 @@ protected:
         select_track.resize(block_length);
 
         if (select_track[0]) {
-            this->wah_p = wah2_extract(this->wah_p, this->y, this->N_HAPS); // Extract current values
+            this->wah_p = wah2_extract_count_ones(this->wah_p, this->y, this->N_HAPS, this->count_ones); // Extract current values
         } else {
             this->sparse_p = this->sparse_extract(this->sparse_p);
         }
@@ -337,7 +342,7 @@ protected:
             if (this->current_position < this->N_SITES-1) {
                 if (select_track[next_position % this->arrangement_sample_rate]) {
                     // Optimisation : Only extract if needed to advance further
-                    this->wah_p = wah2_extract(this->wah_p, this->y, this->N_HAPS);
+                    this->wah_p = wah2_extract_count_ones(this->wah_p, this->y, this->N_HAPS, this->count_ones);
                     // (in V2 only rearrangement positions are in WAH, everything else is in sparse)
                 } else {
                     if (extract) {
@@ -365,12 +370,20 @@ class AccessorInternals {
 public:
     virtual ~AccessorInternals() {}
     virtual void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) = 0;
+    // Fill genotype array also fills allele counts, so this is only to be used when fill_genotype_array is not called (e.g., to recompute AC only)
+    virtual void fill_allele_counts(size_t n_alleles, size_t position) = 0;
+    inline const std::vector<size_t>& get_allele_counts() const {return allele_counts;}
+protected:
+    std::vector<size_t> allele_counts;
 };
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsTemplate : public AccessorInternals {
 public:
     void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) override {
+        this->allele_counts.resize(n_alleles);
+        size_t total_alt = 0;
+
         dp->seek(position);
 
         // Set REF / first ALT
@@ -391,6 +404,9 @@ public:
                 gt_arr[a[i]] = bcf_gt_unphased(y[i]) | ((a[i] & 1) & DEFAULT_PHASED); /// @todo Phase
             }
         }
+        const auto ones = dp->get_current_position_ones();
+        allele_counts[1] = ones;
+        total_alt = ones;
         dp->advance();
 
         // If other ALTs (ALTs are 1 indexed, because 0 is REF)
@@ -425,11 +441,16 @@ public:
                     }
                 }
             }
+            const auto ones = dp->get_current_position_ones();
+            allele_counts[alt_allele] = ones;
+            total_alt += ones;
             dp->advance();
         }
 
         // Set missing info
+        size_t total_missing = 0;
         if (missing_map.find(position) != missing_map.end()) {
+            total_missing = missing_map.at(position).size();
             for (auto pos : missing_map.at(position)) {
                 gt_arr[pos] = bcf_gt_missing | ((pos & 1) & DEFAULT_PHASED);
             }
@@ -441,6 +462,38 @@ public:
                 gt_arr[pos] ^= 0x1; // Toggle phase bit
             }
         }
+
+        // Set ref allele count (all haps that don't have an alt allele or missing)
+        allele_counts[0] = this->N_HAPS - total_alt - total_missing;
+    }
+
+    void fill_allele_counts(size_t n_alleles, size_t position) override {
+        this->allele_counts.resize(n_alleles);
+        size_t total_alt = 0;
+
+        // First allele count
+        dp->seek(position);
+        const auto ones = dp->get_current_position_ones();
+        allele_counts[1] = ones;
+        total_alt = ones;
+        dp->advance();
+
+        // Subsequent allele counts
+        for (size_t alt_allele = 2; alt_allele < n_alleles; ++alt_allele) {
+            const auto ones = dp->get_current_position_ones();
+            allele_counts[alt_allele] = ones;
+            total_alt += ones;
+            dp->advance();
+        }
+
+        // Get missing info
+        size_t total_missing = 0;
+        if (missing_map.find(position) != missing_map.end()) {
+            total_missing = missing_map.at(position).size();
+        }
+
+        // Set ref allele count (all haps that don't have an alt allele or missing)
+        allele_counts[0] = this->N_HAPS - total_alt - total_missing;
     }
 
     AccessorInternalsTemplate(std::string filename) {
