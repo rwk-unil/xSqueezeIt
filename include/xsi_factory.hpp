@@ -104,11 +104,6 @@ public:
     }
 
     void append(const bcf_file_reader_info_t& bcf_fri) {
-        /// @todo this is dirty and we write twice (once in the InternalGtRecord, once in the block) change it
-        //bcf_file_reader_info_t bcf_fri;
-        //bcf_fri.gt_arr = gt_arr;
-        //bcf_fri.ngt_arr = this->PLOIDY * this->num_samples;
-
         size_t prev_variant_counter = variant_counter;
         // This constructor does all the work... (also updates the variant counter...)
         InternalGtRecord<A_T> ir(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH);
