@@ -160,19 +160,13 @@ private:
                 bm_index = num_variants_extracted;
             }
 
-            // Remove the "BM" format /// @todo remove all possible junk (there should be none)
-            bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
-
             // Fill the genotype array (as bcf_get_genotypes() would do)
             accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
+            update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an);
+
             // Count the number of variants extracted
             num_variants_extracted += bcf_fri.line->n_allele-1;
-
-            ///////////////////////
-            // Update BCF Record //
-            ///////////////////////
-            update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an);
         }
         if (values) { free(values); }
     }
@@ -181,6 +175,11 @@ private:
     inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an) {
         std::vector<int32_t> ac_s;
         int ret = 0;
+
+        // Remove the "BM" format
+        /// @todo remove all possible junk (there should be none but there could be)
+        bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
+
         if (select_samples) {
             // If select samples option has been enabled, recompute AC / AN as bcftools does
             ac_s.clear();
