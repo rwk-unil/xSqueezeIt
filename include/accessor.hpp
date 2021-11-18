@@ -23,6 +23,7 @@
 #define __ACCESSOR_HPP__
 
 #include "accessor_internals.hpp"
+#include "fs.hpp"
 
 class Accessor {
 public:
@@ -74,16 +75,27 @@ public:
     }
 
     static std::string get_filename_from_variant_file(const std::string& fname) {
-        std::string filename(fname);
-        auto pos = filename.find("_var.bcf");
-        if (pos != std::string::npos) {
-            filename.erase(pos, filename.length());
-        } else {
-            //std::cerr << "Cannot convert filename " << filename << std::endl;
-            throw "Cannot convert filename";
-        }
+        try {
+            auto basename = get_entry_from_bcf(fname, "XSI");
+            std::string filename(dirname((char *)fname.c_str()));
+            /// @todo use std::fs for interoperability
+            filename.append("/");
+            filename.append(basename);
 
-        return filename;
+            return filename;
+        } catch (const char *e) {
+            // Get filename the old way if XSI entry is missing
+            std::string filename(fname);
+            auto pos = filename.find("_var.bcf");
+            if (pos != std::string::npos) {
+                filename.erase(pos, filename.length());
+            } else {
+                //std::cerr << "Cannot convert filename " << filename << std::endl;
+                throw "Cannot convert filename";
+            }
+
+            return filename;
+        }
     }
 
     std::vector<std::string>& get_sample_list() {return sample_list;}
