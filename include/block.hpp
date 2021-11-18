@@ -102,14 +102,9 @@ public:
     std::vector<SparseGtLine<A_T> > sparse_lines;
 
     void write_to_file(std::fstream& os, bool compressed, int compression_level) {
-        // Funky as f...
-        char *tmpname = strdup("/tmp/tmpfileXXXXXX");
-        int fd = mkstemp(tmpname); /// @todo check return code
-        std::string filename(tmpname);
-        free(tmpname);
-
-        std::fstream ts(filename, ts.binary | ts.out | ts.trunc);
-        std::fstream& s = compressed ? ts : os;
+        int fd = 0;
+        auto ts = get_temporary_file(&fd);
+        std::fstream& s = compressed ? ts.stream : os;
 
         size_t block_start_pos = 0;
         size_t block_end_pos = 0;
@@ -179,7 +174,7 @@ public:
             size_t file_size = block_end_pos-block_start_pos;
             auto file_mmap = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
             if (file_mmap == NULL) {
-                std::cerr << "Failed to memory map file " << filename << std::endl;
+                std::cerr << "Failed to memory map file " << ts.filename << std::endl;
                 throw "Failed to compress block";
             }
 
@@ -225,8 +220,10 @@ public:
                 os.write("", sizeof(char));
             }
         }
-        close(fd);
-        remove(filename.c_str()); // Delete temp file
+        if (fd) {
+            close(fd);
+        }
+        remove(ts.filename.c_str()); // Delete temp file
     }
 };
 

@@ -168,14 +168,14 @@ template<typename T = uint32_t>
 class GtCompressorTemplate : public GtCompressor, protected BcfTraversal {
 public:
 
-    void compress_in_memory(std::string filename) override {
+    virtual void compress_in_memory(std::string filename) override {
         default_phased = seek_default_phased(filename);
         PLOIDY = seek_max_ploidy_from_first_entry(filename);
         std::cerr << "It seems the file " << filename << " is mostly " << (default_phased ? "phased" : "unphased") << std::endl;
         traverse(filename);
     }
 
-    void save_result_to_file(std::string filename) override {
+    virtual void save_result_to_file(std::string filename) override {
         if (internal_gt_records.size() == 0) {
             std::cerr << "GtCompressor internal encoding is empty" << std::endl;
             return;
@@ -422,7 +422,7 @@ public:
 
 protected:
 
-    void handle_bcf_file_reader() override {
+    virtual void handle_bcf_file_reader() override {
         sample_list = extract_samples(bcf_fri);
         N_HAPS = bcf_fri.n_samples * PLOIDY;
         MINOR_ALLELE_COUNT_THRESHOLD = (size_t)((double)N_HAPS * MAF);
@@ -438,7 +438,7 @@ protected:
         rearrangement_counter = 0;
     }
 
-    void handle_bcf_line() override {
+    virtual void handle_bcf_line() override {
         if (line_max_ploidy != PLOIDY) {
             std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
             std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
@@ -700,6 +700,62 @@ public:
     }
 };
 
+#include "xsi_factory.hpp" // Depends on InternalGtRecord
+
+template<typename T = uint32_t>
+class GtCompressorStream : public GtCompressorTemplate<T> {
+public:
+
+    GtCompressorStream(bool zstd_compression_on = false, int zstd_compression_level = 7) : zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level) {}
+    void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
+    void set_zstd_compression_level(int level) {zstd_compression_level = level;}
+
+    virtual void compress_in_memory(std::string filename) override {
+        this->ifname = filename;
+        // Do nothing, everything is done in save_result_to_file
+    }
+
+    void save_result_to_file(std::string filename) override {
+        this->ofname = filename;
+        // This also writes to file
+        GtCompressorTemplate<T>::compress_in_memory(this->ifname);
+        // Write the final bits of the file
+        factory->finalize_file();
+    }
+protected:
+    void handle_bcf_file_reader() override {
+        GtCompressorTemplate<T>::handle_bcf_file_reader();
+
+        // Requires the bcf gile reader to have been handled to extract the relevant information, this also means we are in the "traverse phase"
+        this->factory = make_unique<XsiFactory<T, uint16_t> >(ofname, this->RESET_SORT_BLOCK_LENGTH, this->MINOR_ALLELE_COUNT_THRESHOLD, this->default_phased, this->sample_list, zstd_compression_on, zstd_compression_level);
+    }
+
+    void handle_bcf_line() override {
+        if (this->line_max_ploidy != this->PLOIDY) {
+            std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
+            std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
+            throw "PLOIDY ERROR";
+        }
+
+        // The factory does all the work
+        try {
+            factory->append(this->bcf_fri);
+        } catch (...) {
+            std::cerr << "entry " << this->entry_counter << ", " << unique_id(this->bcf_fri.line) << " caused a problem" << std::endl;
+            exit(-1);
+        }
+
+        // Counts the number of BCF lines
+        this->entry_counter++;
+    }
+
+    std::string ifname;
+    std::string ofname;
+    bool zstd_compression_on = false;
+    int  zstd_compression_level = 7; // Some acceptable default value
+    std::unique_ptr<XsiFactory<T, uint16_t> > factory = nullptr;
+};
+
 class NewCompressor {
 public:
     NewCompressor(uint32_t version = 2) : VERSION(version) {}
@@ -718,13 +774,17 @@ public:
 
         // If not may haplotypes use a compressor that uses uint16_t as indices
         if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-            if (VERSION == 2) {
+            if (VERSION == 33) {
+                _compressor = make_unique<GtCompressorStream<uint16_t> >(zstd_compression_on, zstd_compression_level);
+            } else if (VERSION == 2) {
                 _compressor = make_unique<GtCompressorTemplate<uint16_t> >();
             } else {
                 _compressor = make_unique<GtCompressorV3<uint16_t> >(zstd_compression_on, zstd_compression_level);
             }
         } else { // Else use a compressor that uses uint32_t as indices
-            if (VERSION == 2) {
+            if (VERSION == 33) {
+                _compressor = make_unique<GtCompressorStream<uint32_t> >(zstd_compression_on, zstd_compression_level);
+            } else if (VERSION == 2) {
                 _compressor = make_unique<GtCompressorTemplate<uint32_t> >();
             } else {
                 _compressor = make_unique<GtCompressorV3<uint32_t> >(zstd_compression_on, zstd_compression_level);

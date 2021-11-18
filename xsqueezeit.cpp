@@ -121,7 +121,7 @@ int main(int argc, const char *argv[]) {
         auto compress_thread = std::thread([&]{
             if (opt.v2 or opt.v3) {
                 try {
-                    NewCompressor c(opt.v2 ? 2 : 3);
+                    NewCompressor c(opt.v2 ? 2 : opt.v33 ? 33 : 3);
                     c.set_maf(opt.maf);
                     c.set_reset_sort_block_length(opt.reset_sort_block_length);
                     c.set_zstd_compression_on(opt.zstd);
