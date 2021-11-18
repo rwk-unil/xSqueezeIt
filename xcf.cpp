@@ -683,6 +683,10 @@ std::string get_entry_from_bcf(const std::string& filename, const char *entry_ke
     initialize_bcf_file_reader(bcf_fri, filename);
 
     auto hrec = bcf_hdr_get_hrec(bcf_fri.sr->readers[0].header, BCF_HL_GEN, entry_key, NULL, NULL);
+    if (!hrec) {
+        destroy_bcf_file_reader(bcf_fri);
+        throw "Could not extract entry from header";
+    }
     std::string value(hrec->value);
 
     destroy_bcf_file_reader(bcf_fri);
