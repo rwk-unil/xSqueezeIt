@@ -141,7 +141,6 @@ private:
         int count = 0;
         uint32_t bm_index = 0;
         const int32_t an = samples_to_use.size() * header.ploidy;
-        std::vector<int32_t> ac_s;
 
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
@@ -173,41 +172,49 @@ private:
             ///////////////////////
             // Update BCF Record //
             ///////////////////////
-            int ret = 0;
-            if (select_samples) {
-                // If select samples option has been enabled, recompute AC / AN as bcftools does
-                ac_s.clear();
-                ac_s.resize(bcf_fri.line->n_allele-1, 0);
-                for (size_t i = 0; i < samples_to_use.size(); ++i) {
-                    selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
-                    selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
-                    for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-                        ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
-                        ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
-                    }
-                }
-                ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * header.ploidy);
-                // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
-                // Note that --no-update in bcftools disables this recomputation /// @todo this
-                bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
-                bcf_update_info_int32(hdr, rec, "AN", &an, 1);
-            } else {
-                // Else just fill the GT values
-                ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * header.ploidy); // 15% of time spent in here
-            }
-            if (ret) {
-                std::cerr << "Failed to update genotypes" << std::endl;
-                throw "Failed to update genotypes";
-            }
-
-            ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
-            if (ret) {
-                std::cerr << "Failed to write record" << std::endl;
-                throw "Failed to write record";
-            }
+            update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an);
         }
         if (values) { free(values); }
     }
+
+private:
+    inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an) {
+        std::vector<int32_t> ac_s;
+        int ret = 0;
+        if (select_samples) {
+            // If select samples option has been enabled, recompute AC / AN as bcftools does
+            ac_s.clear();
+            ac_s.resize(bcf_fri.line->n_allele-1, 0);
+            for (size_t i = 0; i < samples_to_use.size(); ++i) {
+                selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
+                selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
+                for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
+                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
+                }
+            }
+            ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * header.ploidy);
+            // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
+            // Note that --no-update in bcftools disables this recomputation /// @todo this
+            bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
+            bcf_update_info_int32(hdr, rec, "AN", &an, 1);
+        } else {
+            // Else just fill the GT values
+            ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * header.ploidy); // 15% of time spent in here
+        }
+        if (ret) {
+            std::cerr << "Failed to update genotypes" << std::endl;
+            throw "Failed to update genotypes";
+        }
+
+        ret = bcf_write1(fp, hdr, rec); // More than 60% of decompress time is spent in this call
+        if (ret) {
+            std::cerr << "Failed to write record" << std::endl;
+            throw "Failed to write record";
+        }
+    }
+
+public:
 
     void enable_select_samples(const std::string& samples_option) {
         std::istringstream iss(samples_option);
@@ -287,7 +294,29 @@ private:
 
     inline void create_output_file(const std::string& ofname, htsFile* &fp, bcf_hdr_t* &hdr) {
         // Open the output file
-        fp = hts_open(ofname.c_str(), ofname.compare("-") ? "wb" : (global_app_options.fast_pipe ? "wbu" : "wu")); // "-" for stdout
+        if (ofname.compare("-") == 0 and global_app_options.fast_pipe) {
+            fp = hts_open("-", "wbu"); // "-" for stdout "wbu" write uncompressed bcf
+        } else {
+            const char* flags = "wu"; // Write uncompressed vcf
+            switch (global_app_options.output_type[0]) {
+                case 'b':
+                    flags = "wb";
+                    break;
+                case 'u':
+                    flags = "wbu";
+                    break;
+                case 'z':
+                    /// @todo check
+                    flags = "w";
+                    break;
+                case 'v':
+                    flags = "wu";
+                    break;
+                default:
+                    break;
+            }
+            fp = hts_open(ofname.c_str(), flags);
+        }
         if (fp == NULL) {
             std::cerr << "Could not open " << bcf_nosamples << std::endl;
             throw "File open error";
