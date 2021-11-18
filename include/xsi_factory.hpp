@@ -31,6 +31,7 @@
 #include "fs.hpp"
 #include "gt_compressor_new.hpp" // For InternalGtRecord
 
+namespace {
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class XsiFactory {
@@ -140,29 +141,26 @@ public:
         }
 
         uint32_t bm_counter = prev_variant_counter;
-        // Append the missing
-        A_T number_missing = ir.sparse_missing.size();
-        if (number_missing) {
-            ms.stream.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
-            ms.stream.write(reinterpret_cast<const char*>(&number_missing), sizeof(A_T));
-            ms.stream.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
-            if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Missing sparse entry at BM " << bm_counter << ", " << number_missing << " : ";
-            if (DEBUG_COMPRESSION) for (auto s : ir.sparse_missing) {std::cerr << s << " ";}
-            if (DEBUG_COMPRESSION) std::cerr << std::endl;
-        }
+        write_sparse_to_stream(ir.sparse_missing, ms.stream, bm_counter);
 
         // Append the non uniform phase info
-        A_T spndp_size = ir.sparse_non_default_phasing.size();
-        if (spndp_size) {
-            const auto& spndp = ir.sparse_non_default_phasing;
-            ps.stream.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
-            ps.stream.write(reinterpret_cast<const char*>(&spndp_size), sizeof(A_T));
-            ps.stream.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
-            if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Phase sparse entry at BM " << bm_counter << ", " << spndp_size << " ";
-            if (DEBUG_COMPRESSION) for (auto s : spndp) {std::cerr << s << " ";}
+        write_sparse_to_stream(ir.sparse_non_default_phasing, ps.stream, bm_counter);
+    }
+
+private:
+    inline void write_sparse_to_stream(const std::vector<A_T>& sparse, std::fstream& stream, const size_t variant_counter) {
+        uint32_t bm_counter = variant_counter;
+        A_T number = sparse.size();
+        if (number) {
+            stream.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
+            stream.write(reinterpret_cast<const char*>(&number), sizeof(A_T));
+            stream.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
+            if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry at BM " << bm_counter << ", " << number << " : ";
+            if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
             if (DEBUG_COMPRESSION) std::cerr << std::endl;
         }
     }
+public:
 
     void finalize_file() {
         header.num_variants = this->variant_counter;
@@ -338,5 +336,7 @@ protected:
 
     std::vector<std::string> sample_list;
 };
+
+}
 
 #endif /* __XSI_FACTORY_H__ */
