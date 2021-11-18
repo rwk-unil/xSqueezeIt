@@ -135,12 +135,13 @@ private:
         destroy_bcf_file_reader(bcf_fri);
     }
 
-    template<const bool RECORD_NONLINEAR = false>
-    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, size_t stop_pos = 0) {
+    template<const bool RECORD_NONLINEAR = false, const bool XSI = false>
+    inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp) {
         int *values = NULL;
         int count = 0;
         uint32_t bm_index = 0;
         const int32_t an = samples_to_use.size() * header.ploidy;
+        std::vector<int32_t> ac_s;
 
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
@@ -160,20 +161,41 @@ private:
                 bm_index = num_variants_extracted;
             }
 
-            // Fill the genotype array (as bcf_get_genotypes() would do)
-            accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+            if CONSTEXPR_IF (XSI) {
+                // Inner variant loop
+                    // If variant count == header.block_size
+                        // Reset a
 
-            update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an);
+                    // If position is sparse
+                        // If select samples
+                            // Current block add selected sparse
+                        // Else
+                            // Current block add sparse
+                    // else
+                        // If select samples
+                            // Current block add selected genotypes given a
+                        // Else
+                            // Current block add genotypes given a
+                    // Count variant extracted
+            } else {
+                // Fill the genotype array (as bcf_get_genotypes() would do)
+                accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
-            // Count the number of variants extracted
-            num_variants_extracted += bcf_fri.line->n_allele-1;
+                update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an, ac_s);
+
+                // Count the number of variants extracted
+                num_variants_extracted += bcf_fri.line->n_allele-1;
+            }
+
+            if CONSTEXPR_IF (XSI) {
+                // TODO FILTER MISSING / PHASE
+            }
         }
         if (values) { free(values); }
     }
 
 private:
-    inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an) {
-        std::vector<int32_t> ac_s;
+    inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an, std::vector<int32_t>& ac_s) {
         int ret = 0;
 
         // Remove the "BM" format
