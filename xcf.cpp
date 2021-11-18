@@ -677,6 +677,18 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
     return pos;
 }
 
+std::string get_entry_from_bcf(const std::string& filename, const char *entry_key) {
+    // Input file
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+
+    auto hrec = bcf_hdr_get_hrec(bcf_fri.sr->readers[0].header, BCF_HL_GEN, entry_key, NULL, NULL);
+    std::string value(hrec->value);
+
+    destroy_bcf_file_reader(bcf_fri);
+    return value;
+}
+
 std::vector<std::vector<bool> > extract_phase_vectors(const std::string& ifname) {
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);

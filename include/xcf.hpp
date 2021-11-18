@@ -106,6 +106,8 @@ std::vector<std::string> extract_samples(const std::string& fname);
  * */
 size_t remove_samples(const std::string& ifname, const std::string& ofname);
 
+std::string get_entry_from_bcf(const std::string& filename, const char *entry_key);
+
 /**
  * @brief counts the number of entries (lines) in VCF / BCF file
  * @param ifname Input file name
