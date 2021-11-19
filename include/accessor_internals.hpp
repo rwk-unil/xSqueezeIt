@@ -373,6 +373,8 @@ public:
     // Fill genotype array also fills allele counts, so this is only to be used when fill_genotype_array is not called (e.g., to recompute AC only)
     virtual void fill_allele_counts(size_t n_alleles, size_t position) = 0;
     inline const std::vector<size_t>& get_allele_counts() const {return allele_counts;}
+    virtual const std::unordered_map<size_t, std::vector<size_t> >& get_missing_sparse_map() const = 0;
+    virtual const std::unordered_map<size_t, std::vector<size_t> >& get_phase_sparse_map() const = 0;
 protected:
     std::vector<size_t> allele_counts;
 };
@@ -599,6 +601,13 @@ public:
     virtual ~AccessorInternalsTemplate() {
         munmap(file_mmap, file_size);
         close(fd);
+    }
+
+    inline const std::unordered_map<size_t, std::vector<size_t> >& get_missing_sparse_map() const override {
+        return this->missing_map;
+    }
+    inline const std::unordered_map<size_t, std::vector<size_t> >& get_phase_sparse_map() const override {
+        return this->non_default_phase_map;
     }
 
 protected:
