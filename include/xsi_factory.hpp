@@ -130,6 +130,8 @@ public:
 
         // Append the non uniform phase info
         write_sparse_to_stream(ir.sparse_non_default_phasing, ps.stream, bm_counter);
+
+        entry_counter++;
     }
 
     void append_sparse(const std::vector<A_T>& sparse) {
@@ -165,6 +167,10 @@ public:
         }
     }
 
+    inline void increment_entry_counter(const size_t increment) {
+        entry_counter += increment;
+    }
+
 private:
     inline void write_sparse_to_stream(const std::vector<A_T>& sparse, std::fstream& stream, const size_t variant_counter) {
         uint32_t bm_counter = variant_counter;
@@ -195,6 +201,7 @@ public:
 
     void finalize_file() {
         header.num_variants = this->variant_counter;
+        header.xcf_entries = this->entry_counter;
         header.number_of_ssas = (this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
 
         // Write the last block if necessary
