@@ -57,7 +57,10 @@ public:
         current_block(RESET_SORT_BLOCK_LENGTH),
         default_phased(default_phased), sample_list(sample_list)
     {
-        std::cerr << "XSI Factory" << std::endl;
+        //std::cerr << "XSI Factory created with :" << std::endl;
+        //std::cerr << "sample list : ";
+        //for (auto s : sample_list) std::cerr << s;
+        //std::cerr << std::endl;
 
         N_HAPS = sample_list.size() * this->PLOIDY;
         a.resize(N_HAPS);

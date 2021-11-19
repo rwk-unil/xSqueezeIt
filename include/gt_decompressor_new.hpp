@@ -275,7 +275,7 @@ private:
             throw "Failed to write record";
         }
 
-        bcf_fri.ngt_arr = header.hap_samples;
+        bcf_fri.ngt_arr = samples_to_use.size() * header.ploidy; /// @todo mixed ploidy
         bcf_fri.n_samples = samples_to_use.size();
 
         // The bcf_fri is used here, therefore it should be filled (comes from compressor code)
