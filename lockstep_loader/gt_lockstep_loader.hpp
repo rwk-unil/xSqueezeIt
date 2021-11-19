@@ -109,6 +109,8 @@ public:
 
         c_xcf_add_readers(c_xcf_p, sr);
 
+        size_t gt_check_counter = 0;
+
         int nset = 0;
         size_t record = 0;
         while ((nset = bcf_sr_next_line(sr))) {
@@ -143,6 +145,7 @@ public:
                             }
                             std::cerr << i << " ";
                         }
+                        gt_check_counter++;
                     }
                     if (gt_diff) {
                         std::cerr << "}" << std::endl;
@@ -156,6 +159,7 @@ public:
             }
         }
 
+        std::cerr << "Checked " << gt_check_counter << " GT entries" << std::endl;
         std::cerr << "Files have the same GT data" << std::endl;
         c_xcf_delete(c_xcf_p);
         c_xcf_p = NULL;
