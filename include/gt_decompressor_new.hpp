@@ -223,7 +223,7 @@ private:
             num_variants_extracted += bcf_fri.line->n_allele-1;
 
             if CONSTEXPR_IF (XSI) {
-                // TODO FILTER MISSING / PHASE
+                // TODO FILTER MISSING / PHASE (for the more optimized version but could be handled above)
             }
         }
         if (values) { free(values); }
