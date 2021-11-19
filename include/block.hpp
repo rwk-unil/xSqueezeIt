@@ -59,6 +59,11 @@ public:
 
     Block(size_t BLOCK_SIZE) : BLOCK_SIZE(BLOCK_SIZE) {}
 
+    enum Rearrangement : bool {
+        NOT_REARRANGED = false,
+        REARRANGED = true,
+    };
+
     enum Dictionnary_Keys : uint32_t {
         KEY_UNUSED = (uint32_t)-1,
         KEY_SORT = 0,

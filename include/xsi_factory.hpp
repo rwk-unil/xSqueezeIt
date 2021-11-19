@@ -113,17 +113,7 @@ public:
         size_t internal_sparse_counter = 0;
         size_t i = prev_variant_counter;
         for (const auto rtv : ir.rearrangements) {
-            // Start new block
-            if ((i % this->RESET_SORT_BLOCK_LENGTH) == 0) {
-                // if there was a previous block, write it
-                if (i) {
-                    //indices[block_counter++] = (uint32_t)s.tellp();
-                    block_counter++;
-                    indices.push_back((uint32_t)s.tellp());
-                    current_block.write_to_file(s, zstd_compression_on, zstd_compression_level);
-                }
-                current_block.reset();
-            }
+            check_flush_block(i);
 
             current_block.rearrangement_track.push_back(rtv);
             if (rtv) {
@@ -142,6 +132,39 @@ public:
         write_sparse_to_stream(ir.sparse_non_default_phasing, ps.stream, bm_counter);
     }
 
+    void append_sparse(const std::vector<A_T>& sparse) {
+        check_flush_block(variant_counter);
+        current_block.rearrangement_track.push_back(Block::NOT_REARRANGED);
+        current_block.sparse_lines.push_back(sparse);
+        variant_counter++;
+    }
+
+    void append_sorted_wah(const std::vector<WAH_T>& wah) {
+        check_flush_block(variant_counter);
+        current_block.rearrangement_track.push_back(Block::REARRANGED);
+        current_block.wahs.push_back(wah);
+        variant_counter++;
+    }
+
+    //void append_wah(const std::vector<WAH_T>& wah) {
+    // // Requires sorting and update a
+    //}
+
+    /// @todo the type of positions are size_t, but it should be A_T ... (to avoid a conversion/copy)
+    void add_sparse_missing_map(const std::unordered_map<size_t, std::vector<size_t> >& map) {
+        for (const auto& e : map) {
+            std::vector<A_T> sparse(e.second.begin(), e.second.end());
+            write_sparse_to_stream(sparse, ms, e.first);
+        }
+    }
+
+    void add_sparse_non_default_phase_map(const std::unordered_map<size_t, std::vector<size_t> >& map) {
+        for (const auto& e : map) {
+            std::vector<A_T> sparse(e.second.begin(), e.second.end());
+            write_sparse_to_stream(sparse, ps, e.first);
+        }
+    }
+
 private:
     inline void write_sparse_to_stream(const std::vector<A_T>& sparse, std::fstream& stream, const size_t variant_counter) {
         uint32_t bm_counter = variant_counter;
@@ -153,6 +176,19 @@ private:
             if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry at BM " << bm_counter << ", " << number << " : ";
             if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
             if (DEBUG_COMPRESSION) std::cerr << std::endl;
+        }
+    }
+
+    inline void check_flush_block(const size_t variant_num) {
+        // Start new block
+        if ((variant_num % RESET_SORT_BLOCK_LENGTH) == 0) {
+            // if there was a previous block, write it
+            if (variant_num) {
+                block_counter++;
+                indices.push_back((uint32_t)s.tellp());
+                current_block.write_to_file(s, zstd_compression_on, zstd_compression_level);
+            }
+            current_block.reset();
         }
     }
 public:
