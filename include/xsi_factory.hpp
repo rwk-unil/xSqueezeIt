@@ -33,8 +33,18 @@
 
 namespace {
 
+class XsiFactoryInterface {
+public:
+    virtual void append(const bcf_file_reader_info_t& bcf_fri) = 0;
+    //virtual void add_sparse_missing_map(const std::unordered_map<size_t, std::vector<size_t> >& map) = 0;
+    //virtual void add_sparse_non_default_phase_map(const std::unordered_map<size_t, std::vector<size_t> >& map) = 0;
+    virtual void finalize_file() = 0;
+
+    virtual ~XsiFactoryInterface() {}
+};
+
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
-class XsiFactory {
+class XsiFactory : public XsiFactoryInterface {
 
 public:
     XsiFactory(std::string filename, const size_t RESET_SORT_BLOCK_LENGTH, const size_t MINOR_ALLELE_COUNT_THRESHOLD, int32_t default_phased, const std::vector<std::string>& sample_list, bool zstd_compression_on = false, int zstd_compression_level = 7) :
@@ -103,7 +113,7 @@ public:
         header.wahs_offset = total_bytes;
     }
 
-    void append(const bcf_file_reader_info_t& bcf_fri) {
+    void append(const bcf_file_reader_info_t& bcf_fri) override {
         size_t prev_variant_counter = variant_counter;
         // This constructor does all the work... (also updates the variant counter...)
         InternalGtRecord<A_T> ir(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH);
@@ -199,7 +209,7 @@ private:
     }
 public:
 
-    void finalize_file() {
+    void finalize_file() override {
         header.num_variants = this->variant_counter;
         header.xcf_entries = this->entry_counter;
         header.number_of_ssas = (this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
