@@ -117,8 +117,11 @@ private:
             }
 
             create_output_file(ofname, fp, hdr);
-
-            decompress_inner_loop<true /* Non linear access */>(bcf_fri, hdr, fp);
+            if (output_file_is_xsi) {
+                decompress_inner_loop<true /* Non linear access */, true /* XSI */>(bcf_fri, hdr, fp);
+            } else {
+                decompress_inner_loop<true /* Non linear access */, false /* XSI */>(bcf_fri, hdr, fp);
+            }
         } else {
             // Read the bcf without the samples (variant info)
             initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
@@ -127,14 +130,34 @@ private:
 
             // Decompress and add the genotype data to the new file
             // This is the main loop, where most of the time is spent
-            decompress_inner_loop(bcf_fri, hdr, fp);
+            if (output_file_is_xsi) {
+                decompress_inner_loop<false /* Non linear access */, true /* XSI */>(bcf_fri, hdr, fp);
+            } else {
+                decompress_inner_loop<false /* Non linear access */, false /* XSI */>(bcf_fri, hdr, fp);
+            }
         }
 
-        hts_close(fp);
-        bcf_hdr_destroy(hdr);
+        if (output_file_is_xsi) {
+            if (xsi_factory) {
+                xsi_factory->finalize_file();
+                xsi_factory = nullptr; // Destroy the factory (unique_ptr)
+            } else {
+                throw "Missing XSI factory !";
+            }
+        }
+
+        if (fp) {
+            hts_close(fp);
+            fp = NULL;
+        }
+        if (hdr) {
+            bcf_hdr_destroy(hdr);
+            fp = NULL;
+        }
         destroy_bcf_file_reader(bcf_fri);
     }
 
+    // Is templated for performance reasons
     template<const bool RECORD_NONLINEAR = false, const bool XSI = false>
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp) {
         int *values = NULL;
@@ -162,6 +185,18 @@ private:
             }
 
             if CONSTEXPR_IF (XSI) {
+                if CONSTEXPR_IF (RECORD_NONLINEAR) {
+                    // The BM index needs to be updated to reflect the new XSI file
+                    int32_t values[1] = {(int32_t)num_variants_extracted};
+                    bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", &values[0], 1, BCF_HT_INT);
+                } // Else the BM counters will be exactly the same
+
+                // This is the "non optimal way"
+                /// @todo replace this by implementing the comments below
+                accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+
+                update_and_write_xsi_block(bcf_fri, an, ac_s);
+
                 // Inner variant loop
                     // If variant count == header.block_size
                         // Reset a
@@ -182,10 +217,10 @@ private:
                 accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
                 update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an, ac_s);
-
-                // Count the number of variants extracted
-                num_variants_extracted += bcf_fri.line->n_allele-1;
             }
+
+            // Count the number of variants extracted
+            num_variants_extracted += bcf_fri.line->n_allele-1;
 
             if CONSTEXPR_IF (XSI) {
                 // TODO FILTER MISSING / PHASE
@@ -195,6 +230,45 @@ private:
     }
 
 private:
+    inline void fill_selected_genotypes(std::vector<int32_t>& ac_s) {
+        for (size_t i = 0; i < samples_to_use.size(); ++i) {
+            if (header.ploidy == 1) {
+                selected_genotypes[i] = genotypes[samples_to_use[i]];
+                for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i]) == alt_allele);
+                }
+            } else if (header.ploidy == 2) {
+                selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
+                selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
+                for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
+                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
+                }
+            }
+        }
+    }
+
+    /// @todo this factory append bcf file reader info is not the most optimal way
+    inline void update_and_write_xsi_block(bcf_file_reader_info_t /* copy */ bcf_fri, const size_t an, std::vector<int32_t>& ac_s) {
+        if (select_samples) {
+            // If select samples option has been enabled, recompute AC / AN as bcftools does
+            ac_s.clear();
+            ac_s.resize(bcf_fri.line->n_allele-1, 0);
+
+            fill_selected_genotypes(ac_s);
+
+            bcf_fri.gt_arr = selected_genotypes;
+        } else {
+            bcf_fri.gt_arr = genotypes;
+        }
+
+        bcf_fri.ngt_arr = header.hap_samples;
+        bcf_fri.n_samples = samples_to_use.size();
+
+        // The bcf_fri is used here, therefore it should be filled (comes from compressor code)
+        xsi_factory->append(bcf_fri);
+    }
+
     inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an, std::vector<int32_t>& ac_s) {
         int ret = 0;
 
@@ -206,14 +280,9 @@ private:
             // If select samples option has been enabled, recompute AC / AN as bcftools does
             ac_s.clear();
             ac_s.resize(bcf_fri.line->n_allele-1, 0);
-            for (size_t i = 0; i < samples_to_use.size(); ++i) {
-                selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
-                selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
-                for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
-                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2]) == alt_allele);
-                    ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i*2+1]) == alt_allele);
-                }
-            }
+
+            fill_selected_genotypes(ac_s);
+
             ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * header.ploidy);
             // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
             // Note that --no-update in bcftools disables this recomputation /// @todo this
@@ -314,11 +383,12 @@ public:
     }
 
     inline void create_output_file(const std::string& ofname, htsFile* &fp, bcf_hdr_t* &hdr) {
+        std::string bcf_ofname(ofname);
+        const char* flags = "wb"; // Write compressed bcf
         // Open the output file
-        if (ofname.compare("-") == 0 and global_app_options.fast_pipe) {
+        if (bcf_ofname.compare("-") == 0 and global_app_options.fast_pipe) {
             fp = hts_open("-", "wbu"); // "-" for stdout "wbu" write uncompressed bcf
         } else {
-            const char* flags = "wu"; // Write uncompressed vcf
             switch (global_app_options.output_type[0]) {
                 case 'b':
                     flags = "wb";
@@ -333,11 +403,22 @@ public:
                 case 'v':
                     flags = "wu";
                     break;
+                case 'x': // XSI (compression is handled by --zstd)
+                    flags = "wb"; // Compressed BCF (always)
+                    output_file_is_xsi = true;
+                    break;
                 default:
+                    std::cerr << "Unrecognized output type : " << global_app_options.output_type << std::endl;
+                    std::cerr << "Will default to BCF" << std::endl;
                     break;
             }
-            fp = hts_open(ofname.c_str(), flags);
+            if (output_file_is_xsi) {
+                /// @todo add output file name extension checks
+                bcf_ofname.append(XSI_BCF_VAR_EXTENSION);
+            }
         }
+
+        fp = hts_open(bcf_ofname.c_str(), flags);
         if (fp == NULL) {
             std::cerr << "Could not open " << bcf_nosamples << std::endl;
             throw "File open error";
@@ -345,25 +426,55 @@ public:
 
         // Duplicate the header from the bcf with the variant info
         hdr = bcf_hdr_dup(bcf_fri.sr->readers[0].header);
-        bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");
         // Remove XSI entry
         bcf_hdr_remove(hdr, BCF_HL_GEN, "XSI");
 
-        // Add the samples to the header
-        if(bcf_hdr_set_samples(hdr, NULL, 0) < 0) {
-            std::cerr << "Failed to remove samples from header for" << ofname << std::endl;
-            throw "Failed to remove samples";
-        }
+        if (output_file_is_xsi) {
+            // Update XSI entry
+            bcf_hdr_append(hdr, std::string("##XSI=").append(std::string(basename((char*)ofname.c_str()))).c_str());
+            // Keep BM Format
 
-        if (select_samples) {
-            for (const auto& sample_index : samples_to_use) {
-                bcf_hdr_add_sample(hdr, sample_list[sample_index].c_str());
+            // Create the XSI factory (requires to know the sample names)
+            const size_t num_samples = (select_samples ? samples_to_use.size() : sample_list.size());
+            std::vector<std::string>& samples = sample_list;
+            std::vector<std::string> smaller_list;
+            if (samples_to_use.size() < sample_list.size()) {
+                for (size_t i = 0; i < samples_to_use.size(); ++i) {
+                    smaller_list.push_back(sample_list[samples_to_use[i]]);
+                }
+                samples = smaller_list;
+            }
+            const size_t N_HAPS = num_samples * header.ploidy;
+            const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * global_app_options.maf;
+            int32_t default_phased = header.default_phased ? 1 : 0;
+            if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
+                xsi_factory = make_unique<XsiFactory<uint16_t, uint16_t> >(ofname, header.ss_rate, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
+                    samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
+            } else {
+                xsi_factory = make_unique<XsiFactory<uint32_t, uint16_t> >(ofname, header.ss_rate, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
+                    samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
             }
         } else {
-            for (const auto& sample : sample_list) {
-                bcf_hdr_add_sample(hdr, sample.c_str());
+            // Remove BM Format
+            bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");
+
+            // Add the samples to the header
+            if(bcf_hdr_set_samples(hdr, NULL, 0) < 0) {
+                std::cerr << "Failed to remove samples from header for" << bcf_ofname << std::endl;
+                throw "Failed to remove samples";
+            }
+
+            if (select_samples) {
+                for (const auto& sample_index : samples_to_use) {
+                    bcf_hdr_add_sample(hdr, sample_list[sample_index].c_str());
+                }
+            } else {
+                for (const auto& sample : sample_list) {
+                    bcf_hdr_add_sample(hdr, sample.c_str());
+                }
             }
         }
+
         bcf_hdr_add_sample(hdr, NULL); // to update internal structures
         // see : https://github.com/samtools/htslib/blob/develop/test/test-vcf-api.c
         if (bcf_hdr_sync(hdr) < 0) {
@@ -372,7 +483,7 @@ public:
 
         // Write the header to the new file
         if (bcf_hdr_write(fp, hdr) < 0) {
-            std::cerr << "Could not write header to file " << ofname << std::endl;
+            std::cerr << "Could not write header to file " << bcf_ofname << std::endl;
             throw "Failed to write file";
         }
     }
@@ -389,6 +500,9 @@ protected:
     std::vector<std::string> sample_list;
     std::vector<size_t> samples_to_use;
     bool select_samples = false;
+
+    bool output_file_is_xsi = false;
+    std::unique_ptr<XsiFactoryInterface> xsi_factory = nullptr;
 
     int32_t* genotypes{NULL};
     int32_t* selected_genotypes{NULL};

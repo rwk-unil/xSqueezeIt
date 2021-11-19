@@ -47,7 +47,9 @@ template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class XsiFactory : public XsiFactoryInterface {
 
 public:
-    XsiFactory(std::string filename, const size_t RESET_SORT_BLOCK_LENGTH, const size_t MINOR_ALLELE_COUNT_THRESHOLD, int32_t default_phased, const std::vector<std::string>& sample_list, bool zstd_compression_on = false, int zstd_compression_level = 7) :
+    XsiFactory(std::string filename, const size_t RESET_SORT_BLOCK_LENGTH, const size_t MINOR_ALLELE_COUNT_THRESHOLD,
+               int32_t default_phased, const std::vector<std::string>& sample_list,
+               bool zstd_compression_on = false, int zstd_compression_level = 7) :
         filename(filename), zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level),
         s(filename, s.binary | s.out | s.trunc),
         RESET_SORT_BLOCK_LENGTH(RESET_SORT_BLOCK_LENGTH), MINOR_ALLELE_COUNT_THRESHOLD(MINOR_ALLELE_COUNT_THRESHOLD),
