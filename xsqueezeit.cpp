@@ -71,7 +71,7 @@ int main(int argc, const char *argv[]) {
         } else {
             std::cerr << "INFO : File is " << filename << std::endl;
             std::cerr << "INFO : " << filename << " size is " << fs::file_size(filename) << " bytes" << std::endl;
-            std::string variants(filename + "_var.bcf");
+            std::string variants(filename + XSI_BCF_VAR_EXTENSION);
             if (fs::exists(variants)) {
                 std::cerr << "INFO : " << variants << " size is " << fs::file_size(variants) << " bytes" << std::endl;
             }
@@ -108,7 +108,7 @@ int main(int argc, const char *argv[]) {
         }
 
         bool fail = false;
-        std::string variant_file(ofname + "_var.bcf");
+        std::string variant_file(ofname + XSI_BCF_VAR_EXTENSION);
         auto variant_thread = std::thread([&]{
             try {
                 //remove_samples(filename, variant_file);
@@ -184,7 +184,7 @@ int main(int argc, const char *argv[]) {
             exit(app.exit(CLI::RuntimeError()));
         }
 
-        std::string variant_file(filename + "_var.bcf");
+        std::string variant_file(filename + XSI_BCF_VAR_EXTENSION);
         create_index_file(variant_file);
         if (opt.v2 or opt.v3) {
             try {

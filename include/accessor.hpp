@@ -61,16 +61,18 @@ public:
         return ngt;
     }
 
+    #define XSI_BCF_VAR_EXTENSION "_var.bcf"
+
     /// @todo All these dependencies on the filenames are dirty and should be fixed ...
     std::string get_variant_filename() {
         std::stringstream ss;
-		ss << filename << "_var.bcf";
+		ss << filename << XSI_BCF_VAR_EXTENSION;
 		return ss.str();
     }
 
     static std::string get_variant_filename(const std::string& fname) {
         std::stringstream ss;
-		ss << fname << "_var.bcf";
+		ss << fname << XSI_BCF_VAR_EXTENSION;
 		return ss.str();
     }
 
@@ -86,7 +88,7 @@ public:
         } catch (const char *e) {
             // Get filename the old way if XSI entry is missing
             std::string filename(fname);
-            auto pos = filename.find("_var.bcf");
+            auto pos = filename.find(XSI_BCF_VAR_EXTENSION);
             if (pos != std::string::npos) {
                 filename.erase(pos, filename.length());
             } else {

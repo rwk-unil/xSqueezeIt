@@ -3,15 +3,16 @@
 
 #include "CLI11.hpp"
 
+#define XSI_BCF_VAR_EXTENSION "_var.bcf"
+
 class GlobalAppOptions
 {
 public:
     GlobalAppOptions() {
         app.add_option("-f,--file", filename, "Input file name, default is stdio");
         app.add_option("-o,--output", ofname, "Output file name, default is stdio");
-        app.add_option("-O, --output-type", output_type, "Output type b|u|z|v|x|y");
+        app.add_option("-O, --output-type", output_type, "Output type b|u|z|v|x");
         app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs binary instead of text when writing to stdout");
-        //app.add_option("-O, --output-type", O, "output type b|u|z|v");
         app.add_flag("-c,--compress", compress, "Compress");
         app.add_flag("-d,--decompress", decompress, "Decompress");
         app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
