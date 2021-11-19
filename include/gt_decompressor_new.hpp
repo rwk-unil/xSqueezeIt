@@ -195,7 +195,7 @@ private:
                 /// @todo replace this by implementing the comments below
                 accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
-                update_and_write_xsi_block(bcf_fri, an, ac_s);
+                update_and_write_xsi(bcf_fri, hdr, fp, rec, an, ac_s);
 
                 // Inner variant loop
                     // If variant count == header.block_size
@@ -249,7 +249,7 @@ private:
     }
 
     /// @todo this factory append bcf file reader info is not the most optimal way
-    inline void update_and_write_xsi_block(bcf_file_reader_info_t /* copy */ bcf_fri, const size_t an, std::vector<int32_t>& ac_s) {
+    inline void update_and_write_xsi(bcf_file_reader_info_t /* copy */ bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an, std::vector<int32_t>& ac_s) {
         if (select_samples) {
             // If select samples option has been enabled, recompute AC / AN as bcftools does
             ac_s.clear();
@@ -257,9 +257,22 @@ private:
 
             fill_selected_genotypes(ac_s);
 
+            // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
+            // Note that --no-update in bcftools disables this recomputation /// @todo this
+            bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
+            bcf_update_info_int32(hdr, rec, "AN", &an, 1);
+
             bcf_fri.gt_arr = selected_genotypes;
         } else {
             bcf_fri.gt_arr = genotypes;
+        }
+
+        // Write the record to the variant file
+        int ret = 0;
+        ret = bcf_write1(fp, hdr, rec);
+        if (ret) {
+            std::cerr << "Failed to write record" << std::endl;
+            throw "Failed to write record";
         }
 
         bcf_fri.ngt_arr = header.hap_samples;
