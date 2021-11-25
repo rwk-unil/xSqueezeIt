@@ -36,6 +36,13 @@
 #include "wah.hpp"
 using namespace wah;
 
+class Writable {
+public:
+    virtual void write_to_stream(std::fstream& os) = 0;
+
+    virtual ~Writable() {};
+};
+
 template<typename T = uint32_t>
 class SparseGtLine {
 public:
@@ -67,10 +74,13 @@ public:
     enum Dictionnary_Keys : uint32_t {
         KEY_UNUSED = (uint32_t)-1,
         KEY_SORT = 0,
-        KEY_SELECT,
-        KEY_WAH,
-        KEY_SPARSE,
-        KEY_SMALL_BLOCK
+        KEY_SELECT = 1,
+        KEY_WAH = 2,
+        KEY_SPARSE = 3,
+        KEY_SMALL_BLOCK = 4,
+        KEY_PLOIDY = 5,
+        KEY_MISSING = 6,
+        KEY_END_OF_VECTORS = 7
     };
 
     static void fill_dictionnary(void *block, std::unordered_map<uint32_t, uint32_t>& dict) {
@@ -88,6 +98,7 @@ public:
 protected:
     const size_t BLOCK_SIZE;
     std::unordered_map<uint32_t, uint32_t> dictionnary;
+    std::unordered_map<uint32_t, std::shared_ptr<Writable> > writable_dictionnary;
 };
 
 template <typename A_T, typename WAH_T = uint16_t>
@@ -100,7 +111,11 @@ public:
         wahs.clear();
         sparse_lines.clear();
         dictionnary.clear();
+        writable_dictionnary.clear();
     }
+
+    void set_non_uniform_ploidy() {dictionnary[KEY_PLOIDY] = -1;}
+    void set_block_ploidy(int32_t ploidy) {dictionnary[KEY_PLOIDY] = ploidy; }
 
     std::vector<bool> rearrangement_track;
     std::vector<std::vector<WAH_T> > wahs;
@@ -116,12 +131,17 @@ public:
 
         block_start_pos = s.tellp();
 
-        dictionnary[KEY_SORT] = -1;
-        dictionnary[KEY_SELECT] = -1;
-        dictionnary[KEY_WAH] = -1;
-        dictionnary[KEY_SPARSE] = -1;
+        // Default values
+        dictionnary[KEY_SORT] = KEY_UNUSED;
+        dictionnary[KEY_SELECT] = KEY_UNUSED;
+        dictionnary[KEY_WAH] = KEY_UNUSED;
+        dictionnary[KEY_SPARSE] = KEY_UNUSED;
         if (this->rearrangement_track.size() < BLOCK_SIZE) {
             dictionnary[KEY_SMALL_BLOCK] = this->rearrangement_track.size();
+        }
+        for (const auto& kv : writable_dictionnary) {
+            // Make sure the writables are in the other dictionnary
+            dictionnary[kv.first] = KEY_UNUSED;
         }
 
         // Write dictionnary
@@ -163,9 +183,16 @@ public:
             s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
         }
 
+        for (const auto& kv : writable_dictionnary) {
+            // Add the current offset to the dictionnary
+            dictionnary[kv.first] = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            // Write the writable
+            kv.second->write_to_stream(s);
+        }
+
         block_end_pos = s.tellp();
 
-        // Write updated dictionnary
+        // Rewrite the updated dictionnary
         s.seekp(block_start_pos, std::ios_base::beg);
         for (const auto& kv : dictionnary) {
             s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(uint32_t));
