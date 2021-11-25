@@ -88,8 +88,9 @@ private:
                     sparse_missing.push_back(index);
                 } else if (bcf_allele == bcf_int32_vector_end) {
                     std::cerr << "End of vector index : " << index << std::endl;
-                    std::cerr << "Mixed ploidy is not supported yet" << std::endl;
-                    throw "PLOIDY ERROR";
+                    std::cerr << "Mixed ploidy detected" << std::endl;
+                    has_mixed_ploidy = true;
+                    end_of_vector[index] = true;
                 } else {
                     try {
                         allele_counts.at(bcf_gt_allele(bcf_allele))++;
@@ -105,7 +106,8 @@ private:
 
 public:
     InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, const size_t MAC_THRESHOLD, size_t& variant_counter, const size_t RESET_SORT_BLOCK_LENGTH) :
-    PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased) {
+    PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased),
+    end_of_vector(PLOIDY, false) {
         scan_genotypes(bcf_fri);
 
         // For all alt alleles (1 if bi-allelic variant site)
@@ -119,7 +121,7 @@ public:
             if (minor_allele_count > MAC_THRESHOLD) {
                 uint32_t _; // Unused
                 bool __; // Unused
-                wahs.push_back(wah::wah_encode2(bcf_fri.gt_arr, alt_allele, a, _, __));
+                wahs.push_back(wah::wah_encode2_with_size(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
                 const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
                 if (minor_allele_count > SORT_THRESHOLD) {
                     rearrangements[alt_allele-1] = true;
@@ -148,6 +150,8 @@ public:
     std::vector<SparseGtLine<T> > sparse_lines;
     std::vector<T> sparse_missing;
     std::vector<T> sparse_non_default_phasing;
+    bool has_mixed_ploidy = false;
+    std::vector<bool> end_of_vector;
 };
 
 class GtCompressor {
@@ -706,7 +710,9 @@ template<typename T = uint32_t>
 class GtCompressorStream : public GtCompressorTemplate<T> {
 public:
 
-    GtCompressorStream(bool zstd_compression_on = false, int zstd_compression_level = 7) : zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level) {}
+    GtCompressorStream(bool zstd_compression_on = false, int zstd_compression_level = 7) : zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level) {
+        this->PLOIDY = 0; // Default, will be increased
+    }
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
@@ -717,10 +723,10 @@ public:
 
     void save_result_to_file(std::string filename) override {
         this->ofname = filename;
-        // This also writes to file
+        // This also writes to file (because of overrides below)
         GtCompressorTemplate<T>::compress_in_memory(this->ifname);
         // Write the final bits of the file
-        factory->finalize_file();
+        factory->finalize_file(this->PLOIDY);
     }
 protected:
     void handle_bcf_file_reader() override {
@@ -731,10 +737,16 @@ protected:
     }
 
     void handle_bcf_line() override {
-        if (this->line_max_ploidy != this->PLOIDY) {
-            std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
-            std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
-            throw "PLOIDY ERROR";
+        if (this->line_max_ploidy > this->PLOIDY) {
+            if (this->PLOIDY) {
+                std::cerr << "WARNING : Mixed PLOIDY is not yet fully supported !" << std::endl;
+                mixed_ploidy = true; // If ploidy was already set, it means mixed ploidy in file
+                throw "Mixed ploidy error";
+            }
+            if (this->line_max_ploidy > 2) {
+                throw "Ploidy higher than 2 is not yet supported";
+            }
+            this->PLOIDY = this->line_max_ploidy; // Max ploidy
         }
 
         // The factory does all the work
@@ -754,6 +766,7 @@ protected:
     bool zstd_compression_on = false;
     int  zstd_compression_level = 7; // Some acceptable default value
     std::unique_ptr<XsiFactory<T, uint16_t> > factory = nullptr;
+    bool mixed_ploidy = false;
 };
 
 class NewCompressor {

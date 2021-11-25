@@ -701,7 +701,7 @@ namespace wah {
      * @brief Copy-less reordering wah encoder
      * */
     template <typename T = uint16_t, typename A = uint16_t>
-    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& alt_allele_count, bool& has_missing) {
+    inline std::vector<T> wah_encode2_with_size(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, const size_t size, uint32_t& alt_allele_count, bool& has_missing) {
         // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         // 0b1000'0000 for 8b
@@ -709,8 +709,8 @@ namespace wah {
         constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
 
         // Resize to have no problems accessing in the loop below (removes conditionals from loop)
-        size_t BITS_WAH_SIZE = a.size() / WAH_BITS;
-        const size_t BITS_REM = a.size() % WAH_BITS; // Hope compiler combines the divide above and this mod
+        size_t BITS_WAH_SIZE = size / WAH_BITS;
+        const size_t BITS_REM = size % WAH_BITS; // Hope compiler combines the divide above and this mod
 
         std::vector<T> wah; // Output
 
@@ -766,8 +766,16 @@ namespace wah {
         }
 
         alt_allele_count = alt_allele_counter;
-        //minor_allele_count = std::min(uint32_t(a.size()) - alt_allele_counter, alt_allele_counter);
+        //minor_allele_count = std::min(uint32_t(size) - alt_allele_counter, alt_allele_counter);
         return wah;
+    }
+
+    /**
+     * @brief Copy-less reordering wah encoder
+     * */
+    template <typename T = uint16_t, typename A = uint16_t>
+    inline std::vector<T> wah_encode2(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, uint32_t& alt_allele_count, bool& has_missing) {
+        return wah_encode2_with_size<T, A>(gt_array, alt_allele, a, a.size(), alt_allele_count, has_missing);
     }
 
     /**

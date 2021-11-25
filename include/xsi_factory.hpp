@@ -38,7 +38,7 @@ public:
     virtual void append(const bcf_file_reader_info_t& bcf_fri) = 0;
     //virtual void add_sparse_missing_map(const std::unordered_map<size_t, std::vector<size_t> >& map) = 0;
     //virtual void add_sparse_non_default_phase_map(const std::unordered_map<size_t, std::vector<size_t> >& map) = 0;
-    virtual void finalize_file() = 0;
+    virtual void finalize_file(const size_t max_ploidy = 2) = 0;
 
     virtual ~XsiFactoryInterface() {}
 };
@@ -77,11 +77,11 @@ public:
         ////////////////////////
         header = {
             .version = 3, // New testing version
-            .ploidy = (uint8_t)this->PLOIDY, // May PLOIDY
+            .ploidy = (uint8_t)-1, // Will be rewritten
             .ind_bytes = sizeof(uint32_t), // Should never change
             .aet_bytes = sizeof(A_T), // Depends on number of hap samples
             .wah_bytes = sizeof(WAH_T), // Should never change
-            .hap_samples = (uint64_t)this->N_HAPS, /// @todo
+            .hap_samples = (uint64_t)-1, // Will be rewritten
             .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
             .block_size = (uint32_t)0,
             .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
@@ -109,8 +109,8 @@ public:
         /////////////////////////////
         s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
 
-        size_t written_bytes = 0;
-        size_t total_bytes = 0;
+        written_bytes = 0;
+        total_bytes = 0;
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
@@ -214,10 +214,12 @@ private:
     }
 public:
 
-    void finalize_file() override {
+    void finalize_file(const size_t max_ploidy) override {
         header.num_variants = this->variant_counter;
         header.xcf_entries = this->entry_counter;
         header.number_of_ssas = (this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
+        header.ploidy = max_ploidy;
+        header.hap_samples = sample_list.size() * max_ploidy;
 
         // Write the last block if necessary
         if (current_block.rearrangement_track.size()) {
