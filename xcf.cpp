@@ -621,7 +621,7 @@ std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifna
  *        in the matrix, which can be used to decompress the missing data.
  *
  * */
-size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname) {
+size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname, const size_t BLOCK_LENGTH, const size_t BM_BLOCK_BITS) {
     // Input file
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
@@ -656,17 +656,34 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
 
     // Write the variants
     size_t pos = 0;
+    size_t line = 0;
+    int32_t offset = 0;
+    int32_t block = 0;
     while (bcf_next_line(bcf_fri)) {
         /// @note this could maybe be improved by removing the dup / destroy
         bcf1_t *rec = bcf_dup(bcf_fri.line);
         bcf_unpack(rec, BCF_UN_STR);
         rec->n_sample = 1;
-        bcf_update_format_int32(hdr, rec, "BM", &pos, 1);
+
+        //if (line and ((line % BLOCK_LENGTH) == 0)) { // New version
+        if (pos and ((pos % BLOCK_LENGTH) == 0)) { // Old version
+            block++;
+            offset = 0; // New block
+        }
+        if (offset >> BM_BLOCK_BITS) {
+            std::cerr << "Offset cannot be represented on " << BM_BLOCK_BITS << " bits !" << std::endl;
+            throw "Variant BCF generation error, BM bits";
+        }
+        int32_t _ = block << BM_BLOCK_BITS | offset;
+
+        bcf_update_format_int32(hdr, rec, "BM", &_, 1);
         ret = bcf_write1(fp, hdr, rec);
         bcf_destroy(rec);
         if (bcf_fri.line->n_allele) {
             pos += bcf_fri.line->n_allele-1;
+            offset += bcf_fri.line->n_allele-1;
         }
+        line++;
     }
 
     // Close everything

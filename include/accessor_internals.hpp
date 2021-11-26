@@ -377,12 +377,20 @@ public:
     virtual const std::unordered_map<size_t, std::vector<size_t> >& get_phase_sparse_map() const = 0;
 protected:
     std::vector<size_t> allele_counts;
+
+    size_t BM_BLOCK_BITS = 15;
 };
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsTemplate : public AccessorInternals {
 public:
-    void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) override {
+    void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
+        // Conversion from new to old, for the moment
+        size_t block_id = new_position >> BM_BLOCK_BITS;
+        int32_t offset = (new_position << (32-BM_BLOCK_BITS)) >> (32-BM_BLOCK_BITS);
+        size_t position = block_id * header.ss_rate + offset;
+        // The conversion will be unnecessary in the new version
+
         this->allele_counts.resize(n_alleles);
         size_t total_alt = 0;
 
@@ -469,7 +477,13 @@ public:
         allele_counts[0] = this->N_HAPS - total_alt - total_missing;
     }
 
-    void fill_allele_counts(size_t n_alleles, size_t position) override {
+    void fill_allele_counts(size_t n_alleles, size_t new_position) override {
+        // Conversion from new to old, for the moment
+        size_t block_id = new_position >> BM_BLOCK_BITS;
+        uint32_t offset = ((uint32_t)new_position << (32-BM_BLOCK_BITS)) >> (32-BM_BLOCK_BITS); // Remove block id bits
+        size_t position = block_id * header.ss_rate + offset;
+        // The conversion will be unnecessary in the new version
+
         this->allele_counts.resize(n_alleles);
         size_t total_alt = 0;
 

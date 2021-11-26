@@ -285,7 +285,7 @@ std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifna
  *        in the matrix, which can be used to decompress the missing data.
  *
  * */
-size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname = "");
+size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname = "", const size_t BLOCK_LENGTH = 8192, const size_t BM_BLOCK_BITS = 15);
 
 std::vector<std::vector<bool> > extract_phase_vectors(const std::string& ifname);
 
