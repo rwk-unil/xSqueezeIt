@@ -1,0 +1,462 @@
+/*******************************************************************************
+ * Copyright (C) 2021 Rick Wertenbroek, University of Lausanne (UNIL),
+ * University of Applied Sciences and Arts Western Switzerland (HES-SO),
+ * School of Management and Engineering Vaud (HEIG-VD).
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ ******************************************************************************/
+
+#ifndef __GT_BLOCK_HPP__
+#define __GT_BLOCK_HPP__
+
+#include "interfaces.hpp"
+#include "internal_gt_record.hpp"
+
+template<typename A_T = uint32_t, typename WAH_T = uint16_t>
+class GtBlock : public IWritable, public IBCFLineEncoder {
+public:
+    const size_t PLOIDY_2 = 2;
+
+    enum Dictionary_Keys : uint32_t {
+        // Element (Scalar) keys
+        KEY_DICTIONNARY_SIZE = (uint32_t)-1,
+        KEY_BCF_LINES = 0,
+        KEY_BINARY_LINES = 1,
+        KEY_MAX_LINE_PLOIDY = 2,
+        // Line (Vector) keys
+        KEY_LINE_SORT = 0x10,
+        KEY_LINE_SELECT = 0x11,
+        KEY_LINE_VECTOR_LENGTH = 0x15,
+        KEY_LINE_MISSING = 0x16,
+        KEY_LINE_NON_UNIFORM_PHASING = 0x17,
+        KEY_LINE_END_OF_VECTORS = 0x18,
+        // Matrix keys
+        KEY_MATRIX_WAH = 0x20,
+        KEY_MATRIX_SPARSE = 0x21,
+        KEY_MATRIX_MISSING = 0x26,
+        KEY_MATRIX_NON_UNIFORM_PHASING = 0x27,
+        KEY_MATRIX_END_OF_VECTORS = 0x28,
+    }
+
+    enum Dictionary_Vals : uint32_t {
+        VAL_UNDEFINED = (uint32_t)-1,
+    }
+
+    GtBlock(const size_t NUM_SAMPLES, const size_t BLOCK_BCF_LINES, const int32_t default_phasing = 0) :
+        effective_bcf_lines_in_block(0), effective_binary_gt_lines_in_block(0),
+        block_bcf_lines(BLOCK_BCF_LINES),
+        line_has_missing(BLOCK_BCF_LINES, false),
+        default_phasing(default_phasing),
+        line_has_non_uniform_phasing(BLOCK_BCF_LINES, false),
+        line_has_end_of_vector(BLOCK_BCF_LINES, false),
+        default_vector_length(PLOIDY_2), max_vector_length(1),
+        allele_counts(BLOCK_BCF_LINES),
+        a(NUM_SAMPLES*PLOIDY_2), b(NUM_SAMPLES*PLOIDY_2),
+        a_weirdness(NUM_SAMPLES*PLOIDY_2), b_weirdness(NUM_SAMPLES*PLOIDY_2)
+    {
+
+    }
+
+    void write_to_stream(std::fstream& ofs) override {
+        if (effective_bcf_lines_in_block != bcf_block_lines) {
+            std::cerr << "Block with fewer BCF lines written to stream" << std::endl;
+        }
+
+        size_t block_start_pos = ofs.tellp();
+        size_t block_end_pos(0);
+        size_t dictionary_pos(0);
+
+        dictionary_pos = write_dictionary(ofs, dictionary);
+
+        /// @todo replace with writable interface loop
+        write_writables(ofs, block_start_pos); // Updates dictionary
+
+        update_dictionnary(ofs, dictionary_pos, dictionary);
+    }
+
+private:
+    inline void scan_genotypes(const bcf_file_reader_info_t& bcf_fri) {
+        const auto LINE_MAX_PLOIDY = bcf_fri.ngt_arr / bcf_fri.n_samples;
+        if (LINE_MAX_PLOIDY > max_vector_length) {
+            max_vector_length = LINE_MAX_PLOIDY;
+        }
+        if (LINE_MAX_PLOIDY != default_vector_length) {
+            non_default_vector_length_positions[effective_bcf_lines_in_block] = LINE_MAX_PLOIDY;
+        }
+
+        auto& allele_counts = line_allele_counts[effective_bcf_lines_in_block];
+        allele_counts.resize(bcf_fri.line->n_allele, 0);
+
+        for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            for (size_t j = 0; j < LINE_MAX_PLOIDY; ++j) {
+                const size_t index = i*LINE_MAX_PLOIDY+j;
+                auto bcf_allele = bcf_fri.gt_arr[index];
+                if (j) {
+                    // Phasing only applies on the second haplotypes and following for polyploid
+                    // This is a quirk of the BCF format, the phase bit of the first genotype is not used...
+                    // 0/1 => 0x02 04 and 0|1 => 0x02 05, see VCF / BCF specifications
+                    // https://samtools.github.io/hts-specs/
+                    // Will be set to non zero if phase changes
+                    if (bcf_gt_is_phased(bcf_allele) != default_phasing) {
+                        non_uniform_phasing = true;
+                        line_has_non_uniform_phasing[effective_bcf_lines_in_block] = true;
+                    }
+                }
+                if (bcf_gt_is_missing(bcf_allele) or (bcf_allele == bcf_int32_missing)) {
+                    missing_found = true;
+                    line_has_missing[effective_bcf_lines_in_block] = true;
+                } else if (bcf_allele == bcf_int32_vector_end) {
+                    end_of_vector_found = true;
+                    line_has_end_of_vector[effective_bcf_lines_in_block] = true;
+
+                    /// @todo set info for non uniform vector lengths (in other function)
+                } else {
+                    try {
+                        allele_counts.at(bcf_gt_allele(bcf_allele))++;
+                    } catch (std::exception& e) {
+                        printf("Bad access at : 0x%08x\n", bcf_gt_allele(bcf_allele));
+                        printf("Value in array is : 0x%08x\n", bcf_allele);
+                        throw "Unknown allele error !";
+                    }
+                }
+            }
+        }
+    }
+
+    // struct MissingPred {
+    //     static inline bool check(int32_t gt_arr_entry, int32_t _) {
+    //         (void)_; // Unused
+    //         return bcf_gt_is_missing(gt_arr_entry);
+    //     }
+    // };
+    struct RawPred {
+        static inline bool check(const int32_t gt_arr_entry, const int32_t raw) {
+            return gt_arr_entry == raw;
+        }
+    };
+    struct NonDefaultPhasingPred {
+        static inline bool check(const int32_t gt_arr_entry, const int32_t default_phasing) {
+            (void)_; // Unused
+            return bcf_gt_is_phased(gt_arr_entry) != default_phasing;
+        }
+    }
+    struct WeirdnessPred {
+        static inline bool check(const int32_t gt_arr_entry, const int32_t default_phasing) {
+            return gt_arr_entry == bcf_int32_missing or gt_arr_entry == bcf_int32_vector_end or bcf_gt_is_phased(gt_arr_entry) != default_phasing;
+        }
+    }
+    template<typename T, class Pred, const size_t V_LEN_RATIO = 1>
+    inline void private_pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, const int32_t _) {
+        size_t u = 0;
+        size_t v = 0;
+
+        for (size_t j = 0; j < ngt; ++j) {
+            if (!Pred::check(gt_arr[a[j]/V_LEN_RATIO], _)) { // If non pred
+                a[u] = a[j];
+                u++;
+            } else { // if pred
+                b[v] = a[j];
+                v++;
+            }
+        }
+        std::copy(b.begin(), b.begin()+v, a.begin()+u);
+    }
+
+public:
+    inline void encode_line(const bcf_file_reader_info_t& bcf_fri) override {
+        scan_genotypes(bcf_fri);
+
+        auto& allele_counts = line_allele_counts[effective_bcf_lines_in_block];
+        const auto LINE_MAX_PLOIDY = bcf_fri.ngt_arr / bcf_fri.n_samples;
+
+        // For all alt alleles (1 if bi-allelic variant site)
+        for (size_t alt_allele = 1; alt_allele < bcf_fri.line->n_alleles; ++alt_allele) {
+
+            const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt_arr - allele_counts[alt_allele]);
+            if (minor_allele_count > MAC_THRESHOLD) {
+                uint32_t _; // Unused
+                bool __; // Unused
+                wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
+                binary_gt_line_is_wah[effective_binary_gt_lines_in_block] = true;
+                //const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
+                //if (minor_allele_count > SORT_THRESHOLD) {
+                    // binary_gt_line_sorts[effective_binary_gt_lines_in_block] = true;
+                    if (LINE_MAX_PLOIDY != default_ploidy) {
+                        if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
+                            // Sort a, b as if they were homozygous with ploidy 2
+                            pbwt_sort1(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                        } else {
+                            /// @todo add and handle polyploid PBWT sort
+                            std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
+                            throw "PLOIDY ERROR";
+                        }
+                    else {
+                        pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                    }
+                //}
+            } else {
+                int32_t sparse_allele = 0; // If 0 means sparse is negated
+                if (allele_counts[alt_allele] == minor_allele_count) {
+                    sparse_allele = alt_allele;
+                }
+                sparse_encoded_binary_gt_lines.emplace_back(SparseGtLine<T>(effective_binary_gt_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
+            }
+            effective_binary_gt_lines_in_block++;
+        }
+
+        bool weird_line = false;
+        uint32_t _; // Unused
+        bool __; // Unused
+        if (line_has_missing[effective_bcf_lines_in_block]) {
+            weird_line = true;
+            wah_encoded_missing_lines.push_back(
+                wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(
+                    bcf_fri.gt_arr, bcf_int32_missing, a, bcf_fri.ngt_arr, _, __
+                )
+            );
+        }
+        if (line_has_non_uniform_phasing[effective_bcf_lines_in_block]) {
+            weird_line = true;
+            /// @todo this needs to be fixed, because here we check all alleles !
+            wah_encoded_non_uniform_phasing_lines.push_back(
+                wah::wah_encode2_with_size<WAH_T, A_T, NonDefaultPhasingPred>(
+                    bcf_fri.gt_arr, default_phasing, a, bcf_fri.ngt_arr, _, __
+                )
+            );
+        }
+        if (line_has_end_of_vector[effective_bcf_lines_in_block]) {
+            weird_line = true;
+            wah_encoded_end_of_vector_lines.push_back(
+                wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(
+                    bcf_fri.gt_arr, bcf_int32_vector_end, a, bcf_fri.ngt_arr, _, __
+                )
+            );
+        }
+
+        if (weird_line) {
+            // PBWT sort on weirdness
+            if (LINE_MAX_PLOIDY != default_ploidy) {
+                if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
+                    // Sort a, b as if they were homozygous with ploidy 2
+                    private_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0);
+                } else {
+                    /// @todo add and handle polyploid PBWT sort
+                    std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
+                    throw "PLOIDY ERROR";
+                }
+            else {
+                private_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, default_phasing);
+            }
+        }
+
+        effective_bcf_lines_in_block++;
+    }
+
+    virtual ~GtBlock() {}
+
+protected:
+    size_t effective_bcf_lines_in_block;
+    size_t effective_binary_gt_lines_in_block;
+    const size_t BLOCK_BCF_LINES;
+
+    // For handling missing
+    bool missing_found = false;
+    std::vector<bool> line_has_missing;
+
+    // For handling non default phase
+    int32_t default_phasing = 0;
+    bool non_uniform_phasing = false;
+    std::vector<bool> line_has_non_uniform_phasing;
+
+    // For handling end of vector
+    bool end_of_vector_found = false;
+    std::vector<bool> line_has_end_of_vector;
+
+    // For handling mixed ploidy
+    uint32_t default_vector_length;
+    uint32_t max_vector_length;
+    std::map<size_t, int32_t> non_default_vector_length_positions;
+    //std::set<int32_t> vector_lengths;
+
+    // Set when the binary gt line is WAH encoded (else sparse)
+    std::vector<bool> binary_gt_line_is_wah;
+    // Set when the binary gt line PBWT sorts the samples
+    //std::vector<bool> binary_gt_line_sorts;
+
+    std::vector<std::vector<WAH_T> > wah_encoded_binary_gt_lines;
+    std::vector<std::vector<A_T> > sparse_encoded_binary_gt_lines;
+
+    std::vector<std::vector<WAH_T> > wah_encoded_missing_lines;
+    std::vector<std::vector<WAH_T> > wah_encoded_phasing_lines;
+    std::vector<std::vector<WAH_T> > wah_encoded_end_of_vector_lines;
+
+    std::vector<std::vector<size_t> > line_allele_counts;
+
+    std::unordered_map<uint32_t, uint32_t> dictionary;
+
+private:
+    inline void fill_dictionary() {
+        dictionary[KEY_BCF_LINES] = effective_bcf_lines_in_block;
+        dictionary[KEY_BINARY_LINES] = effective_bianry_gt_lines_in_block;
+        dictionary[KEY_MAX_LINE_PLOIDY] = max_vector_length;
+
+        // Those are offsets
+        dictionary[KEY_LINE_SORT] = VAL_UNDEFINED;
+        dictionary[KEY_LINE_SELECT] = VAL_UNDEFINED;
+        dictionary[KEY_MATRIX_WAH] = VAL_UNDEFINED;
+        dictionary[KEY_MATRIX_SPARSE] = VAL_UNDEFINED;
+
+        if (missing_found) {
+            // Is an offset
+            dictionary[KEY_LINE_MISSING] = VAL_UNDEFINED;
+            dictionary[KEY_MATRIX_MISSING] = VAL_UNDEFINED;
+        }
+
+        if (non_uniform_phasing) {
+            // Is an offset
+            dictionary[KEY_LINE_NON_UNIFORM_PHASING] = VAL_UNDEFINED;
+            dictionary[KEY_MATRIX_NON_UNIFORM_PHASING] = VAL_UNDEFINED;
+        }
+
+        if (non_default_vector_lengths.size()) {
+            // Is an offset
+            dictionary[KEY_LINE_VECTOR_LENGTH] = VAL_UNDEFINED;
+        }
+
+        if (end_of_vector_found) {
+            // Is an offset
+            dictionary[KEY_LINE_END_OF_VECTORS] = VAL_UNDEFINED;
+            dictionary[KEY_MATRIX_END_OF_VECTORS] = VAL_UNDEFINED;
+        }
+    }
+
+#if 0
+    inline void write_dictionary_size(std::fstream& ofs) {
+        // Block starts with dictionary size (key could be removed but helps recognize this)
+        dictionary.erase(KEY_DICTIONNARY_SIZE); // Make sure the size is not in the dictionary
+        uint32_t key = KEY_DICTIONNARY_SIZE;
+        uint32_t val = dictionary.size();
+        ofs.write(reinterpret_cast<const char*>(&key), sizeof(uint32_t));
+        ofs.write(reinterpret_cast<const char*>(&val), sizeof(uint32_t));
+    }
+
+    inline void write_dictionary(std::fstream& ofs) {
+        for (const auto& kv : dictionary) {
+            ofs.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(uint32_t));
+            ofs.write(reinterpret_cast<const char*>(&(kv.second)), sizeof(uint32_t));
+        }
+    }
+#endif
+
+    inline void write_writables(std::fstream& s, const size_t& block_start_pos) {
+        /// @note .at(key) is used to make sure the key is in the dictionnary !
+        /// @todo handle the exceptions, however there should be none if this class is implemented correctly
+
+        // Write Sort
+        dictionary.at(KEY_LINE_SORT) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+        write_boolean_vector_as_wah(binary_gt_line_is_wah);
+
+        // Write Select
+        dictionary.at(KEY_LINE_SELECT) = dictionnary[KEY_SORT]; // Same is used
+
+        // Write WAH
+        dictionary.at(KEY_MATRIX_WAH) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+        for (const auto& wah : wah_encoded_binary_gt_lines) {
+            write_vector(s, wah);
+        }
+
+        // Write Sparse
+        dictionary.at(KEY_MATRIX_SPARSE) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+        for (const auto& sparse_line : sparse_encoded_binary_gt_lines) {
+            const auto& sparse = sparse_line.sparse_encoding;
+            A_T number_of_positions = sparse.size();
+
+            if (sparse_line.sparse_allele == 0) {
+                //if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
+                // Set the MSB Bit
+                // This will always work as long as MAF is < 0.5
+                // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
+                /// @todo Check for this if user can set MAF
+                number_of_positions |= (A_T)1 << (sizeof(A_T)*8-1);
+            }
+            s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
+            write_vector(s, sparse);
+        }
+
+        // Optional write missing
+        if (missing_found) {
+            dictionary.at(KEY_LINE_MISSING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_boolean_vector_as_wah(s, line_has_missing);
+            dictionary.at(KEY_MATRIX_MISSING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_vector_of_vectors(s, wah_encoded_missing_lines);
+        }
+
+        // Optional write non uniform phasing
+        if (non_uniform_phasing) {
+            dictionary.at(KEY_LINE_NON_UNIFORM_PHASING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_boolean_vector_as_wah(s, line_has_non_uniform_phasing);
+            dictionary.at(KEY_MATRIX_NON_UNIFORM_PHASING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_vector_of_vectors(s, wah_encoded_phasing_lines);
+        }
+
+        // Optional write non default vector lengths
+        if (non_default_vector_lengths.size()) {
+            dictionary.at(KEY_LINE_VECTOR_LENGTH) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+
+            //TODO
+            throw "Not implemented yet !";
+        }
+
+        // Optional write end of vectors
+        if (end_of_vector_found) {
+            dictionary.at(KEY_LINE_END_OF_VECTORS) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_boolean_vector_as_wah(s, line_has_end_of_vector);
+            dictionary.at(KEY_MATRIX_END_OF_VECTORS) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_vector_of_vectors(s, wah_encoded_end_of_vector_lines);
+        }
+    }
+
+    template<typename T>
+    inline void write_vector(std::fstream& s, const std::vector<T>& v) {
+        static_assert(!std::is_same<T, bool>::value, "bool is implementation defined therefore is not portable");
+        s.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(decltype(v.back())));
+    }
+
+    template<typename T>
+    inline void write_vector_of_vectors(std::fstream& s, const std::vector<std::vector<T> >& cv) {
+        for (const auto& v : cv) {
+            write_vector(s, v);
+        }
+    }
+
+    template<typename _WAH_T = WAH_T>
+    inline void write_boolean_vector_as_wah(std::fstream& s, const std::vector<bool>& v) {
+        auto wah = wah::wah_encode2<_WAH_T>(v);
+        write_vector(s, v);
+    }
+
+    // Internal PBWT ordering vectors
+    std::vector<A_T> a;
+    std::vector<A_T> b;
+
+    std::vector<A_T> a_weirdness;
+    std::vector<A_T> b_weirdness;
+};
+
+#endif /* __GT_BLOCK_HPP__ */
