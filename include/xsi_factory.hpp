@@ -29,7 +29,7 @@
 
 #include "block.hpp"
 #include "fs.hpp"
-#include "gt_compressor_new.hpp" // For InternalGtRecord
+#include "internal_gt_record.hpp"
 
 namespace {
 
