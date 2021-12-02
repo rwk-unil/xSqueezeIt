@@ -697,12 +697,18 @@ namespace wah {
         }
     }
 
+    struct DefaultPred {
+        static inline bool check(const int32_t gt_arr_entry, const int32_t alt_allele) {
+            return bcf_gt_allele(gt_arr_entry) == alt_allele;
+        }
+    };
+
     /**
      * @brief Copy-less reordering wah encoder
      * */
-    template <typename T = uint16_t, typename A = uint16_t>
+    template <typename T = uint16_t, typename A = uint16_t, class Pred = DefaultPred>
     inline std::vector<T> wah_encode2_with_size(int32_t* gt_array, const int32_t& alt_allele, const std::vector<A>& a, const size_t size, uint32_t& alt_allele_count, bool& has_missing) {
-        // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
+    // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
         // 0b1000'0000 for 8b
         constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
@@ -728,7 +734,8 @@ namespace wah {
                     //std::cout << "Missing value found" << std::endl;
                     has_missing = true;
                 }
-                if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
+                //if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
+                if (Pred::check(gt_array[a[b++]], alt_allele)) {
                     word |= WAH_HIGH_BIT;
                     alt_allele_counter++;
                 }
@@ -747,7 +754,8 @@ namespace wah {
                         //std::cout << "Missing value found" << std::endl;
                         has_missing = true;
                     }
-                    if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
+                    //if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
+                    if (Pred::check(gt_array[a[b++]], alt_allele)) {
                         word |= WAH_HIGH_BIT;
                         alt_allele_counter++;
                     }
