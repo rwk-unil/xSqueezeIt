@@ -70,7 +70,9 @@ public:
         a(NUM_SAMPLES*PLOIDY_2), b(NUM_SAMPLES*PLOIDY_2),
         a_weirdness(NUM_SAMPLES*PLOIDY_2), b_weirdness(NUM_SAMPLES*PLOIDY_2)
     {
-
+        // Reset a
+        std::iota(a.begin(), a.end(), 0);
+        std::iota(a_weirdness.begin(), a_weirdness.end(), 0);
     }
 
     void write_to_stream(std::fstream& ofs) override {
