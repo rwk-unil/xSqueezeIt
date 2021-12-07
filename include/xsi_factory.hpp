@@ -460,7 +460,7 @@ public:
         // Prepare the header //
         ////////////////////////
         header = {
-            .version = -1, // New testing version
+            .version = (uint32_t)-1, // New testing version
             .ploidy = (uint8_t)-1, // Will be rewritten
             .ind_bytes = sizeof(uint32_t), // Should never change
             .aet_bytes = sizeof(A_T), // Depends on number of hap samples
@@ -534,9 +534,11 @@ private:
 public:
 
     void finalize_file(const size_t max_ploidy) override {
-        header.num_variants = this->variant_counter;
+        //header.num_variants = this->variant_counter;
+        header.num_variants = 0; /// @todo new format
+
         header.xcf_entries = this->entry_counter;
-        header.number_of_ssas = (this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
+        header.number_of_ssas = (this->entry_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
         header.ploidy = max_ploidy;
         header.hap_samples = sample_list.size() * max_ploidy;
 

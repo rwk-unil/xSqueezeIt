@@ -213,7 +213,7 @@ public:
         // Set stream back to end of file
         s.seekp(block_end_pos, std::io_bas::beg);
 #else
-        update_dictionnary(s, dictionary_pos, dictionary);
+        update_dictionary(s, dictionary_pos, dictionary);
 #endif
 
         if (compressed) {

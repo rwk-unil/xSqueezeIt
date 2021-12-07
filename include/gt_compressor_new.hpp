@@ -596,7 +596,7 @@ public:
 
 #include "xsi_factory.hpp" // Depends on InternalGtRecord
 
-template<typename T = uint32_t>
+template<typename T = uint32_t, class XSIF = XsiFactory<T, uint16_t> >
 class GtCompressorStream : public GtCompressorTemplate<T> {
 public:
 
@@ -623,7 +623,7 @@ protected:
         GtCompressorTemplate<T>::handle_bcf_file_reader();
 
         // Requires the bcf gile reader to have been handled to extract the relevant information, this also means we are in the "traverse phase"
-        this->factory = make_unique<XsiFactory<T, uint16_t> >(ofname, this->RESET_SORT_BLOCK_LENGTH, this->MINOR_ALLELE_COUNT_THRESHOLD, this->default_phased, this->sample_list, zstd_compression_on, zstd_compression_level);
+        this->factory = make_unique<XSIF>(ofname, this->RESET_SORT_BLOCK_LENGTH, this->MINOR_ALLELE_COUNT_THRESHOLD, this->default_phased, this->sample_list, zstd_compression_on, zstd_compression_level);
     }
 
     void handle_bcf_line() override {
@@ -655,7 +655,7 @@ protected:
     std::string ofname;
     bool zstd_compression_on = false;
     int  zstd_compression_level = 7; // Some acceptable default value
-    std::unique_ptr<XsiFactory<T, uint16_t> > factory = nullptr;
+    std::unique_ptr<XsiFactoryInterface> factory = nullptr;
     bool mixed_ploidy = false;
 };
 
@@ -677,7 +677,9 @@ public:
 
         // If not may haplotypes use a compressor that uses uint16_t as indices
         if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-            if (VERSION == 33) {
+            if (VERSION == (uint32_t)-1) {
+                _compressor = make_unique<GtCompressorStream<uint16_t, XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
+            } else if (VERSION == 33) {
                 _compressor = make_unique<GtCompressorStream<uint16_t> >(zstd_compression_on, zstd_compression_level);
             } else if (VERSION == 2) {
                 _compressor = make_unique<GtCompressorTemplate<uint16_t> >();
@@ -685,7 +687,9 @@ public:
                 _compressor = make_unique<GtCompressorV3<uint16_t> >(zstd_compression_on, zstd_compression_level);
             }
         } else { // Else use a compressor that uses uint32_t as indices
-            if (VERSION == 33) {
+            if (VERSION == (uint32_t)-1) {
+                _compressor = make_unique<GtCompressorStream<uint32_t, XsiFactoryExt<uint32_t> > >(zstd_compression_on, zstd_compression_level);
+            } else if (VERSION == 33) {
                 _compressor = make_unique<GtCompressorStream<uint32_t> >(zstd_compression_on, zstd_compression_level);
             } else if (VERSION == 2) {
                 _compressor = make_unique<GtCompressorTemplate<uint32_t> >();
