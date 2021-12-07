@@ -31,6 +31,8 @@
 #include "fs.hpp"
 #include "internal_gt_record.hpp"
 
+#include "gt_block.hpp"
+
 namespace {
 
 class XsiFactoryInterface {
@@ -381,6 +383,245 @@ protected:
     std::vector<A_T> b;
     size_t entry_counter = 0;
     size_t variant_counter = 0;
+    /// @todo PLOIDY
+    size_t PLOIDY = 2;
+
+    header_t header;
+
+    size_t written_bytes = 0;
+    size_t total_bytes = 0;
+
+    std::vector<std::string> sample_list;
+};
+
+template <typename T_K, typename T_V, template<typename, typename> class IBinaryBlock>
+class EncodingBinaryBlock : public IBinaryBlock<T_K, T_V>, public IBCFLineEncoder, public BCFBlock {
+public:
+    EncodingBinaryBlock(const size_t BLOCK_BCF_LINES) : BCFBlock(BLOCK_BCF_LINES) {}
+
+    void encode_line(const bcf_file_reader_info_t& bcf_fri) override {
+        for (auto& encoder : writable_block_encoders) {
+            encoder.second->encode_line(bcf_fri);
+        }
+        effective_bcf_lines_in_block++;
+    }
+
+    virtual ~EncodingBinaryBlock() {}
+
+protected:
+    std::unordered_map<T_K, std::shared_ptr<IWritableBCFLineEncoder> > writable_block_encoders;
+};
+
+/// @todo check this derivation !
+class EncodingBinaryBlockWithGT : public EncodingBinaryBlock<uint32_t, uint32_t, BlockWithZstdCompressor> {
+public:
+    EncodingBinaryBlockWithGT(const size_t num_samples, const size_t block_bcf_lines, const size_t MAC_THRESHOLD, const int32_t default_phasing = 0) :
+        EncodingBinaryBlock(block_bcf_lines) {
+        // Add the gt writable encoder
+        this->writable_block_encoders[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY] =
+            ((num_samples <= std::numeric_limits<uint16_t>::max()) ?
+            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)) :
+            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint32_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)));
+        this->writable_dictionary[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY] =
+            std::static_pointer_cast<IWritable>(this->writable_block_encoders[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY]);
+    }
+
+    virtual ~EncodingBinaryBlockWithGT() {}
+};
+
+template <typename A_T = uint32_t, typename WAH_T = uint16_t>
+class XsiFactoryExt : public XsiFactoryInterface {
+
+public:
+    XsiFactoryExt(std::string filename, const size_t RESET_SORT_BLOCK_LENGTH, const size_t MINOR_ALLELE_COUNT_THRESHOLD,
+                  int32_t default_phased, const std::vector<std::string>& sample_list,
+                  bool zstd_compression_on = false, int zstd_compression_level = 7) :
+        filename(filename), zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level),
+        s(filename, s.binary | s.out | s.trunc),
+        RESET_SORT_BLOCK_LENGTH(RESET_SORT_BLOCK_LENGTH), MINOR_ALLELE_COUNT_THRESHOLD(MINOR_ALLELE_COUNT_THRESHOLD),
+        default_phased(default_phased), sample_list(sample_list)
+    {
+        current_block = make_unique<EncodingBinaryBlockWithGT>(sample_list.size(), RESET_SORT_BLOCK_LENGTH, MINOR_ALLELE_COUNT_THRESHOLD, default_phased);
+
+        std::cout << "XSI Factory Ext is used" << std::endl;
+        //std::cerr << "XSI Factory created with :" << std::endl;
+        //std::cerr << "sample list : ";
+        //for (auto s : sample_list) std::cerr << s;
+        //std::cerr << std::endl;
+
+        N_HAPS = sample_list.size() * this->PLOIDY;
+
+        if (!s.is_open()) {
+            std::cerr << "Failed to open file " << filename << std::endl;
+            throw "Failed to open file";
+        }
+
+        ////////////////////////
+        // Prepare the header //
+        ////////////////////////
+        header = {
+            .version = -1, // New testing version
+            .ploidy = (uint8_t)-1, // Will be rewritten
+            .ind_bytes = sizeof(uint32_t), // Should never change
+            .aet_bytes = sizeof(A_T), // Depends on number of hap samples
+            .wah_bytes = sizeof(WAH_T), // Should never change
+            .hap_samples = (uint64_t)-1, // Will be rewritten
+            .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
+            .block_size = (uint32_t)0,
+            .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
+            .ss_rate = (uint32_t)this->RESET_SORT_BLOCK_LENGTH,
+            .number_of_ssas = (uint32_t)-1, /* Set later */
+            .indices_offset = (uint32_t)-1, /* Set later */
+            .ssas_offset = (uint32_t)-1, /* Unused */
+            .wahs_offset = (uint32_t)-1, /* Set later */
+            .samples_offset = (uint32_t)-1, /* Set later */
+            .rearrangement_track_offset = (uint32_t)-1, /* Unused */
+            .xcf_entries = (uint64_t)0, //this->entry_counter,
+            .sample_name_chksum = 0 /* TODO */,
+            .bcf_file_chksum = 0 /* TODO */,
+            .data_chksum = 0 /* TODO */,
+            .header_chksum = 0 /* TODO */
+        };
+        header.iota_ppa = true;
+        header.no_sort = false;
+        header.zstd = zstd_compression_on;
+        header.rare_threshold = this->MINOR_ALLELE_COUNT_THRESHOLD;
+        header.default_phased = this->default_phased;
+
+        /////////////////////////////
+        // Write Unfinished Header //
+        /////////////////////////////
+        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+
+        written_bytes = 0;
+        total_bytes = 0;
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+
+        current_block = make_unique<EncodingBinaryBlockWithGT>(num_samples, RESET_SORT_BLOCK_LENGTH, default_phased);
+
+        header.wahs_offset = total_bytes;
+    }
+
+    void append(const bcf_file_reader_info_t& bcf_fri) override {
+        check_flush_block();
+
+        current_block->encode_line(bcf_fri);
+
+        entry_counter++;
+    }
+
+    inline void increment_entry_counter(const size_t increment) {
+        entry_counter += increment;
+    }
+
+private:
+    inline void check_flush_block() {
+        // Start new block
+        if ((entry_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
+            // if there was a previous block, write it
+            if (entry_counter) {
+                block_counter++;
+                indices.push_back((uint32_t)s.tellp());
+                current_block->write_to_file(s, zstd_compression_on, zstd_compression_level);
+            }
+            // Here replace the pointer instead of resetting the block, check performance...
+            current_block = make_unique<EncodingBinaryBlockWithGT>(num_samples, RESET_SORT_BLOCK_LENGTH, default_phased);
+        }
+    }
+
+public:
+
+    void finalize_file(const size_t max_ploidy) override {
+        header.num_variants = this->variant_counter;
+        header.xcf_entries = this->entry_counter;
+        header.number_of_ssas = (this->variant_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
+        header.ploidy = max_ploidy;
+        header.hap_samples = sample_list.size() * max_ploidy;
+
+        // Write the last block if necessary
+        if (current_block->get_effective_bcf_lines_in_block()) {
+            block_counter++;
+            indices.push_back((uint32_t)s.tellp());
+            current_block->write_to_file(s, zstd_compression_on, zstd_compression_level);
+        }
+
+        // Alignment padding...
+        size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
+        if (mod_uint32) {
+            size_t padding = sizeof(uint32_t) - mod_uint32;
+            for (size_t i = 0; i < padding; ++i) {
+                s.write("", sizeof(char));
+            }
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "blocks " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+
+        ///////////////////////
+        // Write the indices //
+        ///////////////////////
+        header.indices_offset = total_bytes;
+        s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices.back())));
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        header.indices_sparse_offset = (uint32_t)-1; // Not used
+        header.ssas_offset = (uint32_t)-1; // Not used in this compressor
+
+        ////////////////////////////
+        // Write the sample names //
+        ////////////////////////////
+        header.samples_offset = total_bytes;
+        for(const auto& sample : this->sample_list) {
+            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
+        header.sparse_offset = (uint32_t)-1; // Not used
+
+        header.default_phased = this->default_phased;
+
+        s.flush();
+
+        ///////////////////////////
+        // Rewrite Filled Header //
+        ///////////////////////////
+        s.seekp(0, std::ios_base::beg);
+        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+
+        s.close();
+    }
+
+protected:
+    std::string filename;
+
+    bool zstd_compression_on = false;
+    int zstd_compression_level = 7;
+
+    std::fstream s;
+
+    const size_t RESET_SORT_BLOCK_LENGTH;
+    const size_t MINOR_ALLELE_COUNT_THRESHOLD;
+
+    std::unique_ptr<EncodingBinaryBlock<uint32_t, uint32_t, BlockWithZstdCompressor> > current_block;
+
+    size_t block_counter = 0;
+    std::vector<uint32_t> indices;
+
+    int32_t default_phased;
+
+    size_t num_samples;
+    size_t N_HAPS;
+
+    size_t entry_counter = 0;
     /// @todo PLOIDY
     size_t PLOIDY = 2;
 
