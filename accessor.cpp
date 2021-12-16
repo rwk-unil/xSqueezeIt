@@ -40,8 +40,12 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
 
     // Check version
     if (header.version != 2 and header.version != 3) {
-        std::cerr << "Bad version" << std::endl;
-        throw "Bad version";
+        if (header.version == 4) {
+            std::cerr << "Experimental version" << std::endl;
+        } else {
+            std::cerr << "Bad version" << std::endl;
+            throw "Bad version";
+        }
     }
 
     // Extract the sample list
@@ -54,9 +58,17 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
     s.close();
 
     if (header.aet_bytes == 2) {
-        internals = make_unique<AccessorInternalsTemplate<uint16_t> >(filename);
+        if (header.version == 4) {
+            internals = make_unique<AccessorInternalsNewTemplate<uint16_t> >(filename);
+        } else {
+            internals = make_unique<AccessorInternalsTemplate<uint16_t> >(filename);
+        }
     } else if (header.aet_bytes == 4) {
-        internals = make_unique<AccessorInternalsTemplate<uint32_t> >(filename);
+        if (header.version == 4) {
+            internals = make_unique<AccessorInternalsNewTemplate<uint32_t> >(filename);
+        } else {
+            internals = make_unique<AccessorInternalsTemplate<uint32_t> >(filename);
+        }
     } else {
         std::cerr << "Unsupported access type" << std::endl;
         throw "Unsupported A_T";

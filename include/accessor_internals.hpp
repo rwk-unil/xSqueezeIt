@@ -152,6 +152,7 @@ public:
             size_t previous_arrangement = position / arrangement_sample_rate;
             advance_steps = position % arrangement_sample_rate;
 
+            //std::cerr << "Seeking position : " << position << std::endl;
             seek_sampled_arrangement(previous_arrangement);
         }
 
@@ -378,7 +379,7 @@ public:
 protected:
     std::vector<size_t> allele_counts;
 
-    size_t BM_BLOCK_BITS = 15;
+    const size_t BM_BLOCK_BITS = 15;
 };
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
@@ -386,8 +387,9 @@ class AccessorInternalsTemplate : public AccessorInternals {
 public:
     void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
         // Conversion from new to old, for the moment
-        size_t block_id = new_position >> BM_BLOCK_BITS;
-        int32_t offset = (new_position << (32-BM_BLOCK_BITS)) >> (32-BM_BLOCK_BITS);
+        const size_t OFFSET_MASK = ~((((size_t)-1) >> BM_BLOCK_BITS) << BM_BLOCK_BITS);
+        size_t block_id = ((new_position & 0xFFFFFFFF) >> BM_BLOCK_BITS);
+        uint32_t offset = new_position & OFFSET_MASK;
         size_t position = block_id * header.ss_rate + offset;
         // The conversion will be unnecessary in the new version
 

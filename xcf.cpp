@@ -621,7 +621,7 @@ std::vector<std::vector<bool> > extract_common_to_matrix(const std::string& ifna
  *        in the matrix, which can be used to decompress the missing data.
  *
  * */
-size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname, const size_t BLOCK_LENGTH, const size_t BM_BLOCK_BITS) {
+size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const std::string& ofname, std::string xsi_fname, const bool new_version, const size_t BLOCK_LENGTH, const size_t BM_BLOCK_BITS) {
     // Input file
     bcf_file_reader_info_t bcf_fri;
     initialize_bcf_file_reader(bcf_fri, ifname);
@@ -665,8 +665,10 @@ size_t replace_samples_by_pos_in_binary_matrix(const std::string& ifname, const 
         bcf_unpack(rec, BCF_UN_STR);
         rec->n_sample = 1;
 
+        size_t idx = new_version ? line : pos;
         //if (line and ((line % BLOCK_LENGTH) == 0)) { // New version
-        if (pos and ((pos % BLOCK_LENGTH) == 0)) { // Old version
+        //if (pos and ((pos % BLOCK_LENGTH) == 0)) { // Old version
+        if (idx and ((idx % BLOCK_LENGTH) == 0)) {
             block++;
             offset = 0; // New block
         }

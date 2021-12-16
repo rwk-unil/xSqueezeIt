@@ -91,6 +91,7 @@ public:
         } else {
             std::cerr << "Block written to stream" << std::endl;
         }
+        std::cerr << "BCF lines : " << effective_bcf_lines_in_block << " binary lines : " << effective_binary_gt_lines_in_block << std::endl;
 
         size_t block_start_pos = ofs.tellp();
         //size_t block_end_pos(0);

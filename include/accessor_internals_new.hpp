@@ -314,6 +314,7 @@ protected:
         A_T num = *s_p;
         s_p++;
 
+        sparse_negated = (num & MSB_BIT);
         num &= ~MSB_BIT; // Remove the bit !
 
         s_p += num;
@@ -370,9 +371,10 @@ template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsNewTemplate : public AccessorInternals {
 public:
     void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
-        size_t block_id = new_position >> BM_BLOCK_BITS;
+        const size_t OFFSET_MASK = ~((((size_t)-1) >> BM_BLOCK_BITS) << BM_BLOCK_BITS);
+        size_t block_id = ((new_position & 0xFFFFFFFF) >> BM_BLOCK_BITS);
         // The offset is relative to the start of the block and is binary gt lines
-        int32_t offset = (new_position << (32-BM_BLOCK_BITS)) >> (32-BM_BLOCK_BITS);
+        uint32_t offset = new_position & OFFSET_MASK;
 
         // If block ID is not current block
         if (!dp or current_block != block_id) {
@@ -380,6 +382,7 @@ public:
 
             // Make DecompressPointer
             dp = make_unique<DecompressPointerGTBlock<A_T, WAH_T> >(header, gt_block_p);
+            //std::cerr << "Block ID : " << block_id << " offset : " << offset << std::endl;
         }
 
         dp->seek(offset);

@@ -111,8 +111,7 @@ int main(int argc, const char *argv[]) {
         std::string variant_file(ofname + XSI_BCF_VAR_EXTENSION);
         auto variant_thread = std::thread([&]{
             try {
-                //remove_samples(filename, variant_file);
-                replace_samples_by_pos_in_binary_matrix(filename, variant_file, ofname);
+                replace_samples_by_pos_in_binary_matrix(filename, variant_file, ofname, opt.experimental, opt.reset_sort_block_length);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 fail = true;
