@@ -415,13 +415,13 @@ protected:
 /// @todo check this derivation !
 class EncodingBinaryBlockWithGT : public EncodingBinaryBlock<uint32_t, uint32_t, BlockWithZstdCompressor> {
 public:
-    EncodingBinaryBlockWithGT(const size_t num_samples, const size_t block_bcf_lines, const size_t MAC_THRESHOLD, const int32_t default_phasing = 0) :
+    EncodingBinaryBlockWithGT(const size_t num_samples, const size_t block_bcf_lines, const size_t MAC_THRESHOLD, const int32_t default_phasing) :
         EncodingBinaryBlock(block_bcf_lines) {
         // Add the gt writable encoder
         this->writable_block_encoders[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY] =
             ((num_samples <= std::numeric_limits<uint16_t>::max()) ?
-            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)) :
-            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint32_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)));
+            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint16_t, uint16_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)) :
+            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)));
         this->writable_dictionary[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY] =
             std::static_pointer_cast<IWritable>(this->writable_block_encoders[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY]);
     }
@@ -449,6 +449,7 @@ public:
         //for (auto s : sample_list) std::cerr << s;
         //std::cerr << std::endl;
 
+        num_samples = sample_list.size();
         N_HAPS = sample_list.size() * this->PLOIDY;
 
         if (!s.is_open()) {
@@ -460,7 +461,7 @@ public:
         // Prepare the header //
         ////////////////////////
         header = {
-            .version = (uint32_t)-1, // New testing version
+            .version = (uint32_t)4, // New testing version
             .ploidy = (uint8_t)-1, // Will be rewritten
             .ind_bytes = sizeof(uint32_t), // Should never change
             .aet_bytes = sizeof(A_T), // Depends on number of hap samples
@@ -499,7 +500,7 @@ public:
         total_bytes += written_bytes;
         std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
 
-        current_block = make_unique<EncodingBinaryBlockWithGT>(num_samples, RESET_SORT_BLOCK_LENGTH, default_phased);
+        current_block = make_unique<EncodingBinaryBlockWithGT>(num_samples, RESET_SORT_BLOCK_LENGTH, MINOR_ALLELE_COUNT_THRESHOLD, default_phased);
 
         header.wahs_offset = total_bytes;
     }
@@ -527,7 +528,7 @@ private:
                 current_block->write_to_file(s, zstd_compression_on, zstd_compression_level);
             }
             // Here replace the pointer instead of resetting the block, check performance...
-            current_block = make_unique<EncodingBinaryBlockWithGT>(num_samples, RESET_SORT_BLOCK_LENGTH, default_phased);
+            current_block = make_unique<EncodingBinaryBlockWithGT>(num_samples, RESET_SORT_BLOCK_LENGTH, MINOR_ALLELE_COUNT_THRESHOLD, default_phased);
         }
     }
 

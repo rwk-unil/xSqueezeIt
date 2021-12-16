@@ -74,6 +74,21 @@ inline void update_dictionary(std::fstream& ofs, const size_t& dictionary_pos, c
 GEN_UPDATE_DICTIONARY_TYPE(std::map)
 GEN_UPDATE_DICTIONARY_TYPE(std::unordered_map)
 
+template<typename MAP_T>
+inline void read_dictionary(MAP_T& map, uint32_t* p) {
+    map.clear();
+    // Ignore first word
+    (void)*p++;
+    // Get dict size
+    uint32_t size = *p++;
+    for (uint32_t i = 0; i < size; ++i) {
+        uint32_t key = *p++;
+        uint32_t val = *p++;
+        map[key] = val;
+    }
+    //return p;
+}
+
 class IBCFLineEncoder {
 public:
     /**
@@ -161,7 +176,7 @@ public:
         size_t dictionary_pos(0);
 
         // Refresh dictionary
-        dictionary[KEY_BCF_LINES] = block_size;
+        //dictionary[KEY_BCF_LINES] = block_size;
         for (const auto& kv : writable_dictionary) {
             // Make sure the writables are also in the other dictionary
             dictionary[kv.first] = VAL_UNDEFINED;
@@ -245,7 +260,7 @@ public:
         remove(ts.filename.c_str()); // Delete temp file
     }
 
-    size_t block_size;
+    //size_t block_size;
     std::unordered_map<T_KEY, T_VAL> dictionary;
     std::unordered_map<T_KEY, std::shared_ptr<IWritable> > writable_dictionary;
     const T_KEY DICTIONNARY_SIZE_KEY = KEY_DICTIONNARY_SIZE;
@@ -296,5 +311,7 @@ class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
         free(output_buffer);
     }
 };
+
+// Decompression related
 
 #endif /* __INTERFACES_HPP__ */

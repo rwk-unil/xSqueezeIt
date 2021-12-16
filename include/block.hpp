@@ -154,10 +154,18 @@ public:
         s.write(reinterpret_cast<const char*>(&_), sizeof(uint32_t));
         s.write(reinterpret_cast<const char*>(&_), sizeof(uint32_t));
 
+        size_t written_bytes = size_t(s.tellp());
+        size_t total_bytes = size_t(s.tellp());
+
         // Write sort
         dictionnary[KEY_SORT] = (uint32_t)((size_t)s.tellp()-block_start_pos);
         auto sort = wah::wah_encode2<uint16_t>(this->rearrangement_track);
         s.write(reinterpret_cast<const char*>(sort.data()), sort.size() * sizeof(decltype(sort.back())));
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sort " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
         // Write select
         dictionnary[KEY_SELECT] = dictionnary[KEY_SORT]; // Same is used
         // Write wah
@@ -165,6 +173,11 @@ public:
         for (const auto& wah : wahs) {
             s.write(reinterpret_cast<const char*>(wah.data()), wah.size() * sizeof(decltype(wah.back())));
         }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "WAH " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+
         // Write sparse
         dictionnary[KEY_SPARSE] = (uint32_t)((size_t)s.tellp()-block_start_pos);
         for (const auto& sparse_line : sparse_lines) {
@@ -182,6 +195,12 @@ public:
             s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
             s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
         }
+
+        std::cout << "Written " << sparse_lines.size() << " sparse lines" << std::endl;
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sparse " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         for (const auto& kv : writable_dictionnary) {
             // Add the current offset to the dictionnary

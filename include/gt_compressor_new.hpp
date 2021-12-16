@@ -622,6 +622,8 @@ protected:
     void handle_bcf_file_reader() override {
         GtCompressorTemplate<T>::handle_bcf_file_reader();
 
+        this->default_phased = seek_default_phased(this->ifname);
+
         // Requires the bcf gile reader to have been handled to extract the relevant information, this also means we are in the "traverse phase"
         this->factory = make_unique<XSIF>(ofname, this->RESET_SORT_BLOCK_LENGTH, this->MINOR_ALLELE_COUNT_THRESHOLD, this->default_phased, this->sample_list, zstd_compression_on, zstd_compression_level);
     }
@@ -640,12 +642,12 @@ protected:
         }
 
         // The factory does all the work
-        try {
+        //try {
             factory->append(this->bcf_fri);
-        } catch (...) {
-            std::cerr << "entry " << this->entry_counter << ", " << unique_id(this->bcf_fri.line) << " caused a problem" << std::endl;
-            exit(-1);
-        }
+        //} catch (...) {
+        //    std::cerr << "entry " << this->entry_counter << ", " << unique_id(this->bcf_fri.line) << " caused a problem" << std::endl;
+        //    exit(-1);
+        //}
 
         // Counts the number of BCF lines
         this->entry_counter++;

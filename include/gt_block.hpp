@@ -28,20 +28,19 @@
 #include "interfaces.hpp"
 #include "internal_gt_record.hpp"
 
-template<typename A_T = uint32_t, typename WAH_T = uint16_t>
-class GtBlock : public IWritableBCFLineEncoder, public BCFBlock {
+class GTBlockDict {
 public:
-    const size_t PLOIDY_2 = 2;
-
     enum Dictionary_Keys : uint32_t {
         // Element (Scalar) keys
         KEY_DICTIONNARY_SIZE = (uint32_t)-1,
         KEY_BCF_LINES = 0,
         KEY_BINARY_LINES = 1,
         KEY_MAX_LINE_PLOIDY = 2,
+        KEY_DEFAULT_PHASING = 3,
         // Line (Vector) keys
         KEY_LINE_SORT = 0x10,
         KEY_LINE_SELECT = 0x11,
+        KEY_LINE_HAPLOID = 0x12,
         KEY_LINE_VECTOR_LENGTH = 0x15,
         KEY_LINE_MISSING = 0x16,
         KEY_LINE_NON_UNIFORM_PHASING = 0x17,
@@ -57,13 +56,20 @@ public:
     enum Dictionary_Vals : uint32_t {
         VAL_UNDEFINED = (uint32_t)-1,
     };
+};
+
+template<typename A_T = uint32_t, typename WAH_T = uint16_t>
+class GtBlock : public IWritableBCFLineEncoder, public BCFBlock, public GTBlockDict {
+public:
+    const size_t PLOIDY_2 = 2;
 
     GtBlock(const size_t NUM_SAMPLES, const size_t BLOCK_BCF_LINES, const size_t MAC_THRESHOLD, const int32_t default_phasing = 0) :
         BCFBlock(BLOCK_BCF_LINES),
         MAC_THRESHOLD(MAC_THRESHOLD),
+        default_ploidy(PLOIDY_2),
+        default_phasing(default_phasing),
         effective_binary_gt_lines_in_block(0),
         line_has_missing(BLOCK_BCF_LINES, false),
-        default_phasing(default_phasing),
         line_has_non_uniform_phasing(BLOCK_BCF_LINES, false),
         line_has_end_of_vector(BLOCK_BCF_LINES, false),
         default_vector_length(PLOIDY_2), max_vector_length(1),
@@ -71,6 +77,7 @@ public:
         a(NUM_SAMPLES*PLOIDY_2), b(NUM_SAMPLES*PLOIDY_2),
         a_weirdness(NUM_SAMPLES*PLOIDY_2), b_weirdness(NUM_SAMPLES*PLOIDY_2)
     {
+        //std::cerr << "Block MAC Thr : " << MAC_THRESHOLD << std::endl;
         // Reset a
         std::iota(a.begin(), a.end(), 0);
         std::iota(a_weirdness.begin(), a_weirdness.end(), 0);
@@ -81,15 +88,18 @@ public:
     void write_to_stream(std::fstream& ofs) override {
         if (effective_bcf_lines_in_block != BLOCK_BCF_LINES) {
             std::cerr << "Block with fewer BCF lines written to stream" << std::endl;
+        } else {
+            std::cerr << "Block written to stream" << std::endl;
         }
 
         size_t block_start_pos = ofs.tellp();
         //size_t block_end_pos(0);
         size_t dictionary_pos(0);
 
+        fill_dictionary();
+
         dictionary_pos = write_dictionary(ofs, dictionary);
 
-        /// @todo replace with writable interface loop
         write_writables(ofs, block_start_pos); // Updates dictionary
 
         update_dictionary(ofs, dictionary_pos, dictionary);
@@ -101,8 +111,15 @@ private:
         if (LINE_MAX_PLOIDY > max_vector_length) {
             max_vector_length = LINE_MAX_PLOIDY;
         }
-        if (LINE_MAX_PLOIDY != default_vector_length) {
-            non_default_vector_length_positions[effective_bcf_lines_in_block] = LINE_MAX_PLOIDY;
+        //if (LINE_MAX_PLOIDY != default_vector_length) {
+            //non_default_vector_length_positions[effective_bcf_lines_in_block] = LINE_MAX_PLOIDY;
+        //}
+
+        if (LINE_MAX_PLOIDY == 1) {
+            haploid_line_found = true;
+            haploid_binary_gt_line.push_back(true);
+        } else {
+            haploid_binary_gt_line.push_back(false);
         }
 
         auto& allele_counts = line_allele_counts[effective_bcf_lines_in_block];
@@ -119,6 +136,7 @@ private:
                     // https://samtools.github.io/hts-specs/
                     // Will be set to non zero if phase changes
                     if (bcf_gt_is_phased(bcf_allele) != default_phasing) {
+                        //std::cerr << "default : " << default_phasing << " found : " << bcf_gt_is_phased(bcf_allele) << std::endl;
                         non_uniform_phasing = true;
                         line_has_non_uniform_phasing[effective_bcf_lines_in_block] = true;
                     }
@@ -197,7 +215,16 @@ public:
                 uint32_t _; // Unused
                 bool __; // Unused
                 wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
-                binary_gt_line_is_wah[effective_binary_gt_lines_in_block] = true;
+                binary_gt_line_is_wah.push_back(true);
+                if (LINE_MAX_PLOIDY == 1) {
+                    pbwt_sort1(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                } else if (LINE_MAX_PLOIDY == 2) {
+                    pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                } else {
+                    std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
+                    throw "PLOIDY ERROR";
+                }
+                #if 0
                 //const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
                 //if (minor_allele_count > SORT_THRESHOLD) {
                     // binary_gt_line_sorts[effective_binary_gt_lines_in_block] = true;
@@ -214,12 +241,14 @@ public:
                         pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
                     }
                 //}
+                #endif
             } else {
                 int32_t sparse_allele = 0; // If 0 means sparse is negated
                 if (allele_counts[alt_allele] == minor_allele_count) {
                     sparse_allele = alt_allele;
                 }
                 sparse_encoded_binary_gt_lines.emplace_back(SparseGtLine<A_T>(effective_binary_gt_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
+                binary_gt_line_is_wah.push_back(false);
             }
             effective_binary_gt_lines_in_block++;
         }
@@ -231,18 +260,18 @@ public:
             weird_line = true;
             wah_encoded_missing_lines.push_back(
                 wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(
-                    bcf_fri.gt_arr, bcf_int32_missing, a, bcf_fri.ngt_arr, _, __
+                    bcf_fri.gt_arr, bcf_int32_missing, a_weirdness, bcf_fri.ngt_arr, _, __
                 )
             );
         }
         if (line_has_non_uniform_phasing[effective_bcf_lines_in_block]) {
             weird_line = true;
             /// @todo this needs to be fixed, because here we check all alleles !
-            wah_encoded_non_uniform_phasing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, NonDefaultPhasingPred>(bcf_fri.gt_arr, default_phasing, a, bcf_fri.ngt_arr, _, __));
+            wah_encoded_non_uniform_phasing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, NonDefaultPhasingPred>(bcf_fri.gt_arr, default_phasing, a_weirdness, bcf_fri.ngt_arr, _, __));
         }
         if (line_has_end_of_vector[effective_bcf_lines_in_block]) {
             weird_line = true;
-            wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a, bcf_fri.ngt_arr, _, __));
+            wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt_arr, _, __));
         }
 
         if (weird_line) {
@@ -269,6 +298,7 @@ public:
 protected:
     const size_t MAC_THRESHOLD; /// @todo
     size_t default_ploidy; /// @todo
+    int32_t default_phasing;
 
     size_t effective_binary_gt_lines_in_block;
 
@@ -277,7 +307,7 @@ protected:
     std::vector<bool> line_has_missing;
 
     // For handling non default phase
-    int32_t default_phasing = 0;
+
     bool non_uniform_phasing = false;
     std::vector<bool> line_has_non_uniform_phasing;
 
@@ -288,7 +318,9 @@ protected:
     // For handling mixed ploidy
     uint32_t default_vector_length;
     uint32_t max_vector_length;
-    std::map<size_t, int32_t> non_default_vector_length_positions;
+    //std::map<size_t, int32_t> non_default_vector_length_positions;
+    bool haploid_line_found = false;
+    std::vector<bool> haploid_binary_gt_line;
     //std::set<int32_t> vector_lengths;
 
     // Set when the binary gt line is WAH encoded (else sparse)
@@ -296,6 +328,7 @@ protected:
     // Set when the binary gt line PBWT sorts the samples
     //std::vector<bool> binary_gt_line_sorts;
 
+    // 2D Structures
     std::vector<std::vector<WAH_T> > wah_encoded_binary_gt_lines;
     std::vector<SparseGtLine<A_T> > sparse_encoded_binary_gt_lines;
 
@@ -303,6 +336,7 @@ protected:
     std::vector<std::vector<WAH_T> > wah_encoded_non_uniform_phasing_lines;
     std::vector<std::vector<WAH_T> > wah_encoded_end_of_vector_lines;
 
+    // Internal
     std::vector<std::vector<size_t> > line_allele_counts;
 
     std::unordered_map<uint32_t, uint32_t> dictionary;
@@ -312,6 +346,7 @@ private:
         dictionary[KEY_BCF_LINES] = effective_bcf_lines_in_block;
         dictionary[KEY_BINARY_LINES] = effective_binary_gt_lines_in_block;
         dictionary[KEY_MAX_LINE_PLOIDY] = max_vector_length;
+        dictionary[KEY_DEFAULT_PHASING] = default_phasing;
 
         // Those are offsets
         dictionary[KEY_LINE_SORT] = VAL_UNDEFINED;
@@ -320,26 +355,35 @@ private:
         dictionary[KEY_MATRIX_SPARSE] = VAL_UNDEFINED;
 
         if (missing_found) {
+            std::cerr << "[DEBUG] Missing found" << std::endl;
             // Is an offset
             dictionary[KEY_LINE_MISSING] = VAL_UNDEFINED;
             dictionary[KEY_MATRIX_MISSING] = VAL_UNDEFINED;
         }
 
         if (non_uniform_phasing) {
+            std::cerr << "[DEBUG] Non uniform phasing found" << std::endl;
             // Is an offset
             dictionary[KEY_LINE_NON_UNIFORM_PHASING] = VAL_UNDEFINED;
             dictionary[KEY_MATRIX_NON_UNIFORM_PHASING] = VAL_UNDEFINED;
         }
 
-        if (non_default_vector_length_positions.size()) {
-            // Is an offset
-            dictionary[KEY_LINE_VECTOR_LENGTH] = VAL_UNDEFINED;
-        }
+        //if (non_default_vector_length_positions.size()) {
+        //    std::cerr << "[DEBUG] Non default vector length found" << std::endl;
+        //    // Is an offset
+        //    dictionary[KEY_LINE_VECTOR_LENGTH] = VAL_UNDEFINED;
+        //}
 
         if (end_of_vector_found) {
+            std::cerr << "[DEBUG] EOV found" << std::endl;
             // Is an offset
             dictionary[KEY_LINE_END_OF_VECTORS] = VAL_UNDEFINED;
             dictionary[KEY_MATRIX_END_OF_VECTORS] = VAL_UNDEFINED;
+        }
+
+        if (haploid_line_found) {
+            std::cerr << "[DEBUG] Haploid line found" << std::endl;
+            dictionary[KEY_LINE_HAPLOID] = VAL_UNDEFINED;
         }
     }
 
@@ -347,9 +391,16 @@ private:
         /// @note .at(key) is used to make sure the key is in the dictionary !
         /// @todo handle the exceptions, however there should be none if this class is implemented correctly
 
+        size_t written_bytes = size_t(s.tellp());
+        size_t total_bytes = size_t(s.tellp());
+
         // Write Sort
         dictionary.at(KEY_LINE_SORT) = (uint32_t)((size_t)s.tellp()-block_start_pos);
         write_boolean_vector_as_wah(s, binary_gt_line_is_wah);
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sort " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         // Write Select
         dictionary.at(KEY_LINE_SELECT) = dictionary[KEY_LINE_SORT]; // Same is used
@@ -359,6 +410,10 @@ private:
         for (const auto& wah : wah_encoded_binary_gt_lines) {
             write_vector(s, wah);
         }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "WAH " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         // Write Sparse
         dictionary.at(KEY_MATRIX_SPARSE) = (uint32_t)((size_t)s.tellp()-block_start_pos);
@@ -377,6 +432,11 @@ private:
             s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
             write_vector(s, sparse);
         }
+        std::cout << "Written " << sparse_encoded_binary_gt_lines.size() << " sparse lines" << std::endl;
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "sparse " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         // Optional write missing
         if (missing_found) {
@@ -395,12 +455,12 @@ private:
         }
 
         // Optional write non default vector lengths
-        if (non_default_vector_length_positions.size()) {
-            dictionary.at(KEY_LINE_VECTOR_LENGTH) = (uint32_t)((size_t)s.tellp()-block_start_pos);
-
-            //TODO
-            throw "Not implemented yet !";
-        }
+        //if (non_default_vector_length_positions.size()) {
+        //    dictionary.at(KEY_LINE_VECTOR_LENGTH) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+        //
+        //    //TODO
+        //    throw "Not implemented yet !";
+        //}
 
         // Optional write end of vectors
         if (end_of_vector_found) {
@@ -409,6 +469,15 @@ private:
             dictionary.at(KEY_MATRIX_END_OF_VECTORS) = (uint32_t)((size_t)s.tellp()-block_start_pos);
             write_vector_of_vectors(s, wah_encoded_end_of_vector_lines);
         }
+
+        if (haploid_line_found) {
+            dictionary.at(KEY_LINE_HAPLOID) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+            write_boolean_vector_as_wah(s, haploid_binary_gt_line);
+        }
+
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "others " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
     }
 
     template<typename T>
