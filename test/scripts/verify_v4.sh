@@ -14,6 +14,7 @@ ZSTD=""
 REGIONS=""
 SAMPLES=""
 ZSTD_LEVEL=""
+unset -v NO_KEEP
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -46,6 +47,10 @@ case $key in
     ZSTD_LEVEL="--zstd-level $2"
     shift # past argument
     shift # past value
+    ;;
+    --no-keep)
+    NO_KEEP="YES"
+    shift # past argument
     ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
@@ -96,9 +101,14 @@ DIFFLINES=$(wc -l ${TMPDIR}/difflog.txt | awk '{print $1}')
 #echo $DIFFLINES
 if [ ${DIFFLINES} -gt 4 ]
 then
-    echo
-    echo "[KO] The files differ, check out ${TMPDIR}/difflog.txt"
-    #exit_fail_rm_tmp # For dev
+    if [ -z "${NO_KEEP}" ]
+    then
+        echo
+        echo "[KO] The files differ, check out ${TMPDIR}/difflog.txt"
+        exit 1
+    else
+        exit_fail_rm_tmp # For unit testing
+    fi
     exit 1
 else
     echo
