@@ -703,6 +703,72 @@ namespace wah {
         }
     };
 
+
+    /**
+     * @brief Copy-less non reordering wah encoder (counts number of satisfied pred)
+     * */
+    template <typename T = uint16_t, class Pred>
+    inline std::vector<T> wah_encode2_with_size(int32_t* gt_array, const int32_t& alt_allele, const size_t size, uint32_t& pred_count) {
+    // This is a second version where a counter is used both for 0's and 1's (but a N-2 bit counter)
+        constexpr size_t WAH_BITS = sizeof(T)*8-1;
+        // 0b1000'0000 for 8b
+        constexpr T WAH_HIGH_BIT = 1 << WAH_BITS; // Solved at compile time
+        constexpr T WAH_COUNT_1_BIT = WAH_HIGH_BIT >> 1;
+
+        // Resize to have no problems accessing in the loop below (removes conditionals from loop)
+        size_t BITS_WAH_SIZE = size / WAH_BITS;
+        const size_t BITS_REM = size % WAH_BITS; // Hope compiler combines the divide above and this mod
+
+        std::vector<T> wah; // Output
+
+        T not_set_counter = 0;
+        T all_set_counter = 0;
+        size_t b = 0; // b = i*WAH_BITS+j // but counter reduces number of ops
+        size_t pred_counter = 0;
+        for (size_t i = 0; i < BITS_WAH_SIZE; ++i) { // Process loop
+            T word = 0;
+
+            // Scan WAH-BITS in bits (e.g., 7 for uint8_t, 31 for uint32_t)
+            for (size_t j = 0; j < WAH_BITS; ++j) { // WAH word loop
+                if (Pred::check_widx(b, gt_array[b], alt_allele)) {
+                    word |= WAH_HIGH_BIT;
+                    pred_counter++;
+                }
+                b++;
+                word >>= 1;
+            }
+
+            process_wah_word(word, all_set_counter, not_set_counter, wah);
+        }
+
+        // Edge case of remaining bits (pad with 0's) // Is separate from above to avoid the check in the main loop
+        if (BITS_REM) {
+            T word = 0;
+            for (size_t j = 0; j < WAH_BITS; ++j) {
+                if (j < BITS_REM) {
+                    if (Pred::check_widx(b, gt_array[b], alt_allele)) {
+                        word |= WAH_HIGH_BIT;
+                        pred_counter++;
+                    }
+                }
+                b++;
+                word >>= 1;
+            }
+            process_wah_word(word, all_set_counter, not_set_counter, wah);
+        }
+
+        // Push counters (they should be mutually exclusive, they cannot both be non zero)
+        if (not_set_counter) {
+            wah.push_back(WAH_HIGH_BIT | not_set_counter);
+        }
+        if (all_set_counter) {
+            wah.push_back(WAH_HIGH_BIT | WAH_COUNT_1_BIT | all_set_counter);
+        }
+
+        pred_count = pred_counter;
+        return wah;
+    }
+
     /**
      * @brief Copy-less reordering wah encoder
      * */
