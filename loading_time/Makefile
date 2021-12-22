@@ -4,7 +4,9 @@ ZSTD_PATH := ../zstd/lib
 # C++ Compiler
 CXX=g++
 INCLUDE_DIRS=-I . -I ../include -I $(HTSLIB_PATH)/htslib -I $(ZSTD_PATH)
-#EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
+ifeq ($(ADD_EXTRA),y)
+EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
+endif
 CXXFLAGS=-O3 -g -Wall -std=c++11 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
 LD=g++

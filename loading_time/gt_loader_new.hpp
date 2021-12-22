@@ -123,8 +123,15 @@ private:
         int count = 0;
         uint32_t bm_index = 0;
 
+        if (header.version == 4) {
+            std::cerr << "v4" << std::endl;
+        }
+
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
+        size_t block_id = 0;
+        size_t offset = 0;
+        size_t current_block_lines = 0;
         while(bcf_next_line(bcf_fri)) {
             bcf1_t *rec = bcf_fri.line;
 
@@ -138,7 +145,20 @@ private:
                 // Non linear access (returns immediately if dp is already at correct position)
                 bm_index = values[0];
             } else {
-                bm_index = num_variants_extracted;
+                if (header.version == 4) {
+                    if (current_block_lines == header.ss_rate) {
+                        current_block_lines = 0;
+                        offset = 0;
+                        block_id++;
+                    }
+                    bm_index = block_id << 15 | offset;
+                    offset += bcf_fri.line->n_allele-1;
+                    current_block_lines++;
+                } else {
+                    /// @todo this is the old way, (not new bm)
+                    /// @todo this will be removed once version 4 is out
+                    bm_index = num_variants_extracted;
+                }
             }
 
             // Remove the "BM" format /// @todo remove all possible junk (there should be none)
@@ -147,7 +167,7 @@ private:
             // Fill the genotype array (as bcf_get_genotypes() would do)
             accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
-            // Count the number of variants extracted
+            // Count the number of variants extracted;
             num_variants_extracted += bcf_fri.line->n_allele-1;
         }
         if (values) { free(values); }

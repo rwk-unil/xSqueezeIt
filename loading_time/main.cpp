@@ -62,7 +62,7 @@ int main(int argc, const char *argv[]) {
 
     if (filename.substr(filename.find_last_of(".") + 1) == "bcf") {
         load_from_bcf(filename);
-    } else if (filename.substr(filename.find_last_of(".") + 1) == "bin" || filename.substr(filename.find_last_of(".") + 1) == "xsi") {
+    } else if (filename.substr(filename.find_last_of(".") + 1) == "bin" || filename.substr(filename.find_last_of(".") + 1) == "xsi") {
         load_from_bin(filename);
     } else {
         std::cerr << "Unrecognized file type\n";
