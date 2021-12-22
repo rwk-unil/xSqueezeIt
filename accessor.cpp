@@ -41,7 +41,7 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
     // Check version
     if (header.version != 2 and header.version != 3) {
         if (header.version == 4) {
-            std::cerr << "Experimental version" << std::endl;
+            //std::cerr << "Experimental version" << std::endl;
         } else {
             std::cerr << "Bad version" << std::endl;
             throw "Bad version";
