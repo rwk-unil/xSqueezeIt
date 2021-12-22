@@ -47,13 +47,19 @@ using namespace wah;
 
 /// @todo DecompressPointer NEW version
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
-class DecompressPointerGTBlock : /* public DecompressPointer<A_T, WAH_T>, */ public GTBlockDict {
+class DecompressPointerGTBlock : /* public DecompressPointer<A_T, WAH_T>, */ public GTBlockDict, protected PBWTSorter {
 public:
     DecompressPointerGTBlock(const header_t& header, void* block_p) :
         header(header), block_p(block_p), N_HAPS(header.hap_samples),
         internal_binary_gt_line_position(0),
+        internal_binary_weirdness_position(0),
+        internal_binary_phase_position(0),
         y(header.hap_samples+sizeof(WAH_T)*8-1, false),
-        a(header.hap_samples), b(header.hap_samples) {
+        a(header.hap_samples), b(header.hap_samples),
+        y_missing(header.hap_samples+sizeof(WAH_T)*8-1, false),
+        y_eovs(header.hap_samples+sizeof(WAH_T)*8-1, false),
+        y_phase(header.hap_samples+sizeof(WAH_T)*8-1, false),
+        a_weird(header.hap_samples), b_weird(header.hap_samples) {
         // Load dictionary
         read_dictionary(dictionary, (uint32_t*)block_p);
         bcf_lines_in_block = dictionary.at(KEY_BCF_LINES);
@@ -67,13 +73,23 @@ public:
             // By default only the wah lines are sorting
             binary_gt_line_is_sorting = binary_gt_line_is_wah;
         }
-        fill_bool_vector_from_1d_dict_key(KEY_LINE_MISSING, line_has_missing, bcf_lines_in_block);
-        fill_bool_vector_from_1d_dict_key(KEY_LINE_NON_UNIFORM_PHASING, line_has_non_uniform_phasing, bcf_lines_in_block);
-        fill_bool_vector_from_1d_dict_key(KEY_LINE_END_OF_VECTORS, line_has_end_of_vector, bcf_lines_in_block);
+
+        // Check for weirdness
+        block_has_weirdness = false;
+        block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_MISSING, line_has_missing, bcf_lines_in_block);
+        block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_END_OF_VECTORS, line_has_end_of_vector, bcf_lines_in_block);
+        //std::cerr << "Block has weirdness : " << (block_has_weirdness ? "yes" : "no") << std::endl;
+        //for (auto v : line_has_missing) { std::cerr << (v ? "1" : "0"); }
+        //std::cerr << std::endl;
+
+        block_has_non_uniform_phasing = fill_bool_vector_from_1d_dict_key(KEY_LINE_NON_UNIFORM_PHASING, line_has_non_uniform_phasing, bcf_lines_in_block);
+        if (block_has_non_uniform_phasing) { std::cerr << "Block has non uniform phasing" << std::endl; }
+
+        // Handle fully haploid lines
         fill_bool_vector_from_1d_dict_key(KEY_LINE_HAPLOID, haploid_binary_gt_line, binary_gt_lines_in_block);
         if (!haploid_binary_gt_line.size()) { haploid_binary_gt_line.resize(binary_gt_lines_in_block, false); }
 
-        /// @todo non default vector lengths
+        /// @todo non default vector lengths (ploidy over 2)
 
         // Set access to 2D structures (don't decompress them unless needed)
         wah_origin_p = get_pointer_from_dict<WAH_T>(KEY_MATRIX_WAH);
@@ -82,7 +98,22 @@ public:
         sparse_origin_p = get_pointer_from_dict<A_T>(KEY_MATRIX_SPARSE);
         sparse_p = sparse_origin_p;
 
+        // Set the weirdness matrices (will be nullptr if not present)
+        missing_origin_p = get_pointer_from_dict<WAH_T>(KEY_MATRIX_MISSING);
+        //if (missing_origin_p) std::cerr << "Missing 2D array found" << std::endl;
+        missing_p = missing_origin_p;
+
+        eovs_origin_p = get_pointer_from_dict<WAH_T>(KEY_MATRIX_END_OF_VECTORS);
+        eovs_p = eovs_origin_p;
+
+        non_uniform_phasing_origin_p = get_pointer_from_dict<WAH_T>(KEY_MATRIX_NON_UNIFORM_PHASING);
+        non_uniform_phasing_p = non_uniform_phasing_origin_p;
+        if (non_uniform_phasing_origin_p) { std::cerr << "Block has non uniform phasing data" << std::endl; }
+
         std::iota(a.begin(), a.end(), 0);
+        if (block_has_weirdness) {
+            std::iota(a_weird.begin(), a_weird.end(), 0);
+        }
     }
     virtual ~DecompressPointerGTBlock() {}
 
@@ -95,13 +126,15 @@ public:
         } else {
             if (internal_binary_gt_line_position > position) {
                 std::cerr << "Slow backwards seek !" << std::endl;
+                std::cerr << "Current position is : " << internal_binary_gt_line_position << std::endl;
+                std::cerr << "Requested position is : " << position << std::endl;
                 reset();
             }
             while (internal_binary_gt_line_position < position) {
+                const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
                 if (binary_gt_line_is_wah[internal_binary_gt_line_position]) {
                     /// @todo
                     // Resize y based on the vector length
-                    const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
                     if (binary_gt_line_is_sorting[internal_binary_gt_line_position]) {
                         wah_p = wah2_extract(wah_p, y, CURRENT_N_HAPS);
                     } else {
@@ -117,6 +150,15 @@ public:
                 }
                 update_a_if_needed();
 
+                if (block_has_weirdness) {
+                    // Advance weirdly
+                    weirdness_advance(1, CURRENT_N_HAPS);
+                }
+
+                if (block_has_non_uniform_phasing) {
+                    phase_advance(1, CURRENT_N_HAPS);
+                }
+
                 internal_binary_gt_line_position++;
             }
         }
@@ -125,9 +167,12 @@ public:
     inline void fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) {
         allele_counts.resize(n_alleles);
         size_t total_alt = 0;
+        size_t n_missing = 0;
+        size_t n_eovs = 0;
         int32_t DEFAULT_PHASED = dictionary[KEY_DEFAULT_PHASING]; /// @todo
 
         const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
+        const size_t START_OFFSET = internal_binary_gt_line_position;
 
         // Set REF / first ALT
         if (!binary_gt_line_is_wah[internal_binary_gt_line_position]) { /* SPARSE */
@@ -193,16 +238,82 @@ public:
             internal_binary_gt_line_position++;
         }
 
-        allele_counts[0] = CURRENT_N_HAPS - total_alt;
-        /// @todo Apply Missing, phase, eov...
+        // Apply missing, eovs
+        if (block_has_weirdness) {
+            if (START_OFFSET != internal_binary_weirdness_position) {
+                std::cerr << "Block decompression corruption on missing or end of vectors" << std::endl;
+            }
+            // weirdness is either missing or end of vector
+
+            if (line_has_missing.size() and line_has_missing[START_OFFSET]) {
+                // Fill missing without advance
+                //std::cerr << "Extracting missing from wah p" << std::endl;
+                /*missing_p =*/ (void) wah2_extract_count_ones(missing_p, y_missing, CURRENT_N_HAPS, n_missing);
+                for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                    if (y_missing[i]) {
+                        const auto index = a_weird[i];
+                        //std::cerr << "Filling a missing position" << std::endl;
+                        gt_arr[index] = bcf_gt_missing | ((index & 1) & DEFAULT_PHASED);
+                    }
+                }
+            }
+            if (line_has_end_of_vector.size() and line_has_end_of_vector[START_OFFSET]) {
+                // Fill eovs without advance
+                /*eovs_p =*/ (void) wah2_extract_count_ones(eovs_p, y_eovs, CURRENT_N_HAPS, n_eovs);
+                for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                    if (y_eovs[i]) {
+                        const auto index = a_weird[i];
+                        gt_arr[index] = bcf_int32_vector_end;
+                    }
+                }
+            }
+
+            // PBWT weirdness advance
+            // This is not the most optimal because double extraction, but weirdness is an edge case so we don't care
+            weirdness_advance(n_alleles-1, CURRENT_N_HAPS);
+        }
+
+        // Apply phase info
+        if (block_has_non_uniform_phasing) {
+            if (START_OFFSET != internal_binary_phase_position) {
+                std::cerr << "Block decompression corruption on phase information" << std::endl;
+            }
+
+            if (line_has_non_uniform_phasing.size() and line_has_non_uniform_phasing[START_OFFSET]) {
+                (void) wah2_extract(non_uniform_phasing_p, y_phase, CURRENT_N_HAPS);
+                for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                    if (y_phase[i]) {
+                        std::cerr << "Toggling phase bit" << std::endl;
+                        // Toggle phase bit
+                        /// @todo only works for PLOIDY 1 and 2
+                        gt_arr[i] ^= (i & 1); // if non default phase toggle bit
+                    }
+                }
+            }
+
+            phase_advance(n_alleles-1, CURRENT_N_HAPS);
+        }
+
+        allele_counts[0] = CURRENT_N_HAPS - (total_alt + n_missing + n_eovs);
     }
 
     void reset() {
+        // Reset internal structures
+        std::iota(a.begin(), a.end(), 0);
+        internal_binary_gt_line_position = 0;
         wah_p = wah_origin_p;
         sparse_p = sparse_origin_p;
-        std::iota(a.begin(), a.end(), 0);
 
-        internal_binary_gt_line_position = 0;
+        if (block_has_weirdness) {
+            std::iota(a_weird.begin(), a_weird.end(), 0);
+            internal_binary_weirdness_position = 0;
+            missing_p = missing_origin_p;
+            eovs_p = eovs_origin_p;
+        }
+        if (block_has_non_uniform_phasing) {
+            internal_binary_phase_position = 0;
+            non_uniform_phasing_p = non_uniform_phasing_origin_p;
+        }
     }
 
     inline void fill_allele_counts_advance(const size_t n_alleles) {
@@ -243,19 +354,68 @@ public:
     }
 
 protected:
+    inline void weirdness_advance(const size_t STEPS, const size_t CURRENT_N_HAPS) {
+        bool current_line_has_missing = false;
+        bool current_line_has_eovs = false;
+
+        // Update pointers and PBWT weirdness
+        for (size_t i = 0; i < STEPS; ++i) {
+            if (line_has_missing.size() and line_has_missing[internal_binary_weirdness_position]) {
+                current_line_has_missing = true;
+                // Advance missing pointer
+                missing_p = wah2_extract(missing_p, y_missing, CURRENT_N_HAPS);
+            }
+            if (line_has_end_of_vector.size() and line_has_end_of_vector[internal_binary_weirdness_position]) {
+                current_line_has_eovs = true;
+                // Fill eovs;
+                eovs_p = wah2_extract(eovs_p, y_eovs, CURRENT_N_HAPS);
+            }
+
+            // Update PBWT weirdness
+            /// @todo refactor all this
+            if (current_line_has_missing and current_line_has_eovs) {
+                // PBWT on both
+                if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
+                    bool_pbwt_sort_two<A_T, 2>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
+                }
+                else {
+                    bool_pbwt_sort_two<A_T, 1>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
+                }
+            } else if (current_line_has_missing) {
+                // PBWT on missing
+                if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
+                    bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_missing, N_HAPS);
+                }
+                else {
+                    bool_pbwt_sort<A_T, 1>(a_weird, b_weird, y_missing, N_HAPS);
+                }
+
+            } else if (current_line_has_eovs) {
+                // PBWT on eovs
+                if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
+                    bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_eovs, N_HAPS);
+                }
+                else {
+                    bool_pbwt_sort<A_T, 1>(a_weird, b_weird, y_eovs, N_HAPS);
+                }
+            }
+
+            internal_binary_weirdness_position++;
+        }
+    }
+
+    inline void phase_advance(const size_t STEPS, const size_t CURRENT_N_HAPS) {
+        for (size_t i = 0; i < STEPS; ++i) {
+            if (line_has_non_uniform_phasing.size() and line_has_non_uniform_phasing[internal_binary_phase_position]) {
+                wah2_advance_pointer(non_uniform_phasing_p, CURRENT_N_HAPS);
+            }
+            internal_binary_phase_position++;
+        }
+    }
+
     template<const size_t V_LEN_RATIO = 1>
     inline void private_pbwt_sort() {
-        size_t u = 0;
-        size_t v = 0;
-        // PBWT sort
-        for (size_t i = 0; i < N_HAPS; ++i) {
-            if (this->y[i/V_LEN_RATIO] == 0) {
-                this->a[u++] = this->a[i];
-            } else {
-                this->b[v++] = this->a[i];
-            }
-        }
-        std::copy(this->b.begin(), this->b.begin()+v, this->a.begin()+u);
+        bool_pbwt_sort<A_T, V_LEN_RATIO>(a, b, y, N_HAPS);
     }
 
     inline void update_a_if_needed() {
@@ -271,10 +431,14 @@ protected:
 
     inline bool fill_bool_vector_from_1d_dict_key(enum Dictionary_Keys key, std::vector<bool>& v, const size_t size) {
         if (dictionary.find(key) != dictionary.end()) {
-            v.resize(size+sizeof(WAH_T)*8-1);
-            WAH_T* wah_p = (WAH_T*)(((char*)block_p)+dictionary[key]);
-            wah2_extract<WAH_T>(wah_p, v, size);
-            return true;
+            if (dictionary[key] != VAL_UNDEFINED) {
+                v.resize(size+sizeof(WAH_T)*8-1);
+                WAH_T* wah_p = (WAH_T*)(((char*)block_p)+dictionary[key]);
+                wah2_extract<WAH_T>(wah_p, v, size);
+                return true;
+            } else {
+                return false;
+            }
         } else {
             return false;
         }
@@ -283,7 +447,11 @@ protected:
     template<typename T>
     inline T* get_pointer_from_dict(enum Dictionary_Keys key) {
         if (dictionary.find(key) != dictionary.end()) {
-            return (T*)(((char*)block_p)+dictionary[key]);
+            if (dictionary[key] != VAL_UNDEFINED) {
+                return (T*)(((char*)block_p)+dictionary[key]);
+            } else {
+                return nullptr;
+            }
         } else {
             return nullptr;
         }
@@ -336,20 +504,28 @@ protected:
 
     size_t internal_binary_gt_line_position;
 
+    // WAH
     WAH_T* wah_origin_p;
     WAH_T* wah_p;
+
+    // Sparse
     A_T* sparse_origin_p;
     A_T* sparse_p;
-
     std::vector<size_t> sparse;
     bool sparse_negated;
-    // WAH_T* missing_origin_p;
-    // WAH_T* missing_p;
-    // WAH_T* non_uniform_phasing_origin_p;
-    // WAH_T* non_uniform_phasing_p;
-    // WAH_T* eovs_origin_p;
-    // WAH_T* eovs_p;
 
+    // Weirdness
+    bool block_has_weirdness;
+    WAH_T* missing_origin_p;
+    WAH_T* missing_p;
+    WAH_T* eovs_origin_p;
+    WAH_T* eovs_p;
+    bool block_has_non_uniform_phasing;
+    WAH_T* non_uniform_phasing_origin_p;
+    WAH_T* non_uniform_phasing_p;
+
+    size_t internal_binary_weirdness_position;
+    size_t internal_binary_phase_position;
     std::vector<bool> binary_gt_line_is_wah;
     std::vector<bool> binary_gt_line_is_sorting;
     std::vector<bool> line_has_missing;
@@ -365,6 +541,10 @@ protected:
     // Internal
     std::vector<bool> y;
     std::vector<A_T> a, b;
+    std::vector<bool> y_missing;
+    std::vector<bool> y_eovs;
+    std::vector<bool> y_phase;
+    std::vector<A_T> a_weird, b_weird;
 };
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
