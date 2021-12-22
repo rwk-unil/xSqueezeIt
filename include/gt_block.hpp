@@ -81,7 +81,7 @@ public:
     };
     struct WeirdnessPred {
         static inline bool check(const int32_t gt_arr_entry, const int32_t _ /*, const int32_t default_phasing*/) {
-            return gt_arr_entry == bcf_int32_missing or gt_arr_entry == bcf_int32_vector_end; // or bcf_gt_is_phased(gt_arr_entry) != default_phasing;
+            return bcf_gt_is_missing(gt_arr_entry) or (gt_arr_entry == bcf_int32_missing) or gt_arr_entry == bcf_int32_vector_end; // or bcf_gt_is_phased(gt_arr_entry) != default_phasing;
         }
     };
     template<typename T, class Pred, const size_t V_LEN_RATIO = 1>
@@ -316,14 +316,14 @@ public:
             if (LINE_MAX_PLOIDY != default_ploidy) {
                 if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
                     // Sort a, b as if they were homozygous with ploidy 2
-                    pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0);
+                    pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0 /*unused*/);
                 } else {
                     /// @todo add and handle polyploid PBWT sort
                     std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
                     throw "PLOIDY ERROR";
                 }
             } else {
-                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0/*default_phasing*/);
+                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0 /*unused*/);
             }
         }
 
