@@ -161,12 +161,12 @@ public:
     inline uint32_t get_id() const override { return IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY; }
 
     void write_to_stream(std::fstream& ofs) override {
-        if (effective_bcf_lines_in_block != BLOCK_BCF_LINES) {
-            std::cerr << "Block with fewer BCF lines written to stream" << std::endl;
-        } else {
-            std::cerr << "Block written to stream" << std::endl;
-        }
-        std::cerr << "BCF lines : " << effective_bcf_lines_in_block << " binary lines : " << effective_binary_gt_lines_in_block << std::endl;
+        //if (effective_bcf_lines_in_block != BLOCK_BCF_LINES) {
+        //    std::cerr << "Block with fewer BCF lines written to stream" << std::endl;
+        //} else {
+        //    std::cerr << "Block written to stream" << std::endl;
+        //}
+        //std::cerr << "BCF lines : " << effective_bcf_lines_in_block << " binary lines : " << effective_binary_gt_lines_in_block << std::endl;
 
         size_t block_start_pos = ofs.tellp();
         //size_t block_end_pos(0);
@@ -438,7 +438,7 @@ private:
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << "sort " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+        //std::cout << "sort " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         // Write Select
         dictionary.at(KEY_LINE_SELECT) = dictionary[KEY_LINE_SORT]; // Same is used
@@ -451,7 +451,7 @@ private:
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << "WAH " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+        //std::cout << "WAH " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         // Write Sparse
         dictionary.at(KEY_MATRIX_SPARSE) = (uint32_t)((size_t)s.tellp()-block_start_pos);
@@ -470,11 +470,11 @@ private:
             s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
             write_vector(s, sparse);
         }
-        std::cout << "Written " << sparse_encoded_binary_gt_lines.size() << " sparse lines" << std::endl;
+        //std::cout << "Written " << sparse_encoded_binary_gt_lines.size() << " sparse lines" << std::endl;
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << "sparse " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+        //std::cout << "sparse " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         // Optional write missing
         if (missing_found) {
@@ -490,7 +490,7 @@ private:
 
             written_bytes = size_t(s.tellp()) - total_bytes;
             total_bytes += written_bytes;
-            std::cout << "missing " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            //std::cout << "missing " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
         }
 
         // Optional write end of vectors
@@ -503,7 +503,7 @@ private:
 
             written_bytes = size_t(s.tellp()) - total_bytes;
             total_bytes += written_bytes;
-            std::cout << "end of vectors " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            //std::cout << "end of vectors " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
         }
 
         // Optional write non uniform phasing
@@ -521,7 +521,7 @@ private:
 
             written_bytes = size_t(s.tellp()) - total_bytes;
             total_bytes += written_bytes;
-            std::cout << "non uniform phasing " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+            //std::cout << "non uniform phasing " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
         }
 
         // Optional write non default vector lengths
@@ -539,7 +539,7 @@ private:
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << "others " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+        //std::cout << "others " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
     }
 
     // Binary lines >= BCF lines
