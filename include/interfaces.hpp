@@ -280,7 +280,7 @@ class BlockEntry {
 template<typename T_KEY, typename T_VAL> /// @todo maybe not template this
 class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
     typedef uint32_t T;
-    static_assert(std::numeric_limits<T>::is_integer);
+    static_assert(std::numeric_limits<T>::is_integer, "");
 
     void compress_and_write(std::fstream& ofs, void* data, size_t data_size, int compression_level) override {
         size_t output_buffer_size = data_size * 2;
