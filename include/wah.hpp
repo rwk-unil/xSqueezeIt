@@ -801,11 +801,12 @@ namespace wah {
                     has_missing = true;
                 }
                 //if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
-                if (Pred::check(gt_array[a[b++]], alt_allele)) {
+                if (Pred::check(gt_array[a[b]], alt_allele)) {
                     word |= WAH_HIGH_BIT;
                     alt_allele_counter++;
                 }
                 word >>= 1;
+                b++;
             }
 
             process_wah_word(word, all_set_counter, not_set_counter, wah);
@@ -821,12 +822,13 @@ namespace wah {
                         has_missing = true;
                     }
                     //if (bcf_gt_allele(gt_array[a[b++]]) == alt_allele) {
-                    if (Pred::check(gt_array[a[b++]], alt_allele)) {
+                    if (Pred::check(gt_array[a[b]], alt_allele)) {
                         word |= WAH_HIGH_BIT;
                         alt_allele_counter++;
                     }
                 }
                 word >>= 1;
+                b++;
             }
             process_wah_word(word, all_set_counter, not_set_counter, wah);
         }
