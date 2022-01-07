@@ -28,6 +28,7 @@
 #include "xcf.hpp"
 #include "block.hpp" // For SparseGTLine ...
 
+/// @todo remove unused variable ngt
 template<typename T, const size_t V_LEN_RATIO = 1>
 inline void pbwt_sort_(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, int32_t alt_allele) {
     size_t u = 0;

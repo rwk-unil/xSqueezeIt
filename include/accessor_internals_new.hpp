@@ -264,6 +264,12 @@ public:
             internal_binary_gt_line_position++;
         }
 
+        //std::cerr << "[DEBUG] Start offset : " << START_OFFSET << " internal gt line " << internal_binary_gt_line_position << std::endl;
+        //for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+        //    std::cerr << gt_arr[i] << " ";
+        //}
+        //std::cerr << std::endl;
+
         // Apply missing, eovs
         if (block_has_weirdness) {
             if (START_OFFSET != internal_binary_weirdness_position) {
@@ -294,6 +300,10 @@ public:
                 }
             }
 
+            //std::cerr << "[DEBUG] Weirdness a : ";
+            //for (auto& e : a_weird) std::cerr << e << " ";
+            //std::cerr << std::endl;
+
             // PBWT weirdness advance
             // This is not the most optimal because double extraction, but weirdness is an edge case so we don't care
             weirdness_advance(n_alleles-1, CURRENT_N_HAPS);
@@ -312,13 +322,20 @@ public:
                         //std::cerr << "Toggling phase bit" << std::endl;
                         // Toggle phase bit
                         /// @todo only works for PLOIDY 1 and 2
-                        gt_arr[i] ^= (i & 1); // if non default phase toggle bit
+                        if (gt_arr[i] != bcf_int32_vector_end) {
+                            gt_arr[i] ^= (i & 1); // if non default phase toggle bit
+                        } // Don't phase end of vector !
                     }
                 }
             }
 
             phase_advance(n_alleles-1, CURRENT_N_HAPS);
         }
+
+        //for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+        //    std::cerr << gt_arr[i] << " ";
+        //}
+        //std::cerr << std::endl;
 
         allele_counts[0] = CURRENT_N_HAPS - (total_alt + n_missing + n_eovs);
 
@@ -404,27 +421,27 @@ protected:
             if (current_line_has_missing and current_line_has_eovs) {
                 // PBWT on both
                 if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
-                    bool_pbwt_sort_two<A_T, 2>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
+                    //bool_pbwt_sort_two<A_T, 2>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
                 }
                 else {
-                    bool_pbwt_sort_two<A_T, 1>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
+                    bool_pbwt_sort_two<A_T>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
                 }
             } else if (current_line_has_missing) {
                 // PBWT on missing
                 if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
-                    bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_missing, N_HAPS);
+                    //bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_missing, N_HAPS);
                 }
                 else {
-                    bool_pbwt_sort<A_T, 1>(a_weird, b_weird, y_missing, N_HAPS);
+                    bool_pbwt_sort<A_T>(a_weird, b_weird, y_missing, N_HAPS);
                 }
 
             } else if (current_line_has_eovs) {
                 // PBWT on eovs
                 if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
-                    bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_eovs, N_HAPS);
+                    //bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_eovs, N_HAPS);
                 }
                 else {
-                    bool_pbwt_sort<A_T, 1>(a_weird, b_weird, y_eovs, N_HAPS);
+                    bool_pbwt_sort<A_T>(a_weird, b_weird, y_eovs, N_HAPS);
                 }
             }
 
@@ -443,13 +460,40 @@ protected:
 
     template<const size_t V_LEN_RATIO = 1>
     inline void private_pbwt_sort() {
-        bool_pbwt_sort<A_T, V_LEN_RATIO>(a, b, y, N_HAPS);
+        static_assert(V_LEN_RATIO <= 2, "Is not meant to be");
+        if CONSTEXPR_IF (V_LEN_RATIO == 1) {
+            bool_pbwt_sort<A_T>(a, b, y, N_HAPS);
+        } else if CONSTEXPR_IF (V_LEN_RATIO == 2) {
+            auto a1 = haploid_rearrangement_from_diploid(a);
+            /// @todo find a better solution ?
+            std::vector<bool> x(N_SAMPLES);
+            for (size_t i = 0; i < N_SAMPLES; ++i) {
+                x[a1[i]] = y[i];
+            }
+            size_t u = 0;
+            size_t v = 0;
+            for (size_t i = 0; i < N_SAMPLES*V_LEN_RATIO; ++i) {
+                if (x[a[i]/V_LEN_RATIO] == 0) {
+                    a[u++] = a[i];
+                } else {
+                    b[v++] = a[i];
+                }
+            }
+            std::copy(b.begin(), b.begin()+v, a.begin()+u);
+        }
     }
 
     inline void update_a_if_needed() {
         // Extracted line is used to sort
         if (binary_gt_line_is_sorting[internal_binary_gt_line_position]) {
+            //std::cerr << "[DEBUG] a : ";
+            //for (auto& e : a) std::cerr << e << " ";
+            //std::cerr << std::endl;
+            //std::cerr << "[DEBUG] y : ";
+            //for (auto e : y) std::cerr << e << " ";
+            //std::cerr << std::endl;
             if (haploid_binary_gt_line[internal_binary_gt_line_position]) {
+                //std::cerr << "Sort with VLENRATIO2 for line " << internal_binary_gt_line_position << std::endl;
                 private_pbwt_sort<2>();
             } else {
                 private_pbwt_sort<1>();

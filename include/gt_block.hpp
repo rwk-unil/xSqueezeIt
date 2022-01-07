@@ -85,11 +85,11 @@ public:
         }
     };
     template<typename T, class Pred, const size_t V_LEN_RATIO = 1>
-    inline void pred_pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, const int32_t _) {
+    inline void pred_pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t N, const int32_t _) {
         size_t u = 0;
         size_t v = 0;
 
-        for (size_t j = 0; j < ngt; ++j) {
+        for (size_t j = 0; j < N; ++j) {
             if (!Pred::check(gt_arr[a[j]/V_LEN_RATIO], _)) { // If non pred
                 a[u] = a[j];
                 u++;
@@ -100,13 +100,14 @@ public:
         }
         std::copy(b.begin(), b.begin()+v, a.begin()+u);
     }
-    template<typename T, const size_t V_LEN_RATIO = 1>
+
+    /// @todo V_LEN_RATIO doesn't work on y
+    template<typename T>
     inline void bool_pbwt_sort(std::vector<T>& a, std::vector<T>& b, const std::vector<bool>& y, const size_t N) {
         size_t u = 0;
         size_t v = 0;
-        // PBWT sort
         for (size_t i = 0; i < N; ++i) {
-            if (y[i/V_LEN_RATIO] == 0) {
+            if (y[i] == 0) {
                 a[u++] = a[i];
             } else {
                 b[v++] = a[i];
@@ -115,13 +116,12 @@ public:
         std::copy(b.begin(), b.begin()+v, a.begin()+u);
     }
 
-    template<typename T, const size_t V_LEN_RATIO = 1>
+    template<typename T>
     inline void bool_pbwt_sort_two(std::vector<T>& a, std::vector<T>& b, const std::vector<bool>& y1, const std::vector<bool>& y2, const size_t N) {
         size_t u = 0;
         size_t v = 0;
-        // PBWT sort
         for (size_t i = 0; i < N; ++i) {
-            bool y = y1[i/V_LEN_RATIO] or y1[i/V_LEN_RATIO];
+            bool y = y1[i] or y2[i];
             if (y == 0) {
                 a[u++] = a[i];
             } else {
@@ -248,9 +248,19 @@ public:
 
         auto& allele_counts = line_allele_counts[effective_bcf_lines_in_block];
         const auto LINE_MAX_PLOIDY = bcf_fri.ngt / bcf_fri.n_samples;
+        //std::cerr << "[DEBUG] : Line " << effective_bcf_lines_in_block
+        //          << " ngt : " << bcf_fri.ngt << std::endl;
+        //for (size_t i = 0; i < bcf_fri.ngt; ++i) {
+        //    std::cerr << bcf_fri.gt_arr[i] << " ";
+        //}
+        //std::cerr << std::endl;
 
         // For all alt alleles (1 if bi-allelic variant site)
         for (size_t alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
+
+            //std::cerr << "[DEBUG] a : ";
+            //for (auto& e : a) std::cerr << e << " ";
+            //std::cerr << std::endl;
 
             const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt - allele_counts[alt_allele]);
             if (minor_allele_count > MAC_THRESHOLD) {
@@ -289,11 +299,21 @@ public:
         bool __(false); // Unused
         if (line_has_missing[effective_bcf_lines_in_block]) {
             weird_line = true;
-            wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a_weirdness, bcf_fri.ngt, _, __));
+            if (LINE_MAX_PLOIDY == 1) {
+                auto a1 = haploid_rearrangement_from_diploid(a_weirdness);
+                wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a1, bcf_fri.ngt, _, __));
+            } else {
+                wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a_weirdness, bcf_fri.ngt, _, __));
+            }
         }
         if (line_has_end_of_vector[effective_bcf_lines_in_block]) {
             weird_line = true;
-            wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt, _, __));
+            if (LINE_MAX_PLOIDY == 1) {
+                auto a1 = haploid_rearrangement_from_diploid(a_weirdness);
+                wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a1, bcf_fri.ngt, _, __));
+            } else {
+                wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt, _, __));
+            }
         }
 
         // Phasing info is not PBWT reordered with weirdness
@@ -302,19 +322,23 @@ public:
             wah_encoded_non_uniform_phasing_lines.push_back(wah::wah_encode2_with_size<WAH_T, NonDefaultPhasingPred>(bcf_fri.gt_arr, default_phasing, bcf_fri.ngt, _));
         }
 
+        //std::cerr << "[DEBUG] Weirdness a : ";
+        //for (auto& e : a_weirdness) std::cerr << e << " ";
+        //std::cerr << std::endl;
+
         if (weird_line) {
             // PBWT sort on weirdness
             if (LINE_MAX_PLOIDY != default_ploidy) {
                 if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
                     // Sort a, b as if they were homozygous with ploidy 2
-                    pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt, 0 /*unused*/);
+                    //pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, a_weirdness.size(), 0 /*unused*/);
                 } else {
                     /// @todo add and handle polyploid PBWT sort
                     std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
                     throw "PLOIDY ERROR";
                 }
             } else {
-                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt, 0 /*unused*/);
+                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, a_weirdness.size(), 0 /*unused*/);
             }
         }
 
@@ -410,7 +434,7 @@ private:
         //}
 
         if (haploid_line_found) {
-            std::cerr << "[DEBUG] Haploid line found" << std::endl;
+            //std::cerr << "[DEBUG] Haploid line found" << std::endl;
             dictionary[KEY_LINE_HAPLOID] = VAL_UNDEFINED;
         }
     }
