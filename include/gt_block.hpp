@@ -191,6 +191,7 @@ private:
             //non_default_vector_length_positions[effective_bcf_lines_in_block] = LINE_MAX_PLOIDY;
         //}
 
+        /// @todo (performance?) we could use reindexing the BCF indices instead of push_back
         if (LINE_MAX_PLOIDY == 1) {
             haploid_line_found = true;
             haploid_binary_gt_line.push_back(true);
@@ -204,6 +205,7 @@ private:
         line_alt_alleles_number[effective_bcf_lines_in_block] = bcf_fri.line->n_allele-1;
 
         for (size_t i = 0; i < bcf_fri.n_samples; ++i) {
+            // Go over all alleles
             for (size_t j = 0; j < LINE_MAX_PLOIDY; ++j) {
                 const size_t index = i*LINE_MAX_PLOIDY+j;
                 auto bcf_allele = bcf_fri.gt_arr[index];
@@ -254,39 +256,28 @@ public:
             if (minor_allele_count > MAC_THRESHOLD) {
                 uint32_t _; // Unused
                 bool __; // Unused
-                wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
+
                 binary_gt_line_is_wah.push_back(true);
                 if (LINE_MAX_PLOIDY == 1) {
+                    // The order is given by a1 instead of a
+                    auto a1 = haploid_rearrangement_from_diploid(a);
+                    wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a1, bcf_fri.ngt_arr, _, __));
+                    // Here pbwt_sort1 does the logic for the sorting no need to use a1
                     pbwt_sort1(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
                 } else if (LINE_MAX_PLOIDY == 2) {
+                    wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
                     pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
                 } else {
                     std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
                     throw "PLOIDY ERROR";
                 }
-                #if 0
-                //const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
-                //if (minor_allele_count > SORT_THRESHOLD) {
-                    // binary_gt_line_sorts[effective_binary_gt_lines_in_block] = true;
-                    if (LINE_MAX_PLOIDY != default_ploidy) {
-                        if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
-                            // Sort a, b as if they were homozygous with ploidy 2
-                            pbwt_sort1(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
-                        } else {
-                            /// @todo add and handle polyploid PBWT sort
-                            std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
-                            throw "PLOIDY ERROR";
-                        }
-                    } else {
-                        pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
-                    }
-                //}
-                #endif
             } else {
                 int32_t sparse_allele = 0; // If 0 means sparse is negated
                 if (allele_counts[alt_allele] == minor_allele_count) {
                     sparse_allele = alt_allele;
                 }
+                // Sparse does not depend on ploidy because we don't use the rearrangement
+                // We directly encode the correct number of alleles
                 sparse_encoded_binary_gt_lines.emplace_back(SparseGtLine<A_T>(effective_binary_gt_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
                 binary_gt_line_is_wah.push_back(false);
             }
@@ -333,8 +324,8 @@ public:
     virtual ~GtBlock() {}
 
 protected:
-    const size_t MAC_THRESHOLD; /// @todo
-    size_t default_ploidy; /// @todo
+    const size_t MAC_THRESHOLD;
+    size_t default_ploidy;
     int32_t default_phasing;
 
     size_t effective_binary_gt_lines_in_block;
@@ -344,7 +335,6 @@ protected:
     std::vector<bool> line_has_missing;
 
     // For handling non default phase
-
     bool non_uniform_phasing = false;
     std::vector<bool> line_has_non_uniform_phasing;
 
@@ -540,6 +530,23 @@ private:
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         //std::cout << "others " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
+    }
+
+    /// @brief creates haploid arrangement from diploid arrangement
+    std::vector<A_T> haploid_rearrangement_from_diploid(const std::vector<A_T>& a) {
+        std::vector<A_T> a1(a.size()/PLOIDY_2);
+
+        size_t a1_index = 0;
+        // Go through diploid arrangement
+        for (size_t i = 0; i < a.size(); ++i) {
+            // Take the even arrangement (arbitrary)
+            if ((a[i] & 1) == 0) {
+                a1[a1_index] = a[i] / PLOIDY_2;
+                a1_index++;
+            }
+        }
+
+        return a1;
     }
 
     // Binary lines >= BCF lines
