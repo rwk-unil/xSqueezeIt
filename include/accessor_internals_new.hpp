@@ -62,6 +62,9 @@ public:
         a_weird(N_HAPS), b_weird(N_HAPS) {
         // Load dictionary
         read_dictionary(dictionary, (uint32_t*)block_p);
+
+        //std::cerr << "[DEBUG] Dictionnary size : " << dictionary.size() << std::endl;
+
         bcf_lines_in_block = dictionary.at(KEY_BCF_LINES);
         binary_gt_lines_in_block = dictionary.at(KEY_BINARY_LINES);
 
@@ -88,13 +91,13 @@ public:
 
         // Check for weirdness
         block_has_weirdness = false;
-        block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_MISSING, line_has_missing, bcf_lines_in_block);
-        block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_END_OF_VECTORS, line_has_end_of_vector, bcf_lines_in_block);
+        block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_MISSING, line_has_missing, binary_gt_lines_in_block);
+        block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_END_OF_VECTORS, line_has_end_of_vector, binary_gt_lines_in_block);
         //std::cerr << "Block has weirdness : " << (block_has_weirdness ? "yes" : "no") << std::endl;
         //for (auto v : line_has_missing) { std::cerr << (v ? "1" : "0"); }
         //std::cerr << std::endl;
 
-        block_has_non_uniform_phasing = fill_bool_vector_from_1d_dict_key(KEY_LINE_NON_UNIFORM_PHASING, line_has_non_uniform_phasing, bcf_lines_in_block);
+        block_has_non_uniform_phasing = fill_bool_vector_from_1d_dict_key(KEY_LINE_NON_UNIFORM_PHASING, line_has_non_uniform_phasing, binary_gt_lines_in_block);
         //if (block_has_non_uniform_phasing) { std::cerr << "Block has non uniform phasing" << std::endl; }
 
         // Handle fully haploid lines
