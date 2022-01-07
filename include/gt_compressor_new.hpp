@@ -633,7 +633,7 @@ protected:
             if (this->PLOIDY) {
                 std::cerr << "WARNING : Mixed PLOIDY is not yet fully supported !" << std::endl;
                 mixed_ploidy = true; // If ploidy was already set, it means mixed ploidy in file
-                throw "Mixed ploidy error";
+                //throw "Mixed ploidy error";
             }
             if (this->line_max_ploidy > 2) {
                 throw "Ploidy higher than 2 is not yet supported";

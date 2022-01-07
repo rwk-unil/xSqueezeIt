@@ -312,6 +312,24 @@ class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
     }
 };
 
+/// @brief creates haploid arrangement from diploid arrangement
+template<typename A_T>
+std::vector<A_T> haploid_rearrangement_from_diploid(const std::vector<A_T>& a) {
+    std::vector<A_T> a1(a.size() / 2);
+
+    size_t a1_index = 0;
+    // Go through diploid arrangement
+    for (size_t i = 0; i < a.size(); ++i) {
+        // Take the even arrangement (arbitrary)
+        if ((a[i] & 1) == 0) {
+            a1[a1_index] = a[i] / 2;
+            a1_index++;
+        }
+    }
+
+    return a1;
+}
+
 // Decompression related
 
 #endif /* __INTERFACES_HPP__ */

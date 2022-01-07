@@ -50,20 +50,32 @@ template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class DecompressPointerGTBlock : /* public DecompressPointer<A_T, WAH_T>, */ public GTBlockDict, protected PBWTSorter {
 public:
     DecompressPointerGTBlock(const header_t& header, void* block_p) :
-        header(header), block_p(block_p), N_HAPS(header.hap_samples),
+        header(header), block_p(block_p), N_SAMPLES(header.num_samples), N_HAPS(N_SAMPLES ? N_SAMPLES*2 : header.hap_samples), /// @todo fix ploidy
         internal_binary_gt_line_position(0),
         internal_binary_weirdness_position(0),
         internal_binary_phase_position(0),
-        y(header.hap_samples+sizeof(WAH_T)*8-1, false),
-        a(header.hap_samples), b(header.hap_samples),
-        y_missing(header.hap_samples+sizeof(WAH_T)*8-1, false),
-        y_eovs(header.hap_samples+sizeof(WAH_T)*8-1, false),
-        y_phase(header.hap_samples+sizeof(WAH_T)*8-1, false),
-        a_weird(header.hap_samples), b_weird(header.hap_samples) {
+        y(N_HAPS+sizeof(WAH_T)*8-1, false),
+        a(N_HAPS), b(N_HAPS),
+        y_missing(N_HAPS+sizeof(WAH_T)*8-1, false),
+        y_eovs(N_HAPS+sizeof(WAH_T)*8-1, false),
+        y_phase(N_HAPS+sizeof(WAH_T)*8-1, false),
+        a_weird(N_HAPS), b_weird(N_HAPS) {
         // Load dictionary
         read_dictionary(dictionary, (uint32_t*)block_p);
         bcf_lines_in_block = dictionary.at(KEY_BCF_LINES);
         binary_gt_lines_in_block = dictionary.at(KEY_BINARY_LINES);
+
+        MAX_PLOIDY = dictionary.at(KEY_MAX_LINE_PLOIDY);
+        if (MAX_PLOIDY == VAL_UNDEFINED) {
+            std::cerr << "[DEBUG] Line max ploidy not found, setting to 2..." << std::endl;
+            MAX_PLOIDY = 2;
+        }
+
+        DEFAULT_PHASING = dictionary.at(KEY_DEFAULT_PHASING);
+        // Defalut ploidy should be 0 (unphased) or 1 (phased)
+        if ((DEFAULT_PHASING != 1) or (DEFAULT_PHASING != 1)) {
+            DEFAULT_PHASING = 0;
+        }
 
         //std::cerr << "Created a new GTB decompress pointer with " << bcf_lines_in_block << " bcf lines and " << binary_gt_lines_in_block << " binary lines" << std::endl;
 
@@ -131,7 +143,7 @@ public:
                 reset();
             }
             while (internal_binary_gt_line_position < position) {
-                const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
+                const size_t CURRENT_N_HAPS = ((haploid_binary_gt_line[internal_binary_gt_line_position]) ? N_SAMPLES : N_HAPS);
                 if (binary_gt_line_is_wah[internal_binary_gt_line_position]) {
                     /// @todo
                     // Resize y based on the vector length
@@ -169,9 +181,8 @@ public:
         size_t total_alt = 0;
         size_t n_missing = 0;
         size_t n_eovs = 0;
-        int32_t DEFAULT_PHASED = dictionary[KEY_DEFAULT_PHASING]; /// @todo
 
-        const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
+        const size_t CURRENT_N_HAPS = ((haploid_binary_gt_line[internal_binary_gt_line_position]) ? N_SAMPLES : N_HAPS);
         const size_t START_OFFSET = internal_binary_gt_line_position;
 
         // Set REF / first ALT
@@ -181,17 +192,23 @@ public:
             int32_t sparse_gt = sparse_negated ? 0 : 1;
 
             for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
-                gt_arr[i] = bcf_gt_unphased(default_gt) | ((i & 1) & DEFAULT_PHASED);
+                gt_arr[i] = bcf_gt_unphased(default_gt) | ((i & 1) & DEFAULT_PHASING);
             }
             for (const auto& i : sparse) {
                 //if constexpr (DEBUG_DECOMP) std::cerr << "Setting variant at " << i << std::endl;
-                gt_arr[i] = bcf_gt_unphased(sparse_gt) | ((i & 1) & DEFAULT_PHASED);
+                gt_arr[i] = bcf_gt_unphased(sparse_gt) | ((i & 1) & DEFAULT_PHASING);
             }
         } else { /* SORTED WAH */
             wah_p = wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
-
-            for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
-                gt_arr[a[i]] = bcf_gt_unphased(y[i]) | ((a[i] & 1) & DEFAULT_PHASED); /// @todo Phase
+            if (haploid_binary_gt_line[internal_binary_gt_line_position]) {
+                auto a1 = haploid_rearrangement_from_diploid(a);
+                for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                    gt_arr[a1[i]] = bcf_gt_unphased(y[i]); // Haploids don't require phase bit
+                }
+            } else {
+                for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                    gt_arr[a[i]] = bcf_gt_unphased(y[i]) | ((a[i] & 1) & DEFAULT_PHASING);
+                }
             }
         }
 
@@ -209,26 +226,35 @@ public:
                     for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
                         // Only overwrite refs
                         if (bcf_gt_allele(gt_arr[i]) == 0) {
-                            gt_arr[i] = bcf_gt_unphased(alt_allele) | ((i & 1) & DEFAULT_PHASED);
+                            gt_arr[i] = bcf_gt_unphased(alt_allele) | ((i & 1) & DEFAULT_PHASING);
                         }
                     }
                     for (const auto& i : sparse) {
                         // Restore overwritten refs
                         if (bcf_gt_allele(gt_arr[i]) == (int)alt_allele) {
-                            gt_arr[i] = bcf_gt_unphased(0) | ((i & 1) & DEFAULT_PHASED);
+                            gt_arr[i] = bcf_gt_unphased(0) | ((i & 1) & DEFAULT_PHASING);
                         }
                     }
                 } else {
                     // Fill normally
                     for (const auto& i : sparse) {
-                        gt_arr[i] = bcf_gt_unphased(alt_allele) | ((i & 1) & DEFAULT_PHASED);
+                        gt_arr[i] = bcf_gt_unphased(alt_allele) | ((i & 1) & DEFAULT_PHASING);
                     }
                 }
             } else { /* SORTED WAH */
                 wah_p = wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
-                for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
-                    if (y[i]) {
-                        gt_arr[a[i]] = bcf_gt_unphased(alt_allele) | ((a[i] & 1) & DEFAULT_PHASED); /// @todo Phase
+                if (haploid_binary_gt_line[internal_binary_gt_line_position]) {
+                    auto a1 = haploid_rearrangement_from_diploid(a);
+                    for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                        if (y[i]) {
+                            gt_arr[a1[i]] = bcf_gt_unphased(y[i]); // Haploids don't require phase bit
+                        }
+                    }
+                } else {
+                    for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
+                        if (y[i]) {
+                            gt_arr[a[i]] = bcf_gt_unphased(alt_allele) | ((a[i] & 1) & DEFAULT_PHASING); /// @todo Phase
+                        }
                     }
                 }
             }
@@ -253,7 +279,7 @@ public:
                     if (y_missing[i]) {
                         const auto index = a_weird[i];
                         //std::cerr << "Filling a missing position" << std::endl;
-                        gt_arr[index] = bcf_gt_missing | ((index & 1) & DEFAULT_PHASED);
+                        gt_arr[index] = bcf_gt_missing | ((index & 1) & DEFAULT_PHASING);
                     }
                 }
             }
@@ -283,7 +309,7 @@ public:
                 (void) wah2_extract(non_uniform_phasing_p, y_phase, CURRENT_N_HAPS);
                 for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
                     if (y_phase[i]) {
-                        std::cerr << "Toggling phase bit" << std::endl;
+                        //std::cerr << "Toggling phase bit" << std::endl;
                         // Toggle phase bit
                         /// @todo only works for PLOIDY 1 and 2
                         gt_arr[i] ^= (i & 1); // if non default phase toggle bit
@@ -320,7 +346,7 @@ public:
         allele_counts.resize(n_alleles);
         size_t total_alt = 0;
 
-        const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
+        const size_t CURRENT_N_HAPS = ((haploid_binary_gt_line[internal_binary_gt_line_position]) ? N_SAMPLES : N_HAPS);
 
         for (size_t alt_allele = 1; alt_allele < n_alleles; ++alt_allele) {
             if (binary_gt_line_is_wah[internal_binary_gt_line_position]) {
@@ -471,7 +497,7 @@ protected:
             s_p++;
         }
 
-        const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
+        const size_t CURRENT_N_HAPS = ((haploid_binary_gt_line[internal_binary_gt_line_position]) ? N_SAMPLES : N_HAPS);
         ones = (sparse_negated ? CURRENT_N_HAPS-num : num);
 
         return s_p;
@@ -487,7 +513,7 @@ protected:
 
         s_p += num;
 
-        const size_t CURRENT_N_HAPS = (haploid_binary_gt_line[internal_binary_gt_line_position] ? N_HAPS >> 1 : N_HAPS);
+        const size_t CURRENT_N_HAPS = ((haploid_binary_gt_line[internal_binary_gt_line_position]) ? N_SAMPLES : N_HAPS);
         ones = (sparse_negated ? CURRENT_N_HAPS-num : num);
 
         return s_p;
@@ -496,7 +522,9 @@ protected:
 protected:
     const header_t& header;
     const void* block_p;
+    const size_t N_SAMPLES;
     const size_t N_HAPS;
+    size_t MAX_PLOIDY;
     size_t bcf_lines_in_block;
     size_t binary_gt_lines_in_block;
 
@@ -520,6 +548,7 @@ protected:
     WAH_T* missing_p;
     WAH_T* eovs_origin_p;
     WAH_T* eovs_p;
+    int32_t DEFAULT_PHASING;
     bool block_has_non_uniform_phasing;
     WAH_T* non_uniform_phasing_origin_p;
     WAH_T* non_uniform_phasing_p;

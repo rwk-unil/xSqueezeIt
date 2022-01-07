@@ -478,6 +478,7 @@ public:
             .samples_offset = (uint32_t)-1, /* Set later */
             .rearrangement_track_offset = (uint32_t)-1, /* Unused */
             .xcf_entries = (uint64_t)0, //this->entry_counter,
+            .num_samples = (uint64_t)num_samples,
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,

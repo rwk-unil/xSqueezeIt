@@ -436,6 +436,7 @@ private:
         // Write WAH
         dictionary.at(KEY_MATRIX_WAH) = (uint32_t)((size_t)s.tellp()-block_start_pos);
         for (const auto& wah : wah_encoded_binary_gt_lines) {
+            //for (auto& wah_word : wah) print_wah2(wah_word);
             write_vector(s, wah);
         }
 
