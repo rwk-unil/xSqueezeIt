@@ -370,7 +370,7 @@ protected:
 class AccessorInternals {
 public:
     virtual ~AccessorInternals() {}
-    virtual void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) = 0;
+    virtual size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) = 0;
     // Fill genotype array also fills allele counts, so this is only to be used when fill_genotype_array is not called (e.g., to recompute AC only)
     virtual void fill_allele_counts(size_t n_alleles, size_t position) = 0;
     virtual inline const std::vector<size_t>& get_allele_counts() const {return allele_counts;}
@@ -385,7 +385,7 @@ protected:
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsTemplate : public AccessorInternals {
 public:
-    void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
+    size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
         // Conversion from new to old, for the moment
         const size_t OFFSET_MASK = ~((((size_t)-1) >> BM_BLOCK_BITS) << BM_BLOCK_BITS);
         size_t block_id = ((new_position & 0xFFFFFFFF) >> BM_BLOCK_BITS);
@@ -477,6 +477,8 @@ public:
 
         // Set ref allele count (all haps that don't have an alt allele or missing)
         allele_counts[0] = this->N_HAPS - total_alt - total_missing;
+
+        return gt_arr_size; // Old version
     }
 
     void fill_allele_counts(size_t n_alleles, size_t new_position) override {

@@ -183,7 +183,7 @@ public:
 
 private:
     inline void scan_genotypes(const bcf_file_reader_info_t& bcf_fri) {
-        const auto LINE_MAX_PLOIDY = bcf_fri.ngt_arr / bcf_fri.n_samples;
+        const auto LINE_MAX_PLOIDY = bcf_fri.ngt / bcf_fri.n_samples;
         if (LINE_MAX_PLOIDY > max_vector_length) {
             max_vector_length = LINE_MAX_PLOIDY;
         }
@@ -247,12 +247,12 @@ public:
         scan_genotypes(bcf_fri);
 
         auto& allele_counts = line_allele_counts[effective_bcf_lines_in_block];
-        const auto LINE_MAX_PLOIDY = bcf_fri.ngt_arr / bcf_fri.n_samples;
+        const auto LINE_MAX_PLOIDY = bcf_fri.ngt / bcf_fri.n_samples;
 
         // For all alt alleles (1 if bi-allelic variant site)
         for (size_t alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
 
-            const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt_arr - allele_counts[alt_allele]);
+            const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt - allele_counts[alt_allele]);
             if (minor_allele_count > MAC_THRESHOLD) {
                 uint32_t _; // Unused
                 bool __; // Unused
@@ -261,12 +261,12 @@ public:
                 if (LINE_MAX_PLOIDY == 1) {
                     // The order is given by a1 instead of a
                     auto a1 = haploid_rearrangement_from_diploid(a);
-                    wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a1, bcf_fri.ngt_arr, _, __));
+                    wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a1, bcf_fri.ngt, _, __));
                     // Here pbwt_sort1 does the logic for the sorting no need to use a1
-                    pbwt_sort1(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                    pbwt_sort1(a, b, bcf_fri.gt_arr, bcf_fri.ngt, alt_allele);
                 } else if (LINE_MAX_PLOIDY == 2) {
-                    wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
-                    pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                    wah_encoded_binary_gt_lines.push_back(wah::wah_encode2_with_size<WAH_T>(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt, _, __));
+                    pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt, alt_allele);
                 } else {
                     std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
                     throw "PLOIDY ERROR";
@@ -278,7 +278,7 @@ public:
                 }
                 // Sparse does not depend on ploidy because we don't use the rearrangement
                 // We directly encode the correct number of alleles
-                sparse_encoded_binary_gt_lines.emplace_back(SparseGtLine<A_T>(effective_binary_gt_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
+                sparse_encoded_binary_gt_lines.emplace_back(SparseGtLine<A_T>(effective_binary_gt_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt, sparse_allele));
                 binary_gt_line_is_wah.push_back(false);
             }
             effective_binary_gt_lines_in_block++;
@@ -289,17 +289,17 @@ public:
         bool __(false); // Unused
         if (line_has_missing[effective_bcf_lines_in_block]) {
             weird_line = true;
-            wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a_weirdness, bcf_fri.ngt_arr, _, __));
+            wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a_weirdness, bcf_fri.ngt, _, __));
         }
         if (line_has_end_of_vector[effective_bcf_lines_in_block]) {
             weird_line = true;
-            wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt_arr, _, __));
+            wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt, _, __));
         }
 
         // Phasing info is not PBWT reordered with weirdness
         /// @todo double compress this structure would save space, e.g., if all the entries are the same
         if (line_has_non_uniform_phasing[effective_bcf_lines_in_block]) {
-            wah_encoded_non_uniform_phasing_lines.push_back(wah::wah_encode2_with_size<WAH_T, NonDefaultPhasingPred>(bcf_fri.gt_arr, default_phasing, bcf_fri.ngt_arr, _));
+            wah_encoded_non_uniform_phasing_lines.push_back(wah::wah_encode2_with_size<WAH_T, NonDefaultPhasingPred>(bcf_fri.gt_arr, default_phasing, bcf_fri.ngt, _));
         }
 
         if (weird_line) {
@@ -307,14 +307,14 @@ public:
             if (LINE_MAX_PLOIDY != default_ploidy) {
                 if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
                     // Sort a, b as if they were homozygous with ploidy 2
-                    pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0 /*unused*/);
+                    pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt, 0 /*unused*/);
                 } else {
                     /// @todo add and handle polyploid PBWT sort
                     std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
                     throw "PLOIDY ERROR";
                 }
             } else {
-                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt_arr, 0 /*unused*/);
+                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, bcf_fri.ngt, 0 /*unused*/);
             }
         }
 
@@ -531,23 +531,6 @@ private:
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         //std::cout << "others " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-    }
-
-    /// @brief creates haploid arrangement from diploid arrangement
-    std::vector<A_T> haploid_rearrangement_from_diploid(const std::vector<A_T>& a) {
-        std::vector<A_T> a1(a.size()/PLOIDY_2);
-
-        size_t a1_index = 0;
-        // Go through diploid arrangement
-        for (size_t i = 0; i < a.size(); ++i) {
-            // Take the even arrangement (arbitrary)
-            if ((a[i] & 1) == 0) {
-                a1[a1_index] = a[i] / PLOIDY_2;
-                a1_index++;
-            }
-        }
-
-        return a1;
     }
 
     // Binary lines >= BCF lines

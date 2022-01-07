@@ -7,8 +7,8 @@ void BcfTraversal::traverse(const std::string filename) {
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         handle_bcf_line();
     }

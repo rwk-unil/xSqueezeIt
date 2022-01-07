@@ -32,8 +32,8 @@ public:
     Accessor(std::string& filename);
     virtual ~Accessor();
 
-    void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) {
-        internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
+    size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) {
+        return internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
     }
 
     void fill_allele_counts(size_t n_alleles, size_t position) {

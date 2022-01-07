@@ -163,7 +163,7 @@ private:
         int *values = NULL;
         int count = 0;
         uint32_t bm_index = 0;
-        const int32_t an = samples_to_use.size() * header.ploidy;
+        //const int32_t an = samples_to_use.size() * header.ploidy;
         std::vector<int32_t> ac_s;
 
         // The number of variants does not equal the number of lines if multiple ALTs
@@ -210,9 +210,9 @@ private:
 
                 // This is the "non optimal way"
                 /// @todo replace this by implementing the comments below
-                accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
-                update_and_write_xsi(bcf_fri, hdr, fp, rec, an, ac_s);
+                update_and_write_xsi(bcf_fri, hdr, fp, rec, ac_s);
 
                 // Inner variant loop
                     // If variant count == header.block_size
@@ -231,9 +231,9 @@ private:
                     // Count variant extracted
             } else {
                 // Fill the genotype array (as bcf_get_genotypes() would do)
-                accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
-                update_and_write_bcf_record(bcf_fri, hdr, fp, rec, an, ac_s);
+                update_and_write_bcf_record(bcf_fri, hdr, fp, rec, ac_s);
             }
 
             // Count the number of variants extracted
@@ -247,14 +247,26 @@ private:
     }
 
 private:
-    inline void fill_selected_genotypes(std::vector<int32_t>& ac_s) {
+    inline int32_t fill_selected_genotypes(std::vector<int32_t>& ac_s) {
+        const size_t CURRENT_LINE_PLOIDY = (header.version < 4) ? header.ploidy :
+                                           (current_line_num_genotypes / header.num_samples);
+
+        if (!CURRENT_LINE_PLOIDY) {
+            std::cerr << "Detected ploidy of 0 !" << std::endl;
+            throw "PLOIDY ERROR";
+        }
+        if (CURRENT_LINE_PLOIDY > 2) {
+            std::cerr << "Cannot handle ploidy above 2 !" << std::endl;
+            throw "PLOIDY ERROR";
+        }
+
         for (size_t i = 0; i < samples_to_use.size(); ++i) {
-            if (header.ploidy == 1) {
+            if (CURRENT_LINE_PLOIDY == 1) {
                 selected_genotypes[i] = genotypes[samples_to_use[i]];
                 for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
                     ac_s[alt_allele-1] += (bcf_gt_allele(selected_genotypes[i]) == alt_allele);
                 }
-            } else if (header.ploidy == 2) {
+            } else if (CURRENT_LINE_PLOIDY == 2) {
                 selected_genotypes[i*2] = genotypes[samples_to_use[i]*2];
                 selected_genotypes[i*2+1] = genotypes[samples_to_use[i]*2+1];
                 for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
@@ -263,24 +275,27 @@ private:
                 }
             }
         }
+        return samples_to_use.size() * CURRENT_LINE_PLOIDY;
     }
 
     /// @todo this factory append bcf file reader info is not the most optimal way
-    inline void update_and_write_xsi(bcf_file_reader_info_t /* copy */ bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an, std::vector<int32_t>& ac_s) {
+    inline void update_and_write_xsi(bcf_file_reader_info_t /* copy */ bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, std::vector<int32_t>& ac_s) {
         if (select_samples) {
             // If select samples option has been enabled, recompute AC / AN as bcftools does
             ac_s.clear();
             ac_s.resize(bcf_fri.line->n_allele-1, 0);
 
-            fill_selected_genotypes(ac_s);
+            int32_t an = fill_selected_genotypes(ac_s);
 
             // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
             // Note that --no-update in bcftools disables this recomputation /// @todo this
             bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
             bcf_update_info_int32(hdr, rec, "AN", &an, 1);
 
+            bcf_fri.ngt = an;
             bcf_fri.gt_arr = selected_genotypes;
         } else {
+            bcf_fri.ngt = current_line_num_genotypes;
             bcf_fri.gt_arr = genotypes;
         }
 
@@ -292,35 +307,46 @@ private:
             throw "Failed to write record";
         }
 
-        bcf_fri.ngt_arr = samples_to_use.size() * header.ploidy; /// @todo mixed ploidy
         bcf_fri.n_samples = samples_to_use.size();
 
         // The bcf_fri is used here, therefore it should be filled (comes from compressor code)
         xsi_factory->append(bcf_fri);
     }
 
-    inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, const size_t an, std::vector<int32_t>& ac_s) {
+    inline void update_and_write_bcf_record(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp, bcf1_t *rec, std::vector<int32_t>& ac_s) {
         int ret = 0;
 
         // Remove the "BM" format
         /// @todo remove all possible junk (there should be none but there could be)
         bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
+        const size_t CURRENT_LINE_PLOIDY = (header.version < 4) ? header.ploidy :
+                                           (current_line_num_genotypes / header.num_samples);
+
+        if (!CURRENT_LINE_PLOIDY) {
+            std::cerr << "Detected ploidy of 0 !" << std::endl;
+            throw "PLOIDY ERROR";
+        }
+        if (CURRENT_LINE_PLOIDY > 2) {
+            std::cerr << "Cannot handle ploidy above 2 !" << std::endl;
+            throw "PLOIDY ERROR";
+        }
+
         if (select_samples) {
             // If select samples option has been enabled, recompute AC / AN as bcftools does
             ac_s.clear();
             ac_s.resize(bcf_fri.line->n_allele-1, 0);
 
-            fill_selected_genotypes(ac_s);
+            int32_t an = fill_selected_genotypes(ac_s);
 
-            ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * header.ploidy);
+            ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * CURRENT_LINE_PLOIDY);
             // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
             // Note that --no-update in bcftools disables this recomputation /// @todo this
             bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
             bcf_update_info_int32(hdr, rec, "AN", &an, 1);
         } else {
             // Else just fill the GT values
-            ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * header.ploidy); // 15% of time spent in here
+            ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * CURRENT_LINE_PLOIDY); // 15% of time spent in here
         }
         if (ret) {
             std::cerr << "Failed to update genotypes" << std::endl;
@@ -392,11 +418,13 @@ public:
             throw "Unsupported option no sort";
         }
 
-        if (sample_list.size() != (header.hap_samples / header.ploidy)) {
-            std::cerr << "Number of samples doesn't match" << std::endl;
-            std::cerr << "Sample list has " << sample_list.size() << " samples" << std::endl;
-            std::cerr << "Compressed file header has " << header.hap_samples / header.ploidy << " samples" << std::endl;
-            throw "Number of samples doesn't match";
+        if (header.version < 4) {
+            if (sample_list.size() != (header.hap_samples / header.ploidy)) {
+                std::cerr << "Number of samples doesn't match" << std::endl;
+                std::cerr << "Sample list has " << sample_list.size() << " samples" << std::endl;
+                std::cerr << "Compressed file header has " << header.hap_samples / header.ploidy << " samples" << std::endl;
+                throw "Number of samples doesn't match";
+            }
         }
 
         if (global_app_options.samples != "") {
@@ -474,7 +502,7 @@ public:
                 }
                 samples = smaller_list;
             }
-            const size_t N_HAPS = num_samples * header.ploidy;
+            const size_t N_HAPS = num_samples * header.ploidy; /// @todo mixed ploidy
             const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * global_app_options.maf;
             int32_t default_phased = header.default_phased ? 1 : 0;
             if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
@@ -535,6 +563,7 @@ protected:
     std::unique_ptr<XsiFactoryInterface> xsi_factory = nullptr;
 
     int32_t* genotypes{NULL};
+    size_t current_line_num_genotypes;
     int32_t* selected_genotypes{NULL};
 };
 

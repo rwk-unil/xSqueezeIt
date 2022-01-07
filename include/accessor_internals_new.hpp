@@ -95,7 +95,7 @@ public:
         //std::cerr << std::endl;
 
         block_has_non_uniform_phasing = fill_bool_vector_from_1d_dict_key(KEY_LINE_NON_UNIFORM_PHASING, line_has_non_uniform_phasing, bcf_lines_in_block);
-        if (block_has_non_uniform_phasing) { std::cerr << "Block has non uniform phasing" << std::endl; }
+        //if (block_has_non_uniform_phasing) { std::cerr << "Block has non uniform phasing" << std::endl; }
 
         // Handle fully haploid lines
         fill_bool_vector_from_1d_dict_key(KEY_LINE_HAPLOID, haploid_binary_gt_line, binary_gt_lines_in_block);
@@ -120,7 +120,7 @@ public:
 
         non_uniform_phasing_origin_p = get_pointer_from_dict<WAH_T>(KEY_MATRIX_NON_UNIFORM_PHASING);
         non_uniform_phasing_p = non_uniform_phasing_origin_p;
-        if (non_uniform_phasing_origin_p) { std::cerr << "Block has non uniform phasing data" << std::endl; }
+        //if (non_uniform_phasing_origin_p) { std::cerr << "Block has non uniform phasing data" << std::endl; }
 
         std::iota(a.begin(), a.end(), 0);
         if (block_has_weirdness) {
@@ -176,7 +176,7 @@ public:
         }
     }
 
-    inline void fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) {
+    inline size_t fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) {
         allele_counts.resize(n_alleles);
         size_t total_alt = 0;
         size_t n_missing = 0;
@@ -321,6 +321,8 @@ public:
         }
 
         allele_counts[0] = CURRENT_N_HAPS - (total_alt + n_missing + n_eovs);
+
+        return CURRENT_N_HAPS;
     }
 
     void reset() {
@@ -579,7 +581,7 @@ protected:
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsNewTemplate : public AccessorInternals {
 public:
-    void fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
+    size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
         const size_t OFFSET_MASK = ~((((size_t)-1) >> BM_BLOCK_BITS) << BM_BLOCK_BITS);
         size_t block_id = ((new_position & 0xFFFFFFFF) >> BM_BLOCK_BITS);
         // The offset is relative to the start of the block and is binary gt lines
@@ -595,7 +597,7 @@ public:
         }
 
         dp->seek(offset);
-        dp->fill_genotype_array_advance(gt_arr, gt_arr_size, n_alleles);
+        return dp->fill_genotype_array_advance(gt_arr, gt_arr_size, n_alleles);
     }
 
     void fill_allele_counts(size_t n_alleles, size_t new_position) override {

@@ -103,7 +103,7 @@ private:
 
 public:
     InternalGtRecord(const bcf_file_reader_info_t& bcf_fri, std::vector<T>& a, std::vector<T>& b, int32_t default_is_phased, const size_t MAC_THRESHOLD, size_t& variant_counter, const size_t RESET_SORT_BLOCK_LENGTH) :
-    PLOIDY(bcf_fri.ngt_arr/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased),
+    PLOIDY(bcf_fri.ngt/bcf_fri.n_samples), n_alleles(bcf_fri.line->n_allele), allele_counts(bcf_fri.line->n_allele, 0), rearrangements(bcf_fri.line->n_allele-1, false), default_is_phased(default_is_phased),
     end_of_vector(PLOIDY, false) {
         scan_genotypes(bcf_fri);
 
@@ -114,22 +114,22 @@ public:
                 std::iota(a.begin(), a.end(), 0);
             }
 
-            const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt_arr - allele_counts[alt_allele]);
+            const size_t minor_allele_count = std::min(allele_counts[alt_allele], bcf_fri.ngt - allele_counts[alt_allele]);
             if (minor_allele_count > MAC_THRESHOLD) {
                 uint32_t _; // Unused
                 bool __; // Unused
-                wahs.push_back(wah::wah_encode2_with_size(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt_arr, _, __));
+                wahs.push_back(wah::wah_encode2_with_size(bcf_fri.gt_arr, alt_allele, a, bcf_fri.ngt, _, __));
                 const size_t SORT_THRESHOLD = MAC_THRESHOLD; // For next version
                 if (minor_allele_count > SORT_THRESHOLD) {
                     rearrangements[alt_allele-1] = true;
-                    pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt_arr, alt_allele);
+                    pbwt_sort(a, b, bcf_fri.gt_arr, bcf_fri.ngt, alt_allele);
                 }
             } else {
                 int32_t sparse_allele = 0; // If 0 means sparse is negated
                 if (allele_counts[alt_allele] == minor_allele_count) {
                     sparse_allele = alt_allele;
                 }
-                sparse_lines.emplace_back(SparseGtLine<T>(variant_counter, bcf_fri.gt_arr, bcf_fri.ngt_arr, sparse_allele));
+                sparse_lines.emplace_back(SparseGtLine<T>(variant_counter, bcf_fri.gt_arr, bcf_fri.ngt, sparse_allele));
             }
 
             variant_counter++;

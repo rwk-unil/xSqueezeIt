@@ -21,8 +21,8 @@ void extract_common_to_file(const std::string& ifname, const std::string& ofname
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -106,8 +106,8 @@ std::pair<size_t, size_t> extract_common_to_file_het_info(const std::string& ifn
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -215,8 +215,8 @@ void extract_common_to_file_tree_sorted(const std::string& ifname, const std::st
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -317,8 +317,8 @@ void extract_common_to_file_sorted(const std::string& ifname, const std::string&
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -362,7 +362,7 @@ void extract_common_to_file_sorted(const std::string& ifname, const std::string&
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        UNUSED(bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr)));
+        UNUSED(bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr)));
 
         for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
             uint32_t alt_allele_counter = 0;
@@ -421,8 +421,8 @@ void extract_common_to_file_pbwt_color(const std::string& ifname, const std::str
 
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -501,8 +501,8 @@ void extract_common_to_file_block_sorted(const std::string& ifname, const std::s
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -555,7 +555,7 @@ void extract_common_to_file_block_sorted(const std::string& ifname, const std::s
     while(bcf_next_line(bcf_fri)) {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        UNUSED(bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr)));
+        UNUSED(bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr)));
 
         for (int alt_allele = 1; alt_allele < bcf_fri.line->n_allele; ++alt_allele) {
             uint32_t alt_allele_counter = 0;

@@ -213,8 +213,8 @@ void phase_xcf(const std::string& ifname, const std::string& ofname) {
 
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {
@@ -856,8 +856,8 @@ void new_phase_xcf(const std::string& ifname, const std::string& ofname) {
 
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
-        int ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.ngt_arr));
-        int line_max_ploidy = ngt / bcf_fri.n_samples;
+        bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
+        int line_max_ploidy = bcf_fri.ngt / bcf_fri.n_samples;
 
         // Check ploidy, only support diploid for the moment
         if (line_max_ploidy != PLOIDY) {

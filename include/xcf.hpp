@@ -51,7 +51,8 @@ typedef struct bcf_file_reader_info_t {
     size_t n_samples = 0; /* The number of samples */
     size_t var_count = 0; /* The number of variant sites extracted */
     int* gt_arr = nullptr; /* Pointer on genotype data array */
-    int ngt_arr = 0; /* Size of above array as given by bcf_get_genotypes() */
+    int size_gt_arr = 0; /* Size of above array as given by bcf_get_genotypes() */
+    int ngt = 0;
     bcf1_t* line = nullptr; /* Current line pointer */
     size_t line_num = 0; /* Current line number */
     int line_alt_alleles_extracted = 0; /* For multi ALT alleles */
