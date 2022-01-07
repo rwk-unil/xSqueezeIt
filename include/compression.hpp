@@ -88,7 +88,8 @@ struct header_s {
     uint32_t rare_threshold = 0;      // Threshold for the rearrangement track / sorting / wah vs sparse
     uint64_t xcf_entries = 0;         // Num entries in the BCF file (may be less than num_variants if multi-allelic)
     uint32_t phase_info_offset = 0;
-    uint8_t rsvd_3[112] = {0,};
+    uint64_t num_samples = 0;
+    uint8_t rsvd_3[104] = {0,};
 
     // 32 bytes
     uint32_t rsvd_4[3] = {0,};
@@ -100,6 +101,8 @@ struct header_s {
 } __attribute__((__packed__));
 
 typedef struct header_s header_t;
+
+static_assert(sizeof(header_t) == 256, "Header is not 256 bytes");
 
 template<typename _ = uint32_t> /// @todo remove template, this is lazyness...
 void print_header_info(const header_t& header) {
