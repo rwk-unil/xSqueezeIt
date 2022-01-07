@@ -46,24 +46,21 @@ class LockStepLoader {
 public:
 
     LockStepLoader(std::string filename1, std::string filename2) {
-        if (filename1.substr(filename1.find_last_of(".") + 1) == "bcf") {
+        auto ext1 = filename1.substr(filename1.find_last_of(".") + 1);
+        auto ext2 = filename2.substr(filename2.find_last_of(".") + 1);
+        std::cerr << "ext1 " << ext1 << " ext2 " << ext2 << std::endl;
+        if (ext1 == "bcf" || ext1 == "vcf") {
             bcf_filename1 = filename1;
-        } else if (filename1.substr(filename1.find_last_of(".") + 1) == "bin" || filename1.substr(filename1.find_last_of(".") + 1) == "xsi") {
-            // file1_is_stc = true;
-            // accessor1 = std::make_unique<Accessor>(filename1);
-            // bcf_filename1 = accessor1->get_variant_filename();
+        } else if (ext1 == "bin" || ext1 == "xsi") {
             bcf_filename1 = Accessor::get_variant_filename(filename1);
         } else {
             std::cerr << "Unrecognized file type\n";
             exit(-1);
         }
 
-        if (filename2.substr(filename2.find_last_of(".") + 1) == "bcf") {
+        if (ext2 == "bcf" || ext2 == "vcf") {
             bcf_filename2 = filename2;
-        } else if (filename2.substr(filename2.find_last_of(".") + 1) == "bin" || filename2.substr(filename2.find_last_of(".") + 1) == "xsi") {
-            // file2_is_stc = true;
-            // accessor2 = std::make_unique<Accessor>(filename2);
-            // bcf_filename2 = accessor2->get_variant_filename();
+        } else if (ext2 == "bin" || ext2 == "xsi") {
             bcf_filename2 = Accessor::get_variant_filename(filename2);
         } else {
             std::cerr << "Unrecognized file type\n";
@@ -135,6 +132,8 @@ public:
                     // }
                     if (ngt_1 != ngt_2) {
                         std::cerr << "The files don't have the same number of extracted genotypes at record " << record << std::endl;
+                        std::cerr << "First file : " << ngt_1 << " gt entries, Second file : " << ngt_2 << " gt entries." << std::endl;
+                        exit(-1);
                     }
                     bool gt_diff = false;
                     for (int i = 0; i < ngt_1; ++i) {
