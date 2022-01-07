@@ -57,9 +57,7 @@ public:
 			throw "BM key value not found";
 		}
 
-        fill_genotype_array((int32_t*)*gt_arr, ngt, line->n_allele, values[0]);
-
-        return ngt;
+        return fill_genotype_array((int32_t*)*gt_arr, ngt, line->n_allele, values[0]);
     }
 
     #define XSI_BCF_VAR_EXTENSION "_var.bcf"
