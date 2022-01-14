@@ -3,6 +3,7 @@
 
 #include <libgen.h> // Has dirname() / basename()
 #include <string>
+#include <cstring> // for strdup
 #include <fstream>
 #include <unistd.h>
 /*
