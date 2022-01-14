@@ -38,9 +38,9 @@ void recompute_ac_an(std::string& filename, std::string& ofname) {
 }
 
 int main(int argc, const char *argv[]) {
-    std::cout << "Loading time test" << "\n";
+    std::cout << "AF stats" << "\n";
 
-    CLI::App app{"Loading time test app"};
+    CLI::App app{"AF stats app"};
     std::string filename = "-";
     std::string ofname = "-";
     app.add_option("-f,--file", filename, "Input file name");

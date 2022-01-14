@@ -122,12 +122,27 @@ private:
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, size_t stop_pos = 0) {
         int *values = NULL;
         int count = 0;
+        size_t block_id = 0;
+        size_t offset = 0;
+        size_t current_block_lines = 0;
         uint32_t bm_index = 0;
+        uint32_t v4_bm_index = 0;
 
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
         while(bcf_next_line(bcf_fri)) {
             bcf1_t *rec = bcf_fri.line;
+
+            // This is used in liear mode and in output nonlinear
+            if (current_block_lines == header.ss_rate) {
+                current_block_lines = 0;
+                offset = 0;
+                block_id++;
+            }
+            /// @todo replace this constant by the BM bits
+            v4_bm_index = block_id << 15 | offset;
+            offset += bcf_fri.line->n_allele-1;
+            current_block_lines++;
 
             if CONSTEXPR_IF (RECORD_NONLINEAR) {
                 bcf_unpack(rec, BCF_UN_ALL);
@@ -139,7 +154,13 @@ private:
                 // Non linear access (returns immediately if dp is already at correct position)
                 bm_index = values[0];
             } else {
-                bm_index = num_variants_extracted;
+                if (header.version == 4) {
+                    bm_index = v4_bm_index;
+                } else {
+                    /// @todo this is the old way, (not new bm)
+                    /// @todo this will be removed once version 4 is out
+                    bm_index = num_variants_extracted;
+                }
             }
 
             // Fill the genotype array (as bcf_get_genotypes() would do)
