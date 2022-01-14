@@ -118,15 +118,9 @@ int main(int argc, const char *argv[]) {
             }
         });
         auto compress_thread = std::thread([&]{
-            if (opt.v2 or opt.v3) {
+            if (opt.v4) {
                 try {
-                    NewCompressor c(opt.v4 ?
-                                    -1 :
-                                    opt.v2 ?
-                                    2 :
-                                    opt.v33 ?
-                                    33 :
-                                    3);
+                    NewCompressor c(-1 /* v4 is -1, this will be unused */);
                     c.set_maf(opt.maf);
                     c.set_reset_sort_block_length(opt.reset_sort_block_length);
                     c.set_zstd_compression_on(opt.zstd);
@@ -139,7 +133,7 @@ int main(int argc, const char *argv[]) {
                     fail = true;
                 }
             } else {
-                std::cerr << "Version 1 is no longer supported" << std::endl;
+                std::cerr << "Versions <4 are no longer supported" << std::endl;
             }
         });
 
@@ -153,28 +147,6 @@ int main(int argc, const char *argv[]) {
         } else {
             std::cerr << "Failure occurred, exiting..." << std::endl;
             exit(-1);
-        }
-
-        /// @todo this only works for V1 !
-        if (opt.verify) { // Slow (because requires decompression and verification)
-            std::cerr << "Verify is disabled for the moment, decompress and diff..." << std::endl;
-            #if 0
-            create_index_file(variant_file);
-            Decompressor d(ofname, variant_file);
-            std::string verify_file(ofname + "_verify.bcf");
-            d.decompress(verify_file);
-            create_index_file(verify_file);
-            if (matrices_differ(filename, verify_file)) {
-                std::cerr << "Matrices differ !" << std::endl;
-                fs::remove(verify_file);
-                fs::remove(verify_file + ".csi");
-                exit(-1);
-            } else {
-                std::cerr << "Verify successful !" << std::endl;
-                fs::remove(verify_file);
-                fs::remove(verify_file + ".csi");
-            }
-            #endif
         }
 
     } else if (opt.decompress) {
@@ -191,7 +163,7 @@ int main(int argc, const char *argv[]) {
 
         std::string variant_file(filename + XSI_BCF_VAR_EXTENSION);
         create_index_file(variant_file);
-        if (opt.v2 or opt.v3) {
+        if (opt.v2 or opt.v3 or opt.v4) {
             try {
                 NewDecompressor d(filename, variant_file);
                 d.decompress(ofname);

@@ -82,7 +82,7 @@ function exit_fail_rm_tmp {
 
 # --variant-block-length 65536
 # --variant-block-length 1024
-"${SCRIPTPATH}"/../../xsqueezeit --exp -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
 "${SCRIPTPATH}"/../../xsqueezeit -x ${REGIONS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }
