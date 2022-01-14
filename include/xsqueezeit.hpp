@@ -22,13 +22,13 @@ public:
 
         //app.add_flag("--iota", iota, "DEBUG - Seed PWBT with natural order");
         //app.add_flag("--no-sort", no_sort, "DEBUG - No PBWT sort");
-        app.add_flag("--v2", v2, "DEPRECATED - Version 2");
+        //app.add_flag("--v2", v2, "DEPRECATED - Version 2");
         //app.add_flag("--v3", v3, "DEBUG - New version");
-        app.add_flag("--v33", v33, "DEBUG - Experimental Streaming Version 3");
-        app.add_flag("--exp", experimental, "DEBUG - Experimental Version");
-        app.add_flag("--zstd", zstd, "V3 - Compress blocks with zstd");
-        app.add_option("--zstd-level,--zl", zstd_compression_level, "V3 - zstd compression level");
-        app.add_option("--maf", maf, "V3 - Minor Allele Frequency threshold");
+        //app.add_flag("--v33", v33, "DEBUG - Experimental Streaming Version 3");
+        //app.add_flag("--exp", v4, "DEBUG - Experimental Version");
+        app.add_flag("--zstd", zstd, "Compress blocks with zstd");
+        app.add_option("--zstd-level,--zl", zstd_compression_level, "zstd compression level");
+        app.add_option("--maf", maf, "Minor Allele Frequency threshold");
         app.add_option("--variant-block-length", reset_sort_block_length, "V3 - variant block length");
 
         //app.add_flag("--sandbox", sandbox, "DEBUG - ...");
@@ -78,9 +78,9 @@ public:
     bool verify = false;
     bool iota = false;
     bool v2 = false;
-    bool v3 = true;
+    bool v3 = false;
     bool v33 = false;
-    bool experimental = false;
+    bool v4 = true;
     bool zstd = false;
     int  zstd_compression_level = 7; // Some acceptable default value
     double maf = 0.01;

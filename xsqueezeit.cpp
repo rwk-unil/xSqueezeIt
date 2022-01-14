@@ -111,7 +111,7 @@ int main(int argc, const char *argv[]) {
         std::string variant_file(ofname + XSI_BCF_VAR_EXTENSION);
         auto variant_thread = std::thread([&]{
             try {
-                replace_samples_by_pos_in_binary_matrix(filename, variant_file, ofname, opt.experimental, opt.reset_sort_block_length);
+                replace_samples_by_pos_in_binary_matrix(filename, variant_file, ofname, opt.v4, opt.reset_sort_block_length);
             } catch (const char *e) {
                 std::cerr << e << std::endl;
                 fail = true;
@@ -120,7 +120,7 @@ int main(int argc, const char *argv[]) {
         auto compress_thread = std::thread([&]{
             if (opt.v2 or opt.v3) {
                 try {
-                    NewCompressor c(opt.experimental ?
+                    NewCompressor c(opt.v4 ?
                                     -1 :
                                     opt.v2 ?
                                     2 :
