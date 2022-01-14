@@ -403,11 +403,11 @@ public:
 
 protected:
     inline void weirdness_advance(const size_t STEPS, const size_t CURRENT_N_HAPS) {
-        bool current_line_has_missing = false;
-        bool current_line_has_eovs = false;
-
         // Update pointers and PBWT weirdness
         for (size_t i = 0; i < STEPS; ++i) {
+            bool current_line_has_missing = false;
+            bool current_line_has_eovs = false;
+
             if (line_has_missing.size() and line_has_missing[internal_binary_weirdness_position]) {
                 current_line_has_missing = true;
                 // Advance missing pointer
