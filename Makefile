@@ -5,11 +5,17 @@ ZSTD_PATH := ./zstd/lib
 CXX=g++
 INCLUDE_DIRS=-I include -I $(HTSLIB_PATH)/htslib -I $(ZSTD_PATH)
 #EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
-CXXFLAGS=-O3 -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
+ifeq ($(ADD_EXTRA),y)
+EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
+endif
+ifeq ($(OLEVEL),)
+OLEVEL=3
+endif
+CXXFLAGS=-O$(OLEVEL) -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
 LD=g++
 LIBS=-lpthread -lhts -lzstd
-LDFLAGS=-O3 $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
+LDFLAGS=-O$(OLEVEL) $(EXTRA_FLAGS) -L $(HTSLIB_PATH) -L $(ZSTD_PATH)
 
 # Project specific :
 TARGET := xsqueezeit
@@ -23,7 +29,10 @@ DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
 # Rules
-all : $(TARGET) $(DEPENDENCIES)
+all : datetime $(DEPENDENCIES) $(TARGET)
+
+datetime :
+	date | figlet 2> /dev/null
 
 # Link the target
 $(TARGET) : $(OBJS)
@@ -54,7 +63,6 @@ EXPORT_DIR := xsqueezeit_export
 package-sources : xcf.cpp bcf_traversal.cpp accessor.cpp c_api.cpp xsi_mixed_vcf.cpp
 	mkdir -p $(EXPORT_DIR)/include
 	cp $^ $(EXPORT_DIR)
-	rm $(EXPORT_DIR)/$<
 	for dep in $(^:.cpp=.d); do for file in $$(sed -n 's/\(^include.*\):/\1/p' $${dep}); do cp $${file} $(EXPORT_DIR)/include ; done ; done
 	cp Makefile_export $(EXPORT_DIR)/Makefile
 
@@ -64,4 +72,4 @@ clean :
 	rm -rf $(EXPORT_DIR)
 
 # Rules that don't generate artifacts
-.PHONY : all clean debug package-sources
+.PHONY : all clean debug package-sources datetime
