@@ -171,8 +171,20 @@ private:
         size_t block_id = 0;
         size_t offset = 0;
         size_t current_block_lines = 0;
+        uint32_t v4_bm_index = 0;
         while(bcf_next_line(bcf_fri)) {
             bcf1_t *rec = bcf_fri.line;
+
+            // This is used in liear mode and in output nonlinear
+            if (current_block_lines == header.ss_rate) {
+                current_block_lines = 0;
+                offset = 0;
+                block_id++;
+            }
+            /// @todo replace this constant by the BM bits
+            v4_bm_index = block_id << 15 | offset;
+            offset += bcf_fri.line->n_allele-1;
+            current_block_lines++;
 
             if CONSTEXPR_IF (RECORD_NONLINEAR) {
                 bcf_unpack(rec, BCF_UN_ALL);
@@ -185,15 +197,7 @@ private:
                 bm_index = values[0];
             } else {
                 if (header.version == 4) {
-                    if (current_block_lines == header.ss_rate) {
-                        current_block_lines = 0;
-                        offset = 0;
-                        block_id++;
-                    }
-                    /// @todo replace this constant by the BM bits
-                    bm_index = block_id << 15 | offset;
-                    offset += bcf_fri.line->n_allele-1;
-                    current_block_lines++;
+                    bm_index = v4_bm_index;
                 } else {
                     /// @todo this is the old way, (not new bm)
                     /// @todo this will be removed once version 4 is out
@@ -204,7 +208,12 @@ private:
             if CONSTEXPR_IF (XSI) {
                 if CONSTEXPR_IF (RECORD_NONLINEAR) {
                     // The BM index needs to be updated to reflect the new XSI file
-                    int32_t values[1] = {(int32_t)num_variants_extracted};
+                    int32_t values[1];
+                    if (header.version == 4) {
+                        values[0] = (int32_t)v4_bm_index;
+                    } else {
+                        values[0] = (int32_t)num_variants_extracted;
+                    }
                     bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", &values[0], 1, BCF_HT_INT);
                 } // Else the BM counters will be exactly the same
 
@@ -238,10 +247,6 @@ private:
 
             // Count the number of variants extracted
             num_variants_extracted += bcf_fri.line->n_allele-1;
-
-            if CONSTEXPR_IF (XSI) {
-                // TODO FILTER MISSING / PHASE (for the more optimized version but could be handled above)
-            }
         }
         if (values) { free(values); }
     }
@@ -508,10 +513,10 @@ public:
             const size_t BLOCK_SIZE = header.ss_rate;
             /// @todo integrate v4 instead of v3 !!
             if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-                xsi_factory = make_unique<XsiFactory<uint16_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
+                xsi_factory = make_unique<XsiFactoryExt<uint16_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
                     samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
             } else {
-                xsi_factory = make_unique<XsiFactory<uint32_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
+                xsi_factory = make_unique<XsiFactoryExt<uint32_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
                     samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
             }
         } else {
