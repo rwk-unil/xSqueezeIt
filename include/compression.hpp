@@ -112,17 +112,18 @@ void print_header_info(const header_t& header) {
     std::cerr << "Sample id bytes : " << (size_t)header.aet_bytes << std::endl;
     std::cerr << "WAH bytes : " << (size_t)header.wah_bytes << std::endl;
     std::cerr << "--" << std::endl;
-    std::cerr << "Has missing : " << (header.has_missing ? "yes" : "no") << std::endl;
-    std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;
-    std::cerr << "Uses PPA's : " << (header.iota_ppa ? "no" : "yes" ) << std::endl;
-    std::cerr << "Is not sorted : " << (header.no_sort ? "yes" : "no" ) << std::endl;
+    //std::cerr << "Has missing : " << (header.has_missing ? "yes" : "no") << std::endl;
+    //std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;
+    //std::cerr << "Uses PPA's : " << (header.iota_ppa ? "no" : "yes" ) << std::endl;
+    //std::cerr << "Is not sorted : " << (header.no_sort ? "yes" : "no" ) << std::endl;
     std::cerr << "Has a zstd compression layer : " << (header.zstd ? "yes" : "no") << std::endl;
     std::cerr << "--" << std::endl;
     std::cerr << "Haplotype samples  : " << header.hap_samples << std::endl;
+    std::cerr << "Number of samples  : " << header.num_samples << std::endl;
     std::cerr << "Number of variants : " << header.num_variants << std::endl;
     std::cerr << "--" << std::endl;
     std::cerr << "VCF records : " << header.xcf_entries << std::endl;
-    std::cerr << "Permutation arrays  : " << header.wahs_offset - header.ssas_offset << " bytes" << std::endl;
+    //std::cerr << "Permutation arrays  : " << header.wahs_offset - header.ssas_offset << " bytes" << std::endl;
     std::cerr << "GT Data WAH encoded : " << header.samples_offset - header.wahs_offset << " bytes" << std::endl;
 }
 
