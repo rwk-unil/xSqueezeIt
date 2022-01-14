@@ -139,6 +139,7 @@ public:
                     for (int i = 0; i < ngt_1; ++i) {
                         if (genotypes1[i] != genotypes2[i]) {
                             if (gt_diff == false) {
+                                std::cerr << "Pos : " << line1->pos << std::endl;
                                 std::cerr << "Genotype diffs at record " << record << std::endl << "{";
                                 gt_diff = true;
                             }
