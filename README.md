@@ -111,26 +111,23 @@ This software depends on :
 mkdir output
 
 # Compression :
-./xsqueezeit -c -f /path/to/my/data/chr20.bcf -o output/chr20.bin
+./xsqueezeit -c -f /path/to/my/data/chr20.bcf -o output/chr20.xsi
 # This will output two files in output
-# output/chr20.bin which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
-# output/chr20.bin_var.bcf which is the variant data, can be opened with bcftools
+# output/chr20.xsi which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
+# output/chr20.xsi_var.bcf which is the variant data, can be opened with bcftools
 ```
 
 Options :
 - `--zstd` Compresses blocks with an extra zstd compression layer (only for version 3)
 - `--maf <value>` Sets the minor allele frequency (MAF) for the minor allele count (MAC) threshold that selects if a variant is encoded as sparse or word aligned hybrid (WAH), typical values are around 0.001 give or take an order of magnitude
-- `--variant-block-length <value>` Sets the size of the encoded blocks in number of variants. A bigger size can results in better compression, a smaller size can result in faster random access.
-- `--V3` Compresses with version 3 (default)
-- `--V2` Compresses with version 2 (deprecated)
 
 ### Extraction
 - `-x,--extract`
 
 ```shell
 # Extraction (requires both files generated above) :
-./xsqueezeit -x -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./xsqueezeit -x -f output/chr20.bin > output/chr20.bcf # Alternative command (uncompressed BCF)
+./xsqueezeit -x -f output/chr20.xsi -o output/chr20.bcf # To compressed BCF
+./xsqueezeit -x -f output/chr20.xsi > output/chr20.bcf # Alternative command (uncompressed BCF)
 ```
 
 #### Region extraction
@@ -138,8 +135,8 @@ Options :
 
 ```shell
 # Extraction (requires both files generated above) :
-./xsqueezeit -x -r "20:200000-200100" -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./xsqueezeit -x -r "20:200000-200100" -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+./xsqueezeit -x -r "20:200000-200100" -f output/chr20.xsi -o output/chr20.bcf # To compressed BCF
+./xsqueezeit -x -r "20:200000-200100" -f output/chr20.xsi | bcftools view # Pipes uncompressed BCF
 # The above command is much faster than decompressing and using -r in bcftools
 # because only the chosen regions are decompressed, both generate the same result
 ```
@@ -149,20 +146,20 @@ Options :
 
 ```shell
 # Extraction (requires both files generated above) :
-./xsqueezeit -x -s HG00101,NA12878 -f output/chr20.bin -o output/chr20.bcf # To compressed BCF
-./xsqueezeit -x -s HG00101,NA12878 -f output/chr20.bin | bcftools view # Pipes uncompressed BCF
+./xsqueezeit -x -s HG00101,NA12878 -f output/chr20.xsi -o output/chr20.bcf # To compressed BCF
+./xsqueezeit -x -s HG00101,NA12878 -f output/chr20.xsi | bcftools view # Pipes uncompressed BCF
 ```
 
 ### Pipe into bcftools
 
 ```shell
 # Or pipe directly into bcftools (some examples) :
-./xsqueezeit -x -f output/chr20.bin | bcftools view | less
-./xsqueezeit -x -f output/chr20.bin | bcftools view -s HG00111,NA12878 | less
-./xsqueezeit -x -f output/chr20.bin | bcftools stats > output/chr20_stats.txt
+./xsqueezeit -x -f output/chr20.xsi | bcftools view | less
+./xsqueezeit -x -f output/chr20.xsi | bcftools view -s HG00111,NA12878 | less
+./xsqueezeit -x -f output/chr20.xsi | bcftools stats > output/chr20_stats.txt
 ```
 
-The default output of `xsqueezeit` on `stdout` is plain VCF to be human readable, in order to make the above operations faster the `-p` option can be passed to `xsqueezeit` in order to output uncompressed BCF which is the fastest to pipe into BCFTools as mentioned in their [documentation](https://samtools.github.io/bcftools/bcftools.html#common_options) :
+The default output of `xsqueezeit` on `stdout` is BCF, to output VCF and be human readable add `-Ov`, in order to make the above operations faster the `-p` or `-Ou` option can be passed to `xsqueezeit` in order to output uncompressed BCF which is the fastest to pipe into BCFTools as mentioned in their [documentation](https://samtools.github.io/bcftools/bcftools.html#common_options) :
 
 > "Output compressed BCF (b), uncompressed BCF (u), compressed VCF (z), uncompressed VCF (v). Use the -Ou option when piping between bcftools subcommands to speed up performance by removing unnecessary compression/decompression and VCF←→BCF conversion."
 
@@ -194,17 +191,17 @@ The compressor generates a BCF file without the GT data (so variants only) and a
 # ./xsqueezeit <-c|-x> -f <input file> -o <output file>
 
 # Compression :
-./xsqueezeit -c -f /path/to/my/data/chr20.bcf -o chr20.bin
+./xsqueezeit -c -f /path/to/my/data/chr20.bcf -o chr20.xsi
 # This will output two files
-# chr20.bin which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
-# chr20.bin_var.bcf which is the variant data, can be opened with bcftools
+# chr20.xsi which is the samples and genotype data in binary encoded format (can still be compressed e.g., with gzip)
+# chr20.xsi_var.bcf which is the variant data, can be opened with bcftools
 
-bcftools view chr20.bin_var.bcf | less
+bcftools view chr20.xsi_var.bcf | less
 ##fileformat=VCFv4.1
 ##FILTER=<ID=PASS,Description="All filters passed">
 ##fileDate=20150218
 ...
-##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT Binary Matrix">
+##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT xsiary Matrix">
 ##bcftools_viewCommand=view tmp.bin_var.bcf; Date=Tue Aug 17 16:06:34 2021
 #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  BIN_MATRIX_POS
 20      60343   rs527639301     G       A       100     PASS    AC=1;AF=0.000199681;AN=5008;NS=2504;DP=20377;EAS_AF=0;AMR_AF=0.0014;AFR_AF=0;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP   BM      0
@@ -227,7 +224,13 @@ Where BM increases from 103 to 105 because the previous variant has two ALT_ALLE
 
 The `BM` entry allows to extract GT data directly from a region query on the BCF, this is needed to achieve constant time random access. This also helps when because overlapping a region may not be contiguous (e.g., with indels).
 
+** Note : ** Please note that this is for version 3, version 4 uses a little bit different BM index (block:offset) but the idea is similar.
+
 ## File Format Description
+
+### Version 4
+
+Will be described soon and will be the version for the first release.
 
 ### Version 3
 
@@ -443,6 +446,7 @@ The condition track represents if a given bi-allelic variant is saved as WAH or 
 
 ## Notes / TODO
 
+- Document v4 format and update changes above
 - ~~Rename the compressor (currently named console_app ...)~~ Done !
 - ~~Only outputs data as phased for the moment~~ Done !
 - ~~Handle missing~~ Done !
