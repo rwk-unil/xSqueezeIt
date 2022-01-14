@@ -505,11 +505,13 @@ public:
             const size_t N_HAPS = num_samples * header.ploidy; /// @todo mixed ploidy
             const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * global_app_options.maf;
             int32_t default_phased = header.default_phased ? 1 : 0;
+            const size_t BLOCK_SIZE = header.ss_rate;
+            /// @todo integrate v4 instead of v3 !!
             if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-                xsi_factory = make_unique<XsiFactory<uint16_t, uint16_t> >(ofname, header.ss_rate, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
+                xsi_factory = make_unique<XsiFactory<uint16_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
                     samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
             } else {
-                xsi_factory = make_unique<XsiFactory<uint32_t, uint16_t> >(ofname, header.ss_rate, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
+                xsi_factory = make_unique<XsiFactory<uint32_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
                     samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
             }
         } else {
