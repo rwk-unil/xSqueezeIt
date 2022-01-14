@@ -83,7 +83,7 @@ public:
     bool v4 = true;
     bool zstd = false;
     int  zstd_compression_level = 7; // Some acceptable default value
-    double maf = 0.01;
+    double maf = 0.001;
     size_t reset_sort_block_length = 8192;
     bool no_sort = false;
     bool count_xcf = false;
