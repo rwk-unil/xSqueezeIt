@@ -65,6 +65,10 @@ int main(int argc, const char *argv[]) {
     auto& filename = opt.filename;
     auto& ofname = opt.ofname;
 
+    if (opt.fast_pipe) {
+        opt.output_type = "u";
+    }
+
     if (opt.info) {
         if (filename.compare("-") == 0) {
             std::cerr << "INFO : Input is stdin" << std::endl;

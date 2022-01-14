@@ -12,7 +12,7 @@ public:
         app.add_option("-f,--file", filename, "Input file name, default is stdio");
         app.add_option("-o,--output", ofname, "Output file name, default is stdio");
         app.add_option("-O, --output-type", output_type, "Output type b|u|z|v|x");
-        app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs binary instead of text when writing to stdout");
+        app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs uncompressed BCF (-Ou) when writing to stdout");
         app.add_flag("-c,--compress", compress, "Compress");
         app.add_flag("-d,--decompress", decompress, "Decompress");
         app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
@@ -70,7 +70,7 @@ public:
     std::string ofname = "-";
     bool fast_pipe = false;
     //char O = 'u';
-    std::string output_type = "b"; // CL11 doesn't convert to string (runtime e.g., with -O v)
+    std::string output_type = "b"; // CL11 doesn't convert to char (runtime e.g., with -O v)
     bool compress = false;
     bool decompress = false;
     bool info = false;

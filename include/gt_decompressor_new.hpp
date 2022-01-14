@@ -445,7 +445,7 @@ public:
         const char* flags = "wb"; // Write compressed bcf
         // Open the output file
         if (bcf_ofname.compare("-") == 0 and global_app_options.fast_pipe) {
-            fp = hts_open("-", "wbu"); // "-" for stdout "wbu" write uncompressed bcf
+            flags = "wbu"; // "-" for stdout "wbu" write uncompressed bcf
         } else {
             switch (global_app_options.output_type[0]) {
                 case 'b':
