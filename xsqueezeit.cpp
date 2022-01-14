@@ -120,6 +120,7 @@ int main(int argc, const char *argv[]) {
                 std::cerr << e << std::endl;
                 fail = true;
             }
+            create_index_file(variant_file);
         });
         auto compress_thread = std::thread([&]{
             if (opt.v4) {
