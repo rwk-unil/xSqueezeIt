@@ -29,7 +29,7 @@ DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
 # Rules
-all : datetime $(DEPENDENCIES) $(TARGET)
+all : $(DEPENDENCIES) $(TARGET)
 
 datetime :
 	date | figlet 2> /dev/null
