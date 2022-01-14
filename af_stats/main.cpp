@@ -43,8 +43,8 @@ int main(int argc, const char *argv[]) {
     CLI::App app{"AF stats app"};
     std::string filename = "-";
     std::string ofname = "-";
-    app.add_option("-f,--file", filename, "Input file name");
-    app.add_option("-o,--output", ofname, "Output file name");
+    app.add_option("-f,--file", filename, "Input file name (XSI)");
+    app.add_option("-o,--output", ofname, "Output file name (new variant BCF)");
 
     CLI11_PARSE(app, argc, argv);
 
