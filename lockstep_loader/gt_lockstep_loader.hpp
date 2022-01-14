@@ -120,16 +120,7 @@ public:
                 } else {
                     ngt_1 = c_xcf_get_genotypes(c_xcf_p, 0, sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
                     ngt_2 = c_xcf_get_genotypes(c_xcf_p, 1, sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
-                    // if (file1_is_stc) {
-                    //     ngt_1 = accessor1->get_genotypes(sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
-                    // } else {
-                    //     ngt_1 = bcf_get_genotypes(sr->readers[0].header, line1, (void**)&genotypes1, &ngt_arr_1);
-                    // }
-                    // if (file2_is_stc) {
-                    //     ngt_2 = accessor2->get_genotypes(sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
-                    // } else {
-                    //     ngt_2 = bcf_get_genotypes(sr->readers[1].header, line2, (void**)&genotypes2, &ngt_arr_2);
-                    // }
+
                     if (ngt_1 != ngt_2) {
                         std::cerr << "The files don't have the same number of extracted genotypes at record " << record << std::endl;
                         std::cerr << "First file : " << ngt_1 << " gt entries, Second file : " << ngt_2 << " gt entries." << std::endl;
@@ -168,12 +159,6 @@ public:
 protected:
     std::string bcf_filename1;
     std::string bcf_filename2;
-
-    // bool file1_is_stc = false;
-    // bool file2_is_stc = false;
-
-    // std::unique_ptr<Accessor> accessor1 = nullptr;
-    // std::unique_ptr<Accessor> accessor2 = nullptr;
 
     c_xcf* c_xcf_p = NULL;
 
