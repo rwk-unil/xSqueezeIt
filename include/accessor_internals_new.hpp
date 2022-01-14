@@ -627,8 +627,8 @@ protected:
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsNewTemplate : public AccessorInternals {
-public:
-    size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
+private:
+    inline void seek(const size_t& new_position) {
         const size_t OFFSET_MASK = ~((((size_t)-1) >> BM_BLOCK_BITS) << BM_BLOCK_BITS);
         size_t block_id = ((new_position & 0xFFFFFFFF) >> BM_BLOCK_BITS);
         // The offset is relative to the start of the block and is binary gt lines
@@ -644,25 +644,18 @@ public:
         }
 
         dp->seek(offset);
+    }
+
+public:
+    size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
+        seek(new_position);
+
         return dp->fill_genotype_array_advance(gt_arr, gt_arr_size, n_alleles);
     }
 
     void fill_allele_counts(size_t n_alleles, size_t new_position) override {
-        // Conversion from new to old, for the moment
-        size_t block_id = new_position >> BM_BLOCK_BITS;
-        // The offset is relative to the start of the block and is binary gt lines
-        int32_t offset = (new_position << (32-BM_BLOCK_BITS)) >> (32-BM_BLOCK_BITS);
+        seek(new_position);
 
-        // If block ID is not current block
-        if (!dp or current_block != block_id) {
-            // Gets block from file (can decompress)
-            set_gt_block_ptr(block_id);
-
-            // Make DecompressPointer
-            dp = make_unique<DecompressPointerGTBlock<A_T, WAH_T> >(header, gt_block_p);
-        }
-
-        dp->seek(offset);
         dp->fill_allele_counts_advance(n_alleles);
     }
 
