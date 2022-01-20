@@ -22,7 +22,7 @@ Compressing chromosomes 1-22 of 1000 Genomes Phase 3 (1KGP3) https://www.interna
 
 ### Loading
 
-Loading of the data from file format :
+Loading of the data from file format (right CHR1 is vcf.gz) :
 
 <img src="images/loading_times.png" alt="loading times" width="600"/>
 
