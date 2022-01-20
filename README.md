@@ -41,7 +41,7 @@ while (bcf_sr_next_line (reader)) { // While there are records in the BCF
 
 Loading genotype data from xSqueezeIt binary file and associated BCF variant info file :
 ```C
-Accessor accessor("chr20.bin"); // xSqueezeIt binary compressed file
+Accessor accessor("chr20.xsi"); // xSqueezeIt binary compressed file
 bcf_sr_add_reader(reader, accessor.get_variant_filename());
 ...
 while (bcf_sr_next_line (reader)) { // While there are records in the BCF
@@ -204,7 +204,7 @@ bcftools view chr20.xsi_var.bcf | less
 ##fileDate=20150218
 ...
 ##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT xsiary Matrix">
-##bcftools_viewCommand=view tmp.bin_var.bcf; Date=Tue Aug 17 16:06:34 2021
+##bcftools_viewCommand=view tmp.xsi_var.bcf; Date=Tue Aug 17 16:06:34 2021
 #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  BIN_MATRIX_POS
 20      60343   rs527639301     G       A       100     PASS    AC=1;AF=0.000199681;AN=5008;NS=2504;DP=20377;EAS_AF=0;AMR_AF=0.0014;AFR_AF=0;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP   BM      0
 20      60419   rs538242240     A       G       100     PASS    AC=1;AF=0.000199681;AN=5008;NS=2504;DP=19865;EAS_AF=0;AMR_AF=0;AFR_AF=0;EUR_AF=0;SAS_AF=0.001;AA=.|||;VT=SNP    BM      1
