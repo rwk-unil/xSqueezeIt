@@ -59,8 +59,8 @@ This build requires GCC 8+ because modern C++17 features are used.
 
 ```shell
 # Clone
-git clone https://github.com/rwk-unil/pbwt_exp.git #TODO Public repo
-cd pbwt_exp
+git clone https://github.com/rwk-unil/xSqueezeIt.git
+cd xSqueezeIt
 
 # Clone and build htslib (if you already have htslib set Makefile accordingly and skip)
 git submodule update --init htslib
