@@ -460,11 +460,10 @@ public:
                     flags = "wbu";
                     break;
                 case 'z':
-                    /// @todo check
-                    flags = "w";
+                    flags = "wz";
                     break;
                 case 'v':
-                    flags = "wu";
+                    flags = "w";
                     break;
                 case 'x': // XSI (compression is handled by --zstd)
                     flags = "wb"; // Compressed BCF (always)
