@@ -547,9 +547,15 @@ public:
         }
 
         // Write the header to the new file
-        if (bcf_hdr_write(fp, hdr) < 0) {
-            std::cerr << "Could not write header to file " << bcf_ofname << std::endl;
-            throw "Failed to write file";
+        bool file_is_vcf = !(global_app_options.output_type.compare("v")) or // vcf
+                           !(global_app_options.output_type.compare("z"));   // vcf.gz
+        if (file_is_vcf and global_app_options.no_header) {
+            // don't print
+        } else {
+            if (bcf_hdr_write(fp, hdr) < 0) {
+                std::cerr << "Could not write header to file " << bcf_ofname << std::endl;
+                throw "Failed to write file";
+            }
         }
     }
 
