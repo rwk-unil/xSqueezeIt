@@ -383,7 +383,9 @@ public:
 
         // Extract samples
         while (getline(iss, sample, ',')) {
-            samples_in_option.push_back(sample);
+            if (sample.size()) {
+                samples_in_option.push_back(sample);
+            }
         }
 
         /// @todo bcftools complains when sample in list is not in header, we don't
@@ -434,6 +436,34 @@ public:
 
         if (global_app_options.samples != "") {
             enable_select_samples(global_app_options.samples);
+        } else if (global_app_options.samples_file != "") {
+            auto file = global_app_options.samples_file;
+            bool exclude = false;
+            if (file.at(0) == '^') {
+                exclude = true;
+                file.erase(0,1); // Remove first character
+            }
+
+            std::fstream fs(file);
+
+            if (!fs.is_open()) {
+                std::cerr << "Could not open file " << file << std::endl;
+                throw "Sample file error";
+            }
+
+            /// @todo optimize this and move to function
+            std::string sample;
+            std::stringstream samples;
+            if (exclude) {
+                samples << "^";
+            }
+            for (std::string line; std::getline(fs, line); ) {
+                std::getline(std::stringstream(line), sample, '\t');
+                samples << sample << ","; // Trailing , does not matter
+            }
+
+            //std::cerr << "Samples : " << samples.str() << std::endl;
+            enable_select_samples(samples.str());
         }
 
         if (samples_to_use.size() == 0) {
