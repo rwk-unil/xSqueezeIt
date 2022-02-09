@@ -28,11 +28,28 @@ OBJS := xcf.o bcf_traversal.o accessor.o c_api.o xsi_mixed_vcf.o $(OBJ)
 DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
 
+NOT_IN_GIT_REPO := $(shell git rev-parse --short HEAD >/dev/null 2>/dev/null; echo $$?)
+ifneq ($(NOT_IN_GIT_REPO),0)
+	GEN_GIT_REV := gen_git_rev
+	GIT_REVISION := 0
+else
+	GIT_REVISION := $(shell git rev-parse --short HEAD)
+	REV_NOT_UP_TO_DATE := $(shell grep $(GIT_REVISION) include/git_rev.h  >/dev/null 2>/dev/null; echo $$?)
+
+	ifneq ($(REV_NOT_UP_TO_DATE),0)
+		GEN_GIT_REV := gen_git_rev
+	endif
+endif
+GIT_REVISION_DEFINE := "#define GIT_REVISION $(GIT_REVISION)"
+
 # Rules
-all : $(DEPENDENCIES) $(TARGET)
+all : $(GEN_GIT_REV) $(DEPENDENCIES) $(TARGET)
 
 datetime :
 	date | figlet 2> /dev/null
+
+gen_git_rev :
+	echo "#define GIT_REVISION $(GIT_REVISION)" > include/git_rev.h
 
 # Link the target
 $(TARGET) : $(OBJS)
