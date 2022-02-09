@@ -40,16 +40,15 @@ else
 		GEN_GIT_REV := gen_git_rev
 	endif
 endif
-GIT_REVISION_DEFINE := "#define GIT_REVISION $(GIT_REVISION)"
 
 # Rules
-all : $(GEN_GIT_REV) $(DEPENDENCIES) $(TARGET)
+all : datetime $(GEN_GIT_REV) $(DEPENDENCIES) $(TARGET)
 
 datetime :
 	date | figlet 2> /dev/null
 
 gen_git_rev :
-	echo "#define GIT_REVISION $(GIT_REVISION)" > include/git_rev.h
+	echo "#define GIT_REVISION 0x$(GIT_REVISION)" > include/git_rev.h
 
 # Link the target
 $(TARGET) : $(OBJS)
