@@ -112,6 +112,12 @@ int main(int argc, const char *argv[]) {
             std::cerr << "Cannot output compressed file(s) to stdout" << std::endl << std::endl;
             exit(app.exit(CLI::CallForHelp()));
         }
+        if(file_has_no_samples(filename)) {
+            exit(app.exit(CLI::RuntimeError()));
+        }
+        if(file_has_no_entries(filename)) {
+            exit(app.exit(CLI::RuntimeError()));
+        }
 
         bool fail = false;
         std::string variant_file(ofname + XSI_BCF_VAR_EXTENSION);

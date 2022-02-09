@@ -300,4 +300,8 @@ int32_t seek_default_phased(const std::string& filename, size_t limit = 3);
 
 size_t seek_max_ploidy_from_first_entry(const std::string& filename);
 
+bool file_has_no_samples(const std::string& filename);
+
+bool file_has_no_entries(const std::string& filename);
+
 #endif /* __XCF_HPP__ */

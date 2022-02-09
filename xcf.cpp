@@ -827,10 +827,15 @@ size_t seek_max_ploidy_from_first_entry(const std::string& filename) {
     initialize_bcf_file_reader(bcf_fri, filename);
 
     size_t max_ploidy = 0;
-    if ((bcf_fri.n_samples == 0) or (bcf_next_line(bcf_fri) == 0)) {
-        std::cerr << "Could not determine max ploidy..." << std::endl;
+    if (bcf_fri.n_samples == 0) {
+        std::cerr << "The file " << filename << "has no samples" << std::endl;
         destroy_bcf_file_reader(bcf_fri);
-        throw "PLOIDY ERROR";
+        return 0;
+    }
+    if (bcf_next_line(bcf_fri) == 0) {
+        std::cerr << "The file " << filename << "has no entries" << std::endl;
+        destroy_bcf_file_reader(bcf_fri);
+        return 0;
     } else {
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
@@ -841,6 +846,30 @@ size_t seek_max_ploidy_from_first_entry(const std::string& filename) {
     destroy_bcf_file_reader(bcf_fri);
 
     return max_ploidy;
+}
+
+bool file_has_no_samples(const std::string& filename) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+    if (bcf_fri.n_samples == 0) {
+        std::cerr << "The file " << filename << " has no samples" << std::endl;
+        destroy_bcf_file_reader(bcf_fri);
+        return true;
+    }
+    destroy_bcf_file_reader(bcf_fri);
+    return false;
+}
+
+bool file_has_no_entries(const std::string& filename) {
+    bcf_file_reader_info_t bcf_fri;
+    initialize_bcf_file_reader(bcf_fri, filename);
+    if (bcf_next_line(bcf_fri) == 0) {
+        std::cerr << "The file " << filename << " has no entries" << std::endl;
+        destroy_bcf_file_reader(bcf_fri);
+        return true;
+    }
+    destroy_bcf_file_reader(bcf_fri);
+    return false;
 }
 
 #if 0
