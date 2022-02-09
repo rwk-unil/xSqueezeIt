@@ -439,7 +439,9 @@ public:
         filename(filename), zstd_compression_on(zstd_compression_on), zstd_compression_level(zstd_compression_level),
         s(filename, s.binary | s.out | s.trunc),
         RESET_SORT_BLOCK_LENGTH(RESET_SORT_BLOCK_LENGTH), MINOR_ALLELE_COUNT_THRESHOLD(MINOR_ALLELE_COUNT_THRESHOLD),
-        default_phased(default_phased), sample_list(sample_list)
+        block_counter(0), default_phased(default_phased),
+        entry_counter(0), variant_counter(0),
+        sample_list(sample_list)
     {
         current_block = make_unique<EncodingBinaryBlockWithGT>(sample_list.size(), RESET_SORT_BLOCK_LENGTH, MINOR_ALLELE_COUNT_THRESHOLD, default_phased);
 
@@ -511,6 +513,7 @@ public:
 
         current_block->encode_line(bcf_fri);
 
+        variant_counter += bcf_fri.line->n_allele-1;
         entry_counter++;
     }
 
@@ -536,8 +539,7 @@ private:
 public:
 
     void finalize_file(const size_t max_ploidy) override {
-        //header.num_variants = this->variant_counter;
-        header.num_variants = 0; /// @todo new format
+        header.num_variants = this->variant_counter;
 
         header.xcf_entries = this->entry_counter;
         header.number_of_ssas = (this->entry_counter+(uint32_t)this->RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)this->RESET_SORT_BLOCK_LENGTH;
@@ -626,6 +628,7 @@ protected:
     size_t N_HAPS;
 
     size_t entry_counter = 0;
+    size_t variant_counter = 0;
     /// @todo PLOIDY
     size_t PLOIDY = 2;
 
