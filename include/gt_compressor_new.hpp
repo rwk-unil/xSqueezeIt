@@ -665,7 +665,7 @@ protected:
 
 class NewCompressor {
 public:
-    NewCompressor(uint32_t version = 2) : VERSION(version) {}
+    NewCompressor(uint32_t version) : VERSION(version) {}
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
     void set_reset_sort_block_length(size_t reset_sort_block_length) {RESET_SORT_BLOCK_LENGTH = reset_sort_block_length;}
