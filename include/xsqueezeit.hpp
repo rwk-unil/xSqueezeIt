@@ -103,9 +103,6 @@ public:
     bool wait = false;
     bool verify = false;
     bool iota = false;
-    bool v2 = false;
-    bool v3 = false;
-    bool v33 = false;
     bool v4 = true;
     bool zstd = false;
     int  zstd_compression_level = 7; // Some acceptable default value

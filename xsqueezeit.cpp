@@ -125,22 +125,18 @@ int main(int argc, const char *argv[]) {
             create_index_file(variant_file);
         });
         auto compress_thread = std::thread([&]{
-            if (opt.v4) {
-                try {
-                    NewCompressor c(-1 /* v4 is -1, this will be unused */);
-                    c.set_maf(opt.maf);
-                    c.set_reset_sort_block_length(opt.reset_sort_block_length);
-                    c.set_zstd_compression_on(opt.zstd);
-                    c.set_zstd_compression_level(opt.zstd_compression_level);
-                    c.compress_in_memory(filename); /// @todo remove this old interface
-                    //std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
-                    c.save_result_to_file(ofname);
-                } catch (const char* e) {
-                    std::cerr << e << std::endl;
-                    fail = true;
-                }
-            } else {
-                std::cerr << "Versions <4 are no longer supported" << std::endl;
+            try {
+                NewCompressor c(-1 /* v4 is -1, this will be unused */);
+                c.set_maf(opt.maf);
+                c.set_reset_sort_block_length(opt.reset_sort_block_length);
+                c.set_zstd_compression_on(opt.zstd);
+                c.set_zstd_compression_level(opt.zstd_compression_level);
+                c.compress_in_memory(filename); /// @todo remove this old interface
+                //std::cout << "Compressed filename " << filename << " in memory, now writing file " << ofname << std::endl;
+                c.save_result_to_file(ofname);
+            } catch (const char* e) {
+                std::cerr << e << std::endl;
+                fail = true;
             }
         });
 
@@ -170,16 +166,12 @@ int main(int argc, const char *argv[]) {
 
         std::string variant_file(filename + XSI_BCF_VAR_EXTENSION);
         create_index_file(variant_file);
-        if (opt.v2 or opt.v3 or opt.v4) {
-            try {
-                NewDecompressor d(filename, variant_file);
-                d.decompress(ofname);
-            } catch (const char* e) {
-                std::cerr << e << std::endl;
-                exit(-1);
-            }
-        } else {
-            std::cerr << "Version 1 is no longer supported" << std::endl;
+        try {
+            NewDecompressor d(filename, variant_file);
+            d.decompress(ofname);
+        } catch (const char* e) {
+            std::cerr << e << std::endl;
+            exit(-1);
         }
     } else {
         std::cerr << "Choose either to compress or decompress" << std::endl << std::endl;
