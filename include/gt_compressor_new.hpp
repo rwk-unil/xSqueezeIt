@@ -48,8 +48,8 @@ static constexpr bool DEBUG_COMPRESSION = true;
 
 class GtCompressor {
 public:
-    virtual void compress_in_memory(std::string filename) = 0;
-    virtual void save_result_to_file(std::string filename) = 0;
+    virtual void init_compression(std::string filename) = 0;
+    virtual void compress_to_file(std::string filename) = 0;
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
     void set_reset_sort_block_length(size_t new_block_length) {RESET_SORT_BLOCK_LENGTH = new_block_length;}
@@ -72,12 +72,12 @@ public:
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
-    virtual void compress_in_memory(std::string filename) override {
+    virtual void init_compression(std::string filename) override {
         this->ifname = filename;
-        // Do nothing, everything is done in save_result_to_file
+        // Do nothing, everything is done in compress_to_file
     }
 
-    void save_result_to_file(std::string filename) override {
+    void compress_to_file(std::string filename) override {
         this->ofname = filename;
         // This also writes to file (because of overrides below)
         default_phased = seek_default_phased(ifname);
@@ -156,7 +156,7 @@ public:
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
-    void compress_in_memory(std::string filename) {
+    void init_compression(std::string filename) {
         bcf_file_reader_info_t bcf_fri;
         initialize_bcf_file_reader(bcf_fri, filename);
         size_t PLOIDY = 2;
@@ -172,13 +172,13 @@ public:
         }
         _compressor->set_maf(MAF);
         _compressor->set_reset_sort_block_length(RESET_SORT_BLOCK_LENGTH);
-        _compressor->compress_in_memory(filename);
+        _compressor->init_compression(filename);
     }
-    void save_result_to_file(std::string filename) {
+    void compress_to_file(std::string filename) {
         if (_compressor) {
-            _compressor->save_result_to_file(filename);
+            _compressor->compress_to_file(filename);
         } else {
-            std::cerr << "No file compressed yet, call compress_in_memory() first" << std::endl;
+            std::cerr << "No file compressed yet, call init_compression() first" << std::endl;
         }
     }
 
