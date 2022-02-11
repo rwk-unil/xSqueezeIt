@@ -46,6 +46,10 @@ static constexpr bool DEBUG_COMPRESSION = false;
 static constexpr bool DEBUG_COMPRESSION = true;
 #endif
 
+#include "xsqueezeit.hpp"
+#define PRINT_COUNTER_UPDATE_VALUE 1000
+extern GlobalAppOptions global_app_options;
+
 class GtCompressor {
 public:
     virtual void init_compression(std::string filename) = 0;
@@ -96,6 +100,7 @@ protected:
 
         entry_counter = 0;
         variant_counter = 0;
+        print_counter = 0;
 
         this->default_phased = seek_default_phased(this->ifname);
 
@@ -125,10 +130,20 @@ protected:
         //}
 
         // Counts the number of BCF lines
-        this->entry_counter++;
+        entry_counter++;
+        print_counter++;
+        if (global_app_options.verbose and print_counter == PRINT_COUNTER_UPDATE_VALUE) {
+            if (entry_counter > print_counter) {
+                printf("\033[A\033[2K");
+            }
+            std::cout << "Handled " << entry_counter << " VCF entries (lines)" << std::endl;
+            print_counter = 0;
+        }
     }
 
     int default_phased = 0; // If the file is mostly phased or unphased data
+
+    size_t print_counter = 0;
 
     size_t PLOIDY = 2;
     size_t N_HAPS = 0;

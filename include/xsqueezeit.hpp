@@ -38,9 +38,9 @@ public:
         app.add_option("-O, --output-type", output_type, "Output type b|u|z|v|x");
         app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs uncompressed BCF (-Ou) when writing to stdout");
         app.add_flag("-c,--compress", compress, "Compress");
+        app.add_flag("-v,--verbose", verbose, "Verbose, prints progress");
         app.add_flag("-d,--decompress", decompress, "Decompress");
         app.add_flag("-x,--extract", decompress, "Extract (Decompress)");
-        app.add_flag("-i,--info", info, "Get info on file");
         //app.add_flag("--wait", wait, "DEBUG - wait for int input");
         //app.add_flag("--verify", verify, "DEBUG - verify");
 
@@ -53,7 +53,8 @@ public:
         app.add_flag("--zstd", zstd, "Compress blocks with zstd");
         app.add_option("--zstd-level,--zl", zstd_compression_level, "zstd compression level");
         app.add_option("--maf", maf, "Minor Allele Frequency threshold");
-        app.add_option("--variant-block-length", reset_sort_block_length, "V3 - variant block length");
+        app.add_flag("-i,--info", info, "Get info on file");
+        //app.add_option("--variant-block-length", reset_sort_block_length, "V3 - variant block length");
 
         //app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         //app.add_flag("--inject-phase-switches", inject_phase_switches, "DEBUG injects phase switches");
@@ -98,6 +99,7 @@ public:
     //char O = 'u';
     std::string output_type = "b"; // CL11 doesn't convert to char (runtime e.g., with -O v)
     bool compress = false;
+    bool verbose = false;
     bool decompress = false;
     bool info = false;
     bool wait = false;
