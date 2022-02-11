@@ -71,249 +71,6 @@ public:
         traverse(filename);
     }
 
-    virtual void save_result_to_file(std::string filename) override {
-        if (internal_gt_records.size() == 0) {
-            std::cerr << "GtCompressor internal encoding is empty" << std::endl;
-            return;
-        }
-
-        std::fstream s(filename, s.binary | s.out | s.trunc);
-        if (!s.is_open()) {
-            std::cerr << "Failed to open file " << filename << std::endl;
-            throw "Failed to open file";
-        }
-
-        //////////////////////
-        // Write the header //
-        //////////////////////
-        header_t header = {
-            .version = 2, // New testing version
-            .ploidy = (uint8_t)PLOIDY,
-            .ind_bytes = sizeof(uint32_t), // Should never change
-            .aet_bytes = sizeof(T), // Depends on number of hap samples
-            .wah_bytes = sizeof(uint16_t), // Should never change
-            .hap_samples = (uint64_t)this->sample_list.size()*PLOIDY, /// @todo
-            .num_variants = (uint64_t)this->variant_counter,
-            .block_size = (uint32_t)0,
-            .number_of_blocks = (uint32_t)1, // This version is single block
-            .ss_rate = (uint32_t)RESET_SORT_BLOCK_LENGTH,
-            .number_of_ssas = (uint32_t)(variant_counter+(uint32_t)RESET_SORT_BLOCK_LENGTH-1)/(uint32_t)RESET_SORT_BLOCK_LENGTH,
-            .indices_offset = (uint32_t)-1, /* Set later */
-            .ssas_offset = (uint32_t)-1, /* Set later */
-            .wahs_offset = (uint32_t)-1, /* Set later */
-            .samples_offset = (uint32_t)-1, /* Set later */
-            .rearrangement_track_offset = (uint32_t)-1, /* Set later */
-            .xcf_entries = (uint64_t)entry_counter,
-            .sample_name_chksum = 0 /* TODO */,
-            .bcf_file_chksum = 0 /* TODO */,
-            .data_chksum = 0 /* TODO */,
-            .header_chksum = 0 /* TODO */
-        };
-        header.iota_ppa = true;
-        header.no_sort = false;
-        header.rare_threshold = MINOR_ALLELE_COUNT_THRESHOLD;
-
-        /////////////////////////////
-        // Write Unfinished Header //
-        /////////////////////////////
-        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
-
-        size_t written_bytes = 0;
-        size_t total_bytes = 0;
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
-
-        ///////////////////////
-        // Write the indices //
-        ///////////////////////
-        header.indices_offset = total_bytes;
-        std::vector<uint32_t> indices_wah(header.number_of_ssas);
-        std::vector<uint32_t> indices_sparse(header.number_of_ssas);
-        uint32_t index_counter = 0;
-        uint32_t wah_index_offset = 0;
-        uint32_t sparse_index_offset = 0;
-        uint32_t encoding_counter = 0;
-
-        for (const auto& ir : internal_gt_records) {
-            size_t index_w = 0;
-            size_t index_s = 0;
-            for (size_t i = 0; i < ir.rearrangements.size(); ++i) {
-                if ((encoding_counter % RESET_SORT_BLOCK_LENGTH) == 0) {
-                    indices_wah[index_counter] = wah_index_offset;
-                    indices_sparse[index_counter] = sparse_index_offset;
-                    index_counter++;
-                }
-                if (ir.rearrangements[i]) {
-                    wah_index_offset += ir.wahs[index_w].size();
-                    index_w++;
-                } else {
-                    // Sparse is encoded number followed by entries
-                    sparse_index_offset += (ir.sparse_lines[index_s].sparse_encoding.size() + 1);
-                    index_s++;
-                }
-                encoding_counter++;
-            }
-        }
-
-        s.write(reinterpret_cast<const char*>(indices_wah.data()), indices_wah.size() * sizeof(decltype(indices_wah)::value_type));
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        header.indices_sparse_offset = total_bytes;
-        s.write(reinterpret_cast<const char*>(indices_sparse.data()), indices_sparse.size() * sizeof(decltype(indices_sparse)::value_type));
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "sparse indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-
-        //////////////////////////////////
-        // Write the permutation arrays //
-        //////////////////////////////////
-        header.ssas_offset = total_bytes; // Not used in this compressor
-
-        ///////////////////////////////
-        // Write the compressed data //
-        ///////////////////////////////
-        header.wahs_offset = total_bytes;
-        for (const auto& ir : internal_gt_records) {
-            for (const auto& wah : ir.wahs) {
-                s.write(reinterpret_cast<const char*>(wah.data()), wah.size() * sizeof(decltype(wah.back())));
-            }
-        }
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "wah's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        ////////////////////////////
-        // Write the sample names //
-        ////////////////////////////
-        header.samples_offset = total_bytes;
-        for(const auto& sample : sample_list) {
-            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
-        }
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        ///////////////////////////////////
-        // Write the rearrangement track //
-        ///////////////////////////////////
-        header.rearrangement_track_offset = total_bytes;
-        rearrangement_track.resize(variant_counter, false);
-        size_t _ = 0;
-        for (const auto& ir : internal_gt_records) {
-            for (const auto r : ir.rearrangements) {
-                rearrangement_track[_++] = r;
-            }
-        }
-        auto rt = wah::wah_encode2<uint16_t>(rearrangement_track);
-        s.write(reinterpret_cast<const char*>(rt.data()), rt.size() * sizeof(decltype(rt.back())));
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "rearrangement track " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        ///////////////////////////
-        // Write the sparse data //
-        ///////////////////////////
-        header.sparse_offset = total_bytes;
-
-        for (const auto& ir : internal_gt_records) {
-            for (const auto& sl : ir.sparse_lines) {
-                const auto& sparse = sl.sparse_encoding;
-                T number_of_positions = sparse.size();
-                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Sparse entry " << number_of_positions << " ";
-                // Case where the REF allele is actually sparse
-                if (sl.sparse_allele == 0) {
-                    if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
-                    // Set the MSB Bit
-                    // This will always work as long as MAF is < 0.5
-                    // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
-                    /// @todo Check for this if user can set MAF
-                    number_of_positions |= (T)1 << (sizeof(T)*8-1);
-                }
-                if (DEBUG_COMPRESSION) for (auto s : sparse) {std::cerr << s << " ";}
-                if (DEBUG_COMPRESSION) std::cerr << std::endl;
-                s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
-                s.write(reinterpret_cast<const char*>(sparse.data()), sparse.size() * sizeof(decltype(sparse.back())));
-            }
-        }
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        // The approach below is not optimal at all but it works and only is here for compatibility
-
-        //////////////////
-        // MISSING DATA //
-        //////////////////
-        header.missing_offset = total_bytes;
-
-        uint32_t bm_counter = 0;
-        for (const auto& ir : internal_gt_records) {
-            if (ir.sparse_missing.size()) {
-                T number_missing = ir.sparse_missing.size();
-                s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
-                s.write(reinterpret_cast<const char*>(&number_missing), sizeof(T));
-                s.write(reinterpret_cast<const char*>(ir.sparse_missing.data()), ir.sparse_missing.size() * sizeof(decltype(ir.sparse_missing.back())));
-                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Missing sparse entry at BM " << bm_counter << ", " << number_missing << " : ";
-                if (DEBUG_COMPRESSION) for (auto s : ir.sparse_missing) {std::cerr << s << " ";}
-                if (DEBUG_COMPRESSION) std::cerr << std::endl;
-            }
-            // BM index has to be used because of -r option
-            bm_counter += ir.rearrangements.size();
-        }
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        if (written_bytes) {
-            std::cout << "missing sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-            header.has_missing = true;
-        }
-
-        ////////////////
-        // PHASE INFO //
-        ////////////////
-        header.phase_info_offset = total_bytes;
-
-        bm_counter = 0;
-        for (const auto& ir : internal_gt_records) {
-            const auto& spndp = ir.sparse_non_default_phasing;
-            if (spndp.size()) {
-                T qty = spndp.size();
-                s.write(reinterpret_cast<const char*>(&bm_counter), sizeof(bm_counter));
-                s.write(reinterpret_cast<const char*>(&qty), sizeof(T));
-                s.write(reinterpret_cast<const char*>(spndp.data()), spndp.size() * sizeof(decltype(spndp.back())));
-                if (DEBUG_COMPRESSION) std::cerr << "DEBUG : Phase sparse entry at BM " << bm_counter << ", " << qty << " ";
-                if (DEBUG_COMPRESSION) for (auto s : spndp) {std::cerr << s << " ";}
-                if (DEBUG_COMPRESSION) std::cerr << std::endl;
-            }
-            // BM index has to be used because of -r option
-            bm_counter += ir.rearrangements.size();
-        }
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        if (written_bytes) {
-            std::cout << "non uniform phasing sparse data " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-            header.non_uniform_phasing = true;
-        }
-        header.default_phased = default_phased;
-
-        ///////////////////////////
-        // Rewrite Filled Header //
-        ///////////////////////////
-        s.seekp(0, std::ios_base::beg);
-        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
-
-        s.close();
-    }
-
     virtual ~GtCompressorTemplate() {}
 
 protected:
@@ -322,34 +79,9 @@ protected:
         sample_list = extract_samples(bcf_fri);
         N_HAPS = bcf_fri.n_samples * PLOIDY;
         MINOR_ALLELE_COUNT_THRESHOLD = (size_t)((double)N_HAPS * MAF);
-        a.resize(N_HAPS);
-        b.resize(N_HAPS);
-        std::iota(a.begin(), a.end(), 0);
-
-        internal_gt_records.clear();
-        rearrangement_track.clear();
 
         entry_counter = 0;
         variant_counter = 0;
-        rearrangement_counter = 0;
-    }
-
-    virtual void handle_bcf_line() override {
-        if (line_max_ploidy != PLOIDY) {
-            std::cerr << "Compressor does not support non uniform ploidy" << std::endl;
-            std::cerr << "All lines in BCF file should have the same ploidy" << std::endl;
-            throw "PLOIDY ERROR";
-        }
-        // The constructor does all the work
-        try {
-            internal_gt_records.emplace_back(InternalGtRecord<T>(bcf_fri, a, b, default_phased, MINOR_ALLELE_COUNT_THRESHOLD, variant_counter, RESET_SORT_BLOCK_LENGTH));
-        } catch (...) {
-            std::cerr << "entry " << entry_counter << ", " << unique_id(bcf_fri.line) << " caused a problem" << std::endl;
-            exit(-1);
-        }
-
-        // Counts the number of BCF lines
-        entry_counter++;
     }
 
     std::string filename;
@@ -357,17 +89,9 @@ protected:
     size_t PLOIDY = 2;
     T N_HAPS = 0;
     size_t MINOR_ALLELE_COUNT_THRESHOLD = 0;
-    //const uint32_t RESET_SORT_BLOCK_LENGTH = 8192;
-    const size_t REARRANGEMENT_TRACK_CHUNK = 1024; // Should be a power of two
 
-    std::vector<InternalGtRecord<T > > internal_gt_records;
-    std::vector<bool> rearrangement_track;
-
-    size_t rearrangement_counter = 0;
     size_t entry_counter = 0;
     size_t variant_counter = 0;
-
-    std::vector<T> a, b;
 
     std::vector<std::string> sample_list;
 };
@@ -455,27 +179,12 @@ public:
         size_t N_HAPS = bcf_fri.n_samples * PLOIDY;
         destroy_bcf_file_reader(bcf_fri);
 
-        // If not may haplotypes use a compressor that uses uint16_t as indices
+        // If less than 2^16 haplotypes use a compressor that uses uint16_t as indices
         if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-            if (VERSION == (uint32_t)-1) {
-                _compressor = make_unique<GtCompressorStream<uint16_t, XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
-            } else if (VERSION == 33) {
-                _compressor = make_unique<GtCompressorStream<uint16_t> >(zstd_compression_on, zstd_compression_level);
-            } else if (VERSION == 2) {
-                _compressor = make_unique<GtCompressorTemplate<uint16_t> >();
-            } else {
-                _compressor = make_unique<GtCompressorStream<uint16_t, XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
-            }
+            // If needed handle versions here
+            _compressor = make_unique<GtCompressorStream<uint16_t, XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
         } else { // Else use a compressor that uses uint32_t as indices
-            if (VERSION == (uint32_t)-1) {
-                _compressor = make_unique<GtCompressorStream<uint32_t, XsiFactoryExt<uint32_t> > >(zstd_compression_on, zstd_compression_level);
-            } else if (VERSION == 33) {
-                _compressor = make_unique<GtCompressorStream<uint32_t> >(zstd_compression_on, zstd_compression_level);
-            } else if (VERSION == 2) {
-                _compressor = make_unique<GtCompressorTemplate<uint32_t> >();
-            } else {
-                _compressor = make_unique<GtCompressorStream<uint32_t, XsiFactoryExt<uint32_t> > >(zstd_compression_on, zstd_compression_level);
-            }
+            _compressor = make_unique<GtCompressorStream<uint32_t, XsiFactoryExt<uint32_t> > >(zstd_compression_on, zstd_compression_level);
         }
         _compressor->set_maf(MAF);
         _compressor->set_reset_sort_block_length(RESET_SORT_BLOCK_LENGTH);
