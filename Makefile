@@ -42,7 +42,7 @@ else
 endif
 
 # Rules
-all : datetime $(GEN_GIT_REV) $(DEPENDENCIES) $(TARGET)
+all : $(GEN_GIT_REV) $(DEPENDENCIES) $(TARGET)
 
 datetime :
 	date | figlet 2> /dev/null
