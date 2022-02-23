@@ -37,6 +37,7 @@ public:
         KEY_BINARY_LINES = 1,
         KEY_MAX_LINE_PLOIDY = 2,
         KEY_DEFAULT_PHASING = 3,
+        KEY_PBWT_SORT_WEIRDNESS = 4,
         // Line (Vector) keys
         KEY_LINE_SORT = 0x10,
         KEY_LINE_SELECT = 0x11,
@@ -183,6 +184,8 @@ public:
 
 private:
     inline void scan_genotypes(const bcf_file_reader_info_t& bcf_fri) {
+        num_missing_in_current_line = 0;
+        num_eovs_in_current_line = 0;
         const auto LINE_MAX_PLOIDY = bcf_fri.ngt / bcf_fri.n_samples;
         if (LINE_MAX_PLOIDY > max_vector_length) {
             max_vector_length = LINE_MAX_PLOIDY;
@@ -224,9 +227,11 @@ private:
                 if (bcf_gt_is_missing(bcf_allele) or (bcf_allele == bcf_int32_missing)) {
                     missing_found = true;
                     line_has_missing[effective_bcf_lines_in_block] = true;
+                    num_missing_in_current_line++;
                 } else if (bcf_allele == bcf_int32_vector_end) {
                     end_of_vector_found = true;
                     line_has_end_of_vector[effective_bcf_lines_in_block] = true;
+                    num_eovs_in_current_line++;
 
                     /// @todo set info for non uniform vector lengths (in other function)
                 } else {
@@ -326,7 +331,7 @@ public:
         //for (auto& e : a_weirdness) std::cerr << e << " ";
         //std::cerr << std::endl;
 
-        if (weird_line) {
+        if (weird_line and pbwt_sort_weirdness) {
             // PBWT sort on weirdness
             if (LINE_MAX_PLOIDY != default_ploidy) {
                 if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
@@ -354,8 +359,11 @@ protected:
 
     size_t effective_binary_gt_lines_in_block;
 
+    bool pbwt_sort_weirdness = false;
+
     // For handling missing
     bool missing_found = false;
+    size_t num_missing_in_current_line = 0;
     std::vector<bool> line_has_missing;
 
     // For handling non default phase
@@ -364,6 +372,7 @@ protected:
 
     // For handling end of vector
     bool end_of_vector_found = false;
+    size_t num_eovs_in_current_line = 0;
     std::vector<bool> line_has_end_of_vector;
 
     // For handling mixed ploidy
@@ -399,6 +408,7 @@ private:
         dictionary[KEY_BINARY_LINES] = effective_binary_gt_lines_in_block;
         dictionary[KEY_MAX_LINE_PLOIDY] = max_vector_length;
         dictionary[KEY_DEFAULT_PHASING] = default_phasing;
+        dictionary[KEY_PBWT_SORT_WEIRDNESS] = !!pbwt_sort_weirdness;
 
         // Those are offsets
         dictionary[KEY_LINE_SORT] = VAL_UNDEFINED;

@@ -90,6 +90,12 @@ public:
         }
 
         // Check for weirdness
+        if (dictionary.find(KEY_PBWT_SORT_WEIRDNESS) != dictionary.end()) {
+            block_pbwt_sorts_weirdness = !!dictionary.at(KEY_PBWT_SORT_WEIRDNESS);
+        } else {
+            block_pbwt_sorts_weirdness = true; // Was default for version 4
+        }
+
         block_has_weirdness = false;
         block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_MISSING, line_has_missing, binary_gt_lines_in_block);
         block_has_weirdness |= fill_bool_vector_from_1d_dict_key(KEY_LINE_END_OF_VECTORS, line_has_end_of_vector, binary_gt_lines_in_block);
@@ -419,32 +425,34 @@ protected:
                 eovs_p = wah2_extract(eovs_p, y_eovs, CURRENT_N_HAPS);
             }
 
-            // Update PBWT weirdness
-            /// @todo refactor all this
-            if (current_line_has_missing and current_line_has_eovs) {
-                // PBWT on both
-                if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
-                    //bool_pbwt_sort_two<A_T, 2>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
-                }
-                else {
-                    bool_pbwt_sort_two<A_T>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
-                }
-            } else if (current_line_has_missing) {
-                // PBWT on missing
-                if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
-                    //bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_missing, N_HAPS);
-                }
-                else {
-                    bool_pbwt_sort<A_T>(a_weird, b_weird, y_missing, N_HAPS);
-                }
+            if (block_pbwt_sorts_weirdness) {
+                // Update PBWT weirdness
+                /// @todo refactor all this
+                if (current_line_has_missing and current_line_has_eovs) {
+                    // PBWT on both
+                    if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
+                        //bool_pbwt_sort_two<A_T, 2>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
+                    }
+                    else {
+                        bool_pbwt_sort_two<A_T>(a_weird, b_weird, y_missing, y_eovs, N_HAPS);
+                    }
+                } else if (current_line_has_missing) {
+                    // PBWT on missing
+                    if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
+                        //bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_missing, N_HAPS);
+                    }
+                    else {
+                        bool_pbwt_sort<A_T>(a_weird, b_weird, y_missing, N_HAPS);
+                    }
 
-            } else if (current_line_has_eovs) {
-                // PBWT on eovs
-                if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
-                    //bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_eovs, N_HAPS);
-                }
-                else {
-                    bool_pbwt_sort<A_T>(a_weird, b_weird, y_eovs, N_HAPS);
+                } else if (current_line_has_eovs) {
+                    // PBWT on eovs
+                    if (haploid_binary_gt_line[internal_binary_weirdness_position]) {
+                        //bool_pbwt_sort<A_T, 2>(a_weird, b_weird, y_eovs, N_HAPS);
+                    }
+                    else {
+                        bool_pbwt_sort<A_T>(a_weird, b_weird, y_eovs, N_HAPS);
+                    }
                 }
             }
 
@@ -592,6 +600,7 @@ protected:
     bool sparse_negated;
 
     // Weirdness
+    bool block_pbwt_sorts_weirdness = false;
     bool block_has_weirdness;
     WAH_T* missing_origin_p;
     WAH_T* missing_p;
