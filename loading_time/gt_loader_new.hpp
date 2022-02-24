@@ -162,7 +162,7 @@ private:
             }
 
             // Remove the "BM" format /// @todo remove all possible junk (there should be none)
-            bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
+            //bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", NULL, 0, BCF_HT_INT);
 
             // Fill the genotype array (as bcf_get_genotypes() would do)
             accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
