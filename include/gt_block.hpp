@@ -481,19 +481,20 @@ private:
         // Write Sparse
         dictionary.at(KEY_MATRIX_SPARSE) = (uint32_t)((size_t)s.tellp()-block_start_pos);
         for (const auto& sparse_line : sparse_encoded_binary_gt_lines) {
-            const auto& sparse = sparse_line.sparse_encoding;
-            A_T number_of_positions = sparse.size();
-
-            if (sparse_line.sparse_allele == 0) {
-                //if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
-                // Set the MSB Bit
-                // This will always work as long as MAF is < 0.5
-                // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
-                /// @todo Check for this if user can set MAF
-                number_of_positions |= (A_T)1 << (sizeof(A_T)*8-1);
-            }
-            s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
-            write_vector(s, sparse);
+            sparse_line.write_to_stream(s);
+//            const auto& sparse = sparse_line.sparse_encoding;
+//            A_T number_of_positions = sparse.size();
+//
+//            if (sparse_line.sparse_allele == 0) {
+//                //if (DEBUG_COMPRESSION) std::cerr << "NEGATED ";
+//                // Set the MSB Bit
+//                // This will always work as long as MAF is < 0.5
+//                // Do not set MAF to higher, that makes no sense because if will no longer be a MINOR ALLELE FREQUENCY
+//                /// @todo Check for this if user can set MAF
+//                number_of_positions |= (A_T)1 << (sizeof(A_T)*8-1);
+//            }
+//            s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(A_T));
+//            write_vector(s, sparse);
         }
         //std::cout << "Written " << sparse_encoded_binary_gt_lines.size() << " sparse lines" << std::endl;
 
@@ -584,12 +585,6 @@ private:
         }
 
         return result;
-    }
-
-    template<typename T>
-    inline void write_vector(std::fstream& s, const std::vector<T>& v) {
-        static_assert(!std::is_same<T, bool>::value, "bool is implementation defined therefore is not portable");
-        s.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(decltype(v.back())));
     }
 
     template<typename T>

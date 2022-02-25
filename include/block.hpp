@@ -45,22 +45,57 @@ public:
     virtual ~Writable() {};
 };
 
-template<typename T = uint32_t>
-class SparseGtLine {
-public:
-    SparseGtLine() {}
+template<typename T>
+inline void write_vector(std::fstream& s, const std::vector<T>& v) {
+    static_assert(!std::is_same<T, bool>::value, "bool is implementation defined therefore is not portable");
+    s.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(decltype(v.back())));
+}
 
-    SparseGtLine(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t sparse_allele) : index(index), sparse_allele(sparse_allele) {
+template <typename T = uint32_t, class Pred = DefaultPred>
+class Sparse {
+public:
+    Sparse() {}
+
+    Sparse(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t _) : index(index) {
         for (int32_t i = 0; i < ngt; ++i) {
-            if (bcf_gt_allele(gt_array[i]) == sparse_allele) {
+            if (Pred::check(gt_array[i], _)) {
                 sparse_encoding.push_back(i);
             }
         }
     }
 
     size_t index = 0;
-    int32_t sparse_allele = 0;
     std::vector<T> sparse_encoding;
+
+    void write_to_stream(std::fstream& s) const {
+        const auto& sparse = sparse_encoding;
+        T number_of_positions = sparse.size();
+        s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+        write_vector(s, sparse);
+    }
+};
+
+
+template <typename T = uint32_t>
+class SparseGtLine : public Sparse<T, DefaultPred> {
+public:
+    SparseGtLine() {}
+
+    SparseGtLine(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t sparse_allele) :
+        Sparse<T, DefaultPred>(index, gt_array, ngt, sparse_allele), sparse_allele(sparse_allele) {}
+
+    int32_t sparse_allele = 0;
+
+    void write_to_stream(std::fstream& s) const {
+        const auto& sparse = this->sparse_encoding;
+        T number_of_positions = sparse.size();
+        if (sparse_allele == 0) {
+            // Set the MSB Bit
+            number_of_positions |= (T)1 << (sizeof(T)*8-1);
+        }
+        s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+        write_vector(s, sparse);
+    }
 };
 
 class Block {
