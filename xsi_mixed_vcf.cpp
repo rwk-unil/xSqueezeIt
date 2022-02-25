@@ -97,3 +97,11 @@ int Xcf::get_genotypes(int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void *
         return bcf_get_genotypes(hdr, line, dst, ndst);
     }
 }
+
+InternalGtAccess Xcf::get_internal_access(int reader_id, const bcf_hdr_t *hdr, bcf1_t *line) {
+    if (!reader_is_xsi(reader_id)) {
+        throw "Cannot access internals of non XSI reader";
+    } else {
+        return entries[reader_id].accessor->get_internal_access(hdr, line);
+    }
+}

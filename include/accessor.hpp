@@ -29,6 +29,18 @@
 #include "fs.hpp"
 
 class Accessor {
+protected:
+    inline size_t position_from_bm_entry(const bcf_hdr_t *hdr, bcf1_t *line) {
+		// extraction is done by having the accessor seek the data at "BM"
+		int count = 0;
+		int ret = bcf_unpack(line, BCF_UN_ALL);
+		if (ret) { std::cerr << "bcf_unpack error" << std::endl; }
+		if (bcf_get_format_int32(hdr, line, "BM", &values, &count) < 1) {
+			std::cerr << "Failed to retrieve binary matrix index position (BM key)" << std::endl;
+			throw "BM key value not found";
+		}
+        return values[0];
+    }
 public:
 
     Accessor(std::string& filename);
@@ -50,16 +62,14 @@ public:
 		if (!*gt_arr) *gt_arr = malloc(sizeof(int)*ngt);
         *gt_arr_size = ngt;
 
-		// extraction is done by having the accessor seek the data at "BM"
-		int count = 0;
-		int ret = bcf_unpack(line, BCF_UN_ALL);
-		if (ret) { std::cerr << "bcf_unpack error" << std::endl; }
-		if (bcf_get_format_int32(hdr, line, "BM", &values, &count) < 1) {
-			std::cerr << "Failed to retrieve binary matrix index position (BM key)" << std::endl;
-			throw "BM key value not found";
-		}
+        size_t position = position_from_bm_entry(hdr, line);
 
-        return fill_genotype_array((int32_t*)*gt_arr, ngt, line->n_allele, values[0]);
+        return fill_genotype_array((int32_t*)*gt_arr, ngt, line->n_allele, position);
+    }
+
+    InternalGtAccess get_internal_access(const bcf_hdr_t *hdr, bcf1_t *line) {
+        size_t position = position_from_bm_entry(hdr, line);
+        return internals->get_internal_access(line->n_allele, position);
     }
 
     #define XSI_BCF_VAR_EXTENSION "_var.bcf"

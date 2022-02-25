@@ -65,13 +65,11 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
         } else {
             std::cerr << "Unsupported version : " << header.version << std::endl;
             throw "Unsupported version";
-            //internals = make_unique<AccessorInternalsTemplate<uint16_t> >(filename);
         }
     } else if (header.aet_bytes == 4) {
         if (header.version == 4) {
             internals = make_unique<AccessorInternalsNewTemplate<uint32_t> >(filename);
         } else {
-            //internals = make_unique<AccessorInternalsTemplate<uint32_t> >(filename);
             std::cerr << "Unsupported version : " << header.version << std::endl;
             throw "Unsupported version";
         }
@@ -86,5 +84,6 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
 Accessor::~Accessor() {
     if (values) {
         free(values);
+        values = NULL;
     }
 }

@@ -52,6 +52,9 @@ public:
 
     const char *sample_name(int reader_id, const bcf_hdr_t *hdr, int sample_id);
     int get_genotypes(int reader_id, const bcf_hdr_t *hdr, bcf1_t *line, void **dst, int *ndst);
+
+    inline bool reader_is_xsi(int reader_id) const { return entries[reader_id].is_xsi; }
+    InternalGtAccess get_internal_access(int reader_id, const bcf_hdr_t *hdr, bcf1_t *line);
 protected:
     void add_reader(bcf_sr_t* reader, int reader_id);
 

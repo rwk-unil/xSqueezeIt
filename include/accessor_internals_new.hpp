@@ -42,7 +42,7 @@
 
 using namespace wah;
 
-#include "accessor_internals.hpp" // For DecompressPointer, AccessorInternals
+#include "accessor_internals.hpp" // For AccessorInternals
 #include "interfaces.hpp"
 
 /// @todo DecompressPointer NEW version
@@ -441,6 +441,33 @@ public:
         return allele_counts;
     }
 
+    InternalGtAccess get_internal_access(size_t n_alleles) {
+        InternalGtAccess ia;
+        ia.position = internal_binary_gt_line_position;
+        ia.n_alleles = n_alleles;
+        ia.sparse_bytes = sizeof(A_T);
+        constexpr A_T MSB_BIT = (A_T)1 << (sizeof(A_T)*8-1);
+        ia.wah_bytes = sizeof(WAH_T);
+
+        if (n_alleles == 0) return ia;
+        for (size_t i = 0; i < n_alleles-1; ++i) {
+            seek(internal_binary_gt_line_position+i);
+            if (!binary_gt_line_is_wah[internal_binary_gt_line_position]) {
+                if (i == 0)
+                    ia.default_allele = (*sparse_p) & MSB_BIT; // If REF is sparse then MSB bit is set and ALT1 is default
+                ia.sparse.push_back(true);
+                ia.pointers.push_back(sparse_p);
+            } else {
+                if (i == 0)
+                    ia.default_allele = 0; // REF
+                ia.sparse.push_back(false);
+                ia.pointers.push_back(wah_p);
+            }
+        }
+
+        return ia;
+    }
+
 protected:
     inline void weirdness_advance(const size_t STEPS, const size_t CURRENT_N_HAPS) {
         // Update pointers and PBWT weirdness
@@ -720,6 +747,11 @@ public:
     // Directly pass the DecompressPointer Allele counts
     virtual inline const std::vector<size_t>& get_allele_counts() const override {
         return dp->get_allele_count_ref();
+    }
+
+    inline InternalGtAccess get_internal_access(size_t n_alleles, size_t position) override {
+        seek(position);
+        return dp->get_internal_access(n_alleles);
     }
 
     AccessorInternalsNewTemplate(std::string filename) {

@@ -371,6 +371,29 @@ protected:
 };
 #endif
 
+class InternalGtAccess {
+public:
+    size_t position;
+    size_t n_alleles;
+    size_t sparse_bytes;
+    size_t wah_bytes;
+    int32_t default_allele;
+    std::vector<bool> sparse;
+    std::vector<void *> pointers;
+
+    void print_info() const {
+        std::cerr << "Position = " << position << "\n";
+        std::cerr << "n_alleles = " << n_alleles << "\n";
+        std::cerr << "sparse_bytes = " << sparse_bytes << "\n";
+        std::cerr << "wah_bytes = " << wah_bytes << "\n";
+        std::cerr << "Sparse vector : ";
+        for (size_t i = 0; i < sparse.size(); ++i) {
+            std::cerr << (sparse[i] ? "1" : "0");
+        }
+        std::cerr << std::endl;
+    }
+};
+
 class AccessorInternals {
 public:
     virtual ~AccessorInternals() {}
@@ -378,6 +401,7 @@ public:
     // Fill genotype array also fills allele counts, so this is only to be used when fill_genotype_array is not called (e.g., to recompute AC only)
     virtual void fill_allele_counts(size_t n_alleles, size_t position) = 0;
     virtual inline const std::vector<size_t>& get_allele_counts() const {return allele_counts;}
+    virtual inline InternalGtAccess get_internal_access(size_t n_alleles, size_t position) = 0;
     //virtual const std::unordered_map<size_t, std::vector<size_t> >& get_missing_sparse_map() const = 0;
     //virtual const std::unordered_map<size_t, std::vector<size_t> >& get_phase_sparse_map() const = 0;
 protected:
