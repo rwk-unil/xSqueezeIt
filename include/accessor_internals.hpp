@@ -47,6 +47,7 @@ static constexpr bool DEBUG_DECOMP = true;
 #endif
 using namespace wah;
 
+#if 0
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class DecompressPointer {
 public:
@@ -368,6 +369,7 @@ protected:
     void *file_mmap_p;
     const bool compressed;
 };
+#endif
 
 class AccessorInternals {
 public:
@@ -384,6 +386,7 @@ protected:
     const size_t BM_BLOCK_BITS = 15;
 };
 
+#if 0
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class AccessorInternalsTemplate : public AccessorInternals {
 public:
@@ -700,5 +703,6 @@ protected:
 
     std::unique_ptr<DecompressPointer<A_T, WAH_T> > dp;
 };
+#endif
 
 #endif /* __ACCESSOR_INTERNALS_HPP__ */

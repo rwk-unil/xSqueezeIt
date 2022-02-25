@@ -45,6 +45,7 @@ public:
     virtual ~XsiFactoryInterface() {}
 };
 
+#if 0
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
 class XsiFactory : public XsiFactoryInterface {
 
@@ -394,6 +395,8 @@ protected:
     std::vector<std::string> sample_list;
 };
 
+#endif
+
 template <typename T_K, typename T_V, template<typename, typename> class IBinaryBlock>
 class EncodingBinaryBlock : public IBinaryBlock<T_K, T_V>, public IBCFLineEncoder, public BCFBlock {
 public:
@@ -445,7 +448,7 @@ public:
     {
         current_block = make_unique<EncodingBinaryBlockWithGT>(sample_list.size(), RESET_SORT_BLOCK_LENGTH, MINOR_ALLELE_COUNT_THRESHOLD, default_phased);
 
-        std::cout << "XSI Factory Ext is used" << std::endl;
+        //std::cout << "XSI Factory Ext is used" << std::endl;
         //std::cerr << "XSI Factory created with :" << std::endl;
         //std::cerr << "sample list : ";
         //for (auto s : sample_list) std::cerr << s;
@@ -629,7 +632,6 @@ protected:
 
     size_t entry_counter = 0;
     size_t variant_counter = 0;
-    /// @todo PLOIDY
     size_t PLOIDY = 2;
 
     header_t header;
