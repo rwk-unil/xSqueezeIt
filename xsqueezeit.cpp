@@ -170,7 +170,17 @@ int main(int argc, const char *argv[]) {
         }
 
         std::string variant_file(filename + XSI_BCF_VAR_EXTENSION);
-        create_index_file(variant_file);
+        if(!fs::exists(variant_file)) {
+            std::cerr << "File " << variant_file << " is missing and required to decompress the .xsi" << std::endl;
+            exit(app.exit(CLI::RuntimeError()));
+        }
+
+        std::string variant_file_index(filename + XSI_BCF_VAR_EXTENSION + ".csi");
+        if(!fs::exists(variant_file_index)) {
+            std::cerr << "Index for " << variant_file << " is missing, reindexing now..." << std::endl;
+            create_index_file(variant_file);
+        }
+
         try {
             NewDecompressor d(filename, variant_file);
             d.decompress(ofname);
