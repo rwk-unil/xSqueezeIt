@@ -37,7 +37,7 @@ public:
         KEY_BINARY_LINES = 1,
         KEY_MAX_LINE_PLOIDY = 2,
         KEY_DEFAULT_PHASING = 3,
-        KEY_PBWT_SORT_WEIRDNESS = 4,
+        KEY_WEIRDNESS_STRATEGY = 4,
         // Line (Vector) keys
         KEY_LINE_SORT = 0x10,
         KEY_LINE_SELECT = 0x11,
@@ -52,10 +52,19 @@ public:
         KEY_MATRIX_MISSING = 0x26,
         KEY_MATRIX_NON_UNIFORM_PHASING = 0x27,
         KEY_MATRIX_END_OF_VECTORS = 0x28,
+        KEY_MATRIX_MISSING_SPARSE = 0x36,
+        KEY_MATRIX_END_OF_VECTORS_SPARSE = 0x38,
     };
 
     enum Dictionary_Vals : uint32_t {
         VAL_UNDEFINED = (uint32_t)-1,
+    };
+
+    enum Weirdness_Strategy : uint32_t {
+        WS_PBWT_WAH = 0,
+        WS_WAH = 1,
+        WS_SPARSE = 2,
+        WS_MIXED = 3,
     };
 };
 
@@ -64,7 +73,13 @@ public:
     struct MissingPred {
         static inline bool check(int32_t gt_arr_entry, int32_t _) {
             (void)_; // Unused
-            return bcf_gt_is_missing(gt_arr_entry);
+            return bcf_gt_is_missing(gt_arr_entry) or (gt_arr_entry == bcf_int32_missing);
+        }
+    };
+    struct EndOfVectorPred {
+        static inline bool check(const int32_t gt_arr_entry, const int32_t _) {
+            (void)_; // Unused
+            return gt_arr_entry == bcf_int32_vector_end;
         }
     };
     struct RawPred {
@@ -248,6 +263,13 @@ private:
     }
 
 public:
+    static inline bool do_sparse_heuristic(const size_t num, const size_t num_different) {
+        /* This is a very arbitrary heuristic to choose between a sparse representation and other encoding
+         * It assumes the sparse representation requires 64 times more memory if data was 50% different (worst case) */
+        return !!(((num >> 4) > (num_different << 2)));
+    }
+
+public:
     inline void encode_line(const bcf_file_reader_info_t& bcf_fri) override {
         scan_genotypes(bcf_fri);
 
@@ -299,53 +321,80 @@ public:
             effective_binary_gt_lines_in_block++;
         }
 
-        bool weird_line = false;
-        uint32_t _(0); // Unused
-        bool __(false); // Unused
         if (line_has_missing[effective_bcf_lines_in_block]) {
-            weird_line = true;
-            if (LINE_MAX_PLOIDY == 1) {
-                auto a1 = haploid_rearrangement_from_diploid(a_weirdness);
-                wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a1, bcf_fri.ngt, _, __));
-            } else {
-                wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a_weirdness, bcf_fri.ngt, _, __));
-            }
+            int32_t _(0); // Unused
+            sparse_encoded_missing_lines.push_back(Sparse<A_T, MissingPred>(effective_bcf_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt, _));
         }
+
         if (line_has_end_of_vector[effective_bcf_lines_in_block]) {
-            weird_line = true;
-            if (LINE_MAX_PLOIDY == 1) {
-                auto a1 = haploid_rearrangement_from_diploid(a_weirdness);
-                wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a1, bcf_fri.ngt, _, __));
-            } else {
-                wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt, _, __));
+            int32_t _(0); // Unused
+            sparse_encoded_end_of_vector_lines.push_back(Sparse<A_T, EndOfVectorPred>(effective_bcf_lines_in_block, bcf_fri.gt_arr, bcf_fri.ngt, _));
+        }
+
+        if ((weirdness_strat == WS_PBWT_WAH) or (weirdness_strat == WS_WAH) or (weirdness_strat == WS_MIXED)) {
+            bool weird_line = false;
+            uint32_t _(0); // Unused
+            bool __(false); // Unused
+            if (line_has_missing[effective_bcf_lines_in_block]) {
+                weird_line = true;
+                if ((weirdness_strat == WS_SPARSE) or ((weirdness_strat == WS_MIXED) and do_sparse_heuristic(bcf_fri.ngt, num_missing_in_current_line))) {
+                    //sparse_encoded_missing_lines.push_back(...);
+                    throw "unsupported weirdness strategy";
+                } else {
+                    if (LINE_MAX_PLOIDY == 1) {
+                        auto a1 = haploid_rearrangement_from_diploid(a_weirdness);
+                        wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a1, bcf_fri.ngt, _, __));
+                    } else {
+                        wah_encoded_missing_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, MissingPred>(bcf_fri.gt_arr, _, a_weirdness, bcf_fri.ngt, _, __));
+                    }
+                }
             }
+            if (line_has_end_of_vector[effective_bcf_lines_in_block]) {
+                weird_line = true;
+                if ((weirdness_strat == WS_SPARSE) or ((weirdness_strat == WS_MIXED) and do_sparse_heuristic(bcf_fri.ngt, num_eovs_in_current_line))) {
+                    //spase_encoded_end_of_vector_lines.push_back(...);
+                    throw "unsupported weirdness strategy";
+                } else {
+                    if (LINE_MAX_PLOIDY == 1) {
+                        auto a1 = haploid_rearrangement_from_diploid(a_weirdness);
+                        wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a1, bcf_fri.ngt, _, __));
+                    } else {
+                        wah_encoded_end_of_vector_lines.push_back(wah::wah_encode2_with_size<WAH_T, A_T, RawPred>(bcf_fri.gt_arr, bcf_int32_vector_end, a_weirdness, bcf_fri.ngt, _, __));
+                    }
+                }
+            }
+
+            //std::cerr << "[DEBUG] Weirdness a : ";
+            //for (auto& e : a_weirdness) std::cerr << e << " ";
+            //std::cerr << std::endl;
+
+            if (weird_line and weirdness_strat == WS_PBWT_WAH) {
+                // PBWT sort on weirdness
+                if (LINE_MAX_PLOIDY != default_ploidy) {
+                    if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
+                        // Sort a, b as if they were homozygous with ploidy 2
+                        //pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, a_weirdness.size(), 0 /*unused*/);
+                    } else {
+                        /// @todo add and handle polyploid PBWT sort
+                        std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
+                        throw "PLOIDY ERROR";
+                    }
+                } else {
+                    pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, a_weirdness.size(), 0 /*unused*/);
+                }
+            }
+        } else {
+            //throw "Unsupported weirdness strategy";
         }
 
         // Phasing info is not PBWT reordered with weirdness
         /// @todo double compress this structure would save space, e.g., if all the entries are the same
         if (line_has_non_uniform_phasing[effective_bcf_lines_in_block]) {
+            uint32_t _(0); // Unused
             wah_encoded_non_uniform_phasing_lines.push_back(wah::wah_encode2_with_size<WAH_T, NonDefaultPhasingPred>(bcf_fri.gt_arr, default_phasing, bcf_fri.ngt, _));
         }
+         /* Weirdness stratedy */
 
-        //std::cerr << "[DEBUG] Weirdness a : ";
-        //for (auto& e : a_weirdness) std::cerr << e << " ";
-        //std::cerr << std::endl;
-
-        if (weird_line and pbwt_sort_weirdness) {
-            // PBWT sort on weirdness
-            if (LINE_MAX_PLOIDY != default_ploidy) {
-                if (LINE_MAX_PLOIDY == 1 and default_ploidy == 2) {
-                    // Sort a, b as if they were homozygous with ploidy 2
-                    //pred_pbwt_sort<A_T, WeirdnessPred, 2>(a_weirdness, b_weirdness, bcf_fri.gt_arr, a_weirdness.size(), 0 /*unused*/);
-                } else {
-                    /// @todo add and handle polyploid PBWT sort
-                    std::cerr << "Cannot handle ploidy of " << LINE_MAX_PLOIDY << " with default ploidy " << default_ploidy << std::endl;
-                    throw "PLOIDY ERROR";
-                }
-            } else {
-                pred_pbwt_sort<A_T, WeirdnessPred>(a_weirdness, b_weirdness, bcf_fri.gt_arr, a_weirdness.size(), 0 /*unused*/);
-            }
-        }
 
         effective_bcf_lines_in_block++;
     }
@@ -359,7 +408,8 @@ protected:
 
     size_t effective_binary_gt_lines_in_block;
 
-    bool pbwt_sort_weirdness = false;
+    Weirdness_Strategy weirdness_strat = WS_SPARSE;
+    //Weirdness_Strategy weirdness_strat = WS_WAH;
 
     // For handling missing
     bool missing_found = false;
@@ -393,8 +443,10 @@ protected:
     std::vector<SparseGtLine<A_T> > sparse_encoded_binary_gt_lines;
 
     std::vector<std::vector<WAH_T> > wah_encoded_missing_lines;
-    std::vector<std::vector<WAH_T> > wah_encoded_non_uniform_phasing_lines;
+    std::vector<Sparse<A_T, MissingPred> > sparse_encoded_missing_lines;
     std::vector<std::vector<WAH_T> > wah_encoded_end_of_vector_lines;
+    std::vector<Sparse<A_T, EndOfVectorPred> > sparse_encoded_end_of_vector_lines;
+    std::vector<std::vector<WAH_T> > wah_encoded_non_uniform_phasing_lines;
 
     // Internal
     std::vector<std::vector<size_t> > line_allele_counts;
@@ -408,7 +460,7 @@ private:
         dictionary[KEY_BINARY_LINES] = effective_binary_gt_lines_in_block;
         dictionary[KEY_MAX_LINE_PLOIDY] = max_vector_length;
         dictionary[KEY_DEFAULT_PHASING] = default_phasing;
-        dictionary[KEY_PBWT_SORT_WEIRDNESS] = !!pbwt_sort_weirdness;
+        dictionary[KEY_WEIRDNESS_STRATEGY] = weirdness_strat;
 
         // Those are offsets
         dictionary[KEY_LINE_SORT] = VAL_UNDEFINED;
@@ -421,6 +473,7 @@ private:
             // Is an offset
             dictionary[KEY_LINE_MISSING] = VAL_UNDEFINED;
             dictionary[KEY_MATRIX_MISSING] = VAL_UNDEFINED;
+            dictionary[KEY_MATRIX_MISSING_SPARSE] = VAL_UNDEFINED;
         }
 
         if (end_of_vector_found) {
@@ -428,6 +481,7 @@ private:
             // Is an offset
             dictionary[KEY_LINE_END_OF_VECTORS] = VAL_UNDEFINED;
             dictionary[KEY_MATRIX_END_OF_VECTORS] = VAL_UNDEFINED;
+            dictionary[KEY_MATRIX_END_OF_VECTORS_SPARSE] = VAL_UNDEFINED;
         }
 
         if (non_uniform_phasing) {
@@ -511,8 +565,17 @@ private:
             //std::cerr << std::endl;
             dictionary.at(KEY_LINE_MISSING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
             write_boolean_vector_as_wah(s, v);
-            dictionary.at(KEY_MATRIX_MISSING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
-            write_vector_of_vectors(s, wah_encoded_missing_lines);
+            if ((weirdness_strat == WS_WAH) or (weirdness_strat == WS_PBWT_WAH)) {
+                dictionary.at(KEY_MATRIX_MISSING) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+                write_vector_of_vectors(s, wah_encoded_missing_lines);
+            } else if (weirdness_strat == WS_SPARSE) {
+                dictionary.at(KEY_MATRIX_MISSING_SPARSE) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+                for (const auto& sparse_line : sparse_encoded_missing_lines) {
+                    sparse_line.write_to_stream(s);
+                }
+            } else {
+                throw "unsupported weirdness strategy";
+            }
 
             written_bytes = size_t(s.tellp()) - total_bytes;
             total_bytes += written_bytes;
@@ -524,8 +587,17 @@ private:
             auto v = reindex_binary_vector_from_bcf_to_binary_lines(line_has_end_of_vector);
             dictionary.at(KEY_LINE_END_OF_VECTORS) = (uint32_t)((size_t)s.tellp()-block_start_pos);
             write_boolean_vector_as_wah(s, v);
-            dictionary.at(KEY_MATRIX_END_OF_VECTORS) = (uint32_t)((size_t)s.tellp()-block_start_pos);
-            write_vector_of_vectors(s, wah_encoded_end_of_vector_lines);
+            if ((weirdness_strat == WS_WAH) or (weirdness_strat == WS_PBWT_WAH)) {
+                dictionary.at(KEY_MATRIX_END_OF_VECTORS) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+                write_vector_of_vectors(s, wah_encoded_end_of_vector_lines);
+            } else if (weirdness_strat == WS_SPARSE) {
+                dictionary.at(KEY_MATRIX_END_OF_VECTORS_SPARSE) = (uint32_t)((size_t)s.tellp()-block_start_pos);
+                for (const auto& sparse_line : sparse_encoded_end_of_vector_lines) {
+                    sparse_line.write_to_stream(s);
+                }
+            } else {
+                throw "unsupported weirdness strategy";
+            }
 
             written_bytes = size_t(s.tellp()) - total_bytes;
             total_bytes += written_bytes;

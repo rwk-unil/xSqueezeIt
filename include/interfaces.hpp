@@ -89,6 +89,13 @@ inline void read_dictionary(MAP_T& map, uint32_t* p) {
     //return p;
 }
 
+template<typename MAP_T>
+inline void print_dictionary(const MAP_T& map) {
+    for (const auto& kv : map) {
+        std::cerr << "Key : " << kv.first << " Value : " << kv.second << std::endl;
+    }
+}
+
 class IBCFLineEncoder {
 public:
     /**
