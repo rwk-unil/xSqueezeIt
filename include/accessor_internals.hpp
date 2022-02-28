@@ -377,7 +377,9 @@ public:
     size_t n_alleles;
     size_t sparse_bytes;
     size_t wah_bytes;
+    size_t a_bytes;
     int32_t default_allele;
+    const void *a;
     std::vector<bool> sparse;
     std::vector<void *> pointers;
 

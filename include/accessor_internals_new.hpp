@@ -448,10 +448,12 @@ public:
         ia.sparse_bytes = sizeof(A_T);
         constexpr A_T MSB_BIT = (A_T)1 << (sizeof(A_T)*8-1);
         ia.wah_bytes = sizeof(WAH_T);
+        ia.a_bytes = sizeof(A_T);
 
         if (n_alleles == 0) return ia;
         for (size_t i = 0; i < n_alleles-1; ++i) {
             seek(internal_binary_gt_line_position+i);
+            ia.a = a.data();
             if (!binary_gt_line_is_wah[internal_binary_gt_line_position]) {
                 if (i == 0)
                     ia.default_allele = (*sparse_p) & MSB_BIT; // If REF is sparse then MSB bit is set and ALT1 is default
@@ -466,6 +468,10 @@ public:
         }
 
         return ia;
+    }
+
+    bool current_position_is_sparse() const {
+        return !binary_gt_line_is_wah[internal_binary_gt_line_position];
     }
 
 protected:
