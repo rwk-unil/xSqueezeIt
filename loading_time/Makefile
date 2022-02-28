@@ -45,7 +45,7 @@ endif
 
 # Remove artifacts
 clean :
-	rm -f $(OBJS) $(TARGET) $(DEPENDENCIES)
+	rm -f $(OBJ) $(TARGET) $(DEPENDENCIES)
 
 # Rules that don't generate artifacts
 .PHONY :
