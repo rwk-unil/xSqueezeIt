@@ -456,7 +456,7 @@ public:
             ia.a = a.data();
             if (!binary_gt_line_is_wah[internal_binary_gt_line_position]) {
                 if (i == 0)
-                    ia.default_allele = (*sparse_p) & MSB_BIT; // If REF is sparse then MSB bit is set and ALT1 is default
+                    ia.default_allele = ((*sparse_p) & MSB_BIT) ? 1 : 0; // If REF is sparse then MSB bit is set and ALT1 is default
                 ia.sparse.push_back(true);
                 ia.pointers.push_back(sparse_p);
             } else {
