@@ -439,7 +439,7 @@ private:
                         uint16_t *a = (uint16_t*)gt.a;
                         DotProd dp(wah_p, a, phenotypes);
                         result = dp.Sxy;
-                    } else if (gt.wah_bytes == 4) {
+                    } else if (gt.a_bytes == 4) {
                         uint16_t *wah_p = (uint16_t*)gt.pointers[0];
                         uint32_t *a = (uint32_t*)gt.a;
                         DotProd dp(wah_p, a, phenotypes);
