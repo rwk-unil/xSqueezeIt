@@ -262,7 +262,7 @@ public:
         if (this->bcf_fri.line->n_allele != 2) {
             //std::cerr << "Skipping entry with more (or less) than 2 alleles" << std::endl;
         } else {
-            DotProd dp(this->bcf_fri.gt_arr, this->bcf_fri.size_gt_arr, phenotypes, true);
+            DotProd dp(this->bcf_fri.gt_arr, this->bcf_fri.ngt, phenotypes, true);
             //std::cout << "Dot product " << counter++ << " = " << dp.Sxy << std::endl;
             checksum += dp.Sxy;
         }
