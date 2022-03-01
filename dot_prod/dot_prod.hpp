@@ -91,7 +91,11 @@ public:
                 std::cout << "Add pheno for hap " << i << std::endl;
             }
             #endif
-            Sxy += bcf_gt_allele(gt_array[i]) * y[i>>1];
+            // This doesn't handle "missing" or other "weirdness"
+            //Sxy += bcf_gt_allele(gt_array[i]) * y[i>>1];
+            if (bcf_gt_allele(gt_array[i]) == 1) { // ALT Allele
+                Sxy += y[i>>1];
+            }
         }
     }
 
@@ -259,11 +263,12 @@ public:
             //std::cerr << "Skipping entry with more (or less) than 2 alleles" << std::endl;
         } else {
             DotProd dp(this->bcf_fri.gt_arr, this->bcf_fri.size_gt_arr, phenotypes, true);
-            //std::cout << "Dot product = " << dp.Sxy << std::endl;
+            //std::cout << "Dot product " << counter++ << " = " << dp.Sxy << std::endl;
             checksum += dp.Sxy;
         }
     }
 
+    size_t counter = 0;
     double checksum = 0;
     std::vector<double> phenotypes;
 };
@@ -357,6 +362,7 @@ private:
         size_t block_id = 0;
         size_t offset = 0;
         size_t current_block_lines = 0;
+        size_t counter = 0;
         while(bcf_next_line(bcf_fri)) {
             bcf1_t *rec = bcf_fri.line;
 
@@ -397,7 +403,8 @@ private:
             } else {
                 accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
                 DotProd dp(genotypes, header.hap_samples, phenotypes, true);
-                std::cout << "Dot product = " << dp.Sxy << std::endl;
+                //std::cout << "Dot product " << counter++ << " = " << dp.Sxy << std::endl;
+                checksum += dp.Sxy;
             }
 #else
             if (rec->n_allele != 2) {
@@ -407,16 +414,24 @@ private:
                 //gt.print_info();
                 double result = 0;
                 if (gt.sparse[0]) {
-                    if (gt.sparse_bytes == 2) {
-                        uint16_t *sp_p = (uint16_t*)gt.pointers[0];
-                        DotProd dp(sp_p, phenotypes);
-                        result = dp.Sxy;
-                    } else if (gt.sparse_bytes == 4) {
-                        uint32_t *sp_p = (uint32_t*)gt.pointers[0];
-                        DotProd dp(sp_p, phenotypes);
+                    if (gt.default_allele) {
+                        // If default is non REF...
+                        // Then decompress and do normal dot product
+                        accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                        DotProd dp(genotypes, header.hap_samples, phenotypes, true);
                         result = dp.Sxy;
                     } else {
-                        throw "Sparse bytes not supported";
+                        if (gt.sparse_bytes == 2) {
+                            uint16_t *sp_p = (uint16_t*)gt.pointers[0];
+                            DotProd dp(sp_p, phenotypes);
+                            result = dp.Sxy;
+                        } else if (gt.sparse_bytes == 4) {
+                            uint32_t *sp_p = (uint32_t*)gt.pointers[0];
+                            DotProd dp(sp_p, phenotypes);
+                            result = dp.Sxy;
+                        } else {
+                            throw "Sparse bytes not supported";
+                        }
                     }
                 } else { /* WAH */
                     if (gt.a_bytes == 2) {
@@ -433,7 +448,7 @@ private:
                         throw "Sparse bytes not supported";
                     }
                 }
-                //std::cout << "Dot product = " << result << std::endl;
+                //std::cout << "Dot product " << counter++ << " = " << result << std::endl;
                 checksum += result;
             }
 #endif
