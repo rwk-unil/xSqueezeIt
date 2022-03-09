@@ -162,8 +162,6 @@ private:
     // Is templated for performance reasons
     template<const bool RECORD_NONLINEAR = false, const bool XSI = false>
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp) {
-        int *values = NULL;
-        int count = 0;
         uint32_t bm_index = 0;
         //const int32_t an = samples_to_use.size() * header.ploidy;
         std::vector<int32_t> ac_s;
@@ -188,58 +186,19 @@ private:
             offset += bcf_fri.line->n_allele-1;
             current_block_lines++;
 
-            if CONSTEXPR_IF (RECORD_NONLINEAR) {
-                bcf_unpack(rec, BCF_UN_ALL);
-                int ngt = bcf_get_format_int32(bcf_fri.sr->readers[0].header, rec, "BM", &values, &count);
-                if (ngt < 1) {
-                    std::cerr << "Failed to retrieve binary matrix index position (BM key)" << std::endl;
-                    throw "BM key value not found";
-                }
-                // Non linear access (returns immediately if dp is already at correct position)
-                bm_index = values[0];
-            } else {
-                if (header.version == 4) {
-                    bm_index = v4_bm_index;
-                } else {
-                    /// @todo this is the old way, (not new bm)
-                    /// @todo this will be removed once version 4 is out
-                    bm_index = num_variants_extracted;
-                }
-            }
+            bm_index = accessor.position_from_bm_entry(bcf_fri.sr->readers[0].header, rec);
 
             if CONSTEXPR_IF (XSI) {
-                if CONSTEXPR_IF (RECORD_NONLINEAR) {
-                    // The BM index needs to be updated to reflect the new XSI file
-                    int32_t values[1];
-                    if (header.version == 4) {
-                        values[0] = (int32_t)v4_bm_index;
-                    } else {
-                        values[0] = (int32_t)num_variants_extracted;
-                    }
-                    bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", &values[0], 1, BCF_HT_INT);
-                } // Else the BM counters will be exactly the same
+                // The BM index needs to be updated to reflect the new XSI file
+                int32_t values[1];
+                values[0] = (int32_t)v4_bm_index;
+                bcf_update_format(bcf_fri.sr->readers[0].header, rec, "BM", &values[0], 1, BCF_HT_INT);
 
                 // This is the "non optimal way"
                 /// @todo replace this by implementing the comments below
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
 
                 update_and_write_xsi(bcf_fri, hdr, fp, rec, ac_s);
-
-                // Inner variant loop
-                    // If variant count == header.block_size
-                        // Reset a
-
-                    // If position is sparse
-                        // If select samples
-                            // Current block add selected sparse
-                        // Else
-                            // Current block add sparse
-                    // else
-                        // If select samples
-                            // Current block add selected genotypes given a
-                        // Else
-                            // Current block add genotypes given a
-                    // Count variant extracted
             } else {
                 // Fill the genotype array (as bcf_get_genotypes() would do)
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
@@ -250,7 +209,6 @@ private:
             // Count the number of variants extracted
             num_variants_extracted += bcf_fri.line->n_allele-1;
         }
-        if (values) { free(values); }
     }
 
 private:

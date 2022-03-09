@@ -29,22 +29,21 @@
 #include "fs.hpp"
 
 class Accessor {
-protected:
+public:
+
+    Accessor(std::string& filename);
+    virtual ~Accessor();
+
     inline size_t position_from_bm_entry(const bcf_hdr_t *hdr, bcf1_t *line) {
 		// extraction is done by having the accessor seek the data at "BM"
-		int count = 0;
 		int ret = bcf_unpack(line, BCF_UN_ALL);
 		if (ret) { std::cerr << "bcf_unpack error" << std::endl; }
-		if (bcf_get_format_int32(hdr, line, "BM", &values, &count) < 1) {
+		if (bcf_get_format_int32(hdr, line, "BM", &values, &nvalues) < 1) {
 			std::cerr << "Failed to retrieve binary matrix index position (BM key)" << std::endl;
 			throw "BM key value not found";
 		}
         return values[0];
     }
-public:
-
-    Accessor(std::string& filename);
-    virtual ~Accessor();
 
     size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) {
         return internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
@@ -121,6 +120,7 @@ protected:
     header_t header;
     std::vector<std::string> sample_list;
     int *values{NULL};
+    int nvalues{0};
 };
 
 #endif /* __ACCESSOR_HPP__ */
