@@ -330,7 +330,7 @@ These encoded variant site are then stored in a map as for the missing positions
 
 **DEPRECATED**
 
-But still supported by compressor / decompressor
+~~But still supported by compressor / decompressor~~
 
 #### File organization
 
