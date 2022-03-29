@@ -1,10 +1,10 @@
-# xSqueezeIt - VCF / BCF Compressor
+# xSqueezeIt (XSI) - VCF / BCF Genotype Compressor
 
 VCF / BCF Genotype data compressor based on sparse representation for rare variants and positional Burrows-Wheeler transform (PBWT) followed by 16-bit Word Aligned Hybrid (WAH) encoding for common variants. (Minor Allele Frequency threshold is selectable for rare/common variants).
 
 Variant information is left in BCF format to remain compatible with HTSLIB / BCFTools, genotype data is custom encoded as described above. The encoded genotype data can then optionnaly be further compressed with zstd https://github.com/facebook/zstd/.
 
-The compressor was realized with haploid/diploid genotype data in mind (human population genetics data). The compressor supports multi-allelic variant sites. Polyploid samples with ploidy > 2 are not supported yet, mixed ploidy samples are not supported yet either. The main goal is to provide an alternative file format for storing large reference panels, to reduce loading times and if possible speed-up computation (e.g., with computation on the encoded data directly).
+The compressor was realized with haploid/diploid genotype data in mind (human population genetics data). The compressor supports multi-allelic variant sites. Polyploid samples with ploidy > 2 are not supported yet, mixed ploidy samples are supported (e.g., chrX). The main goal is to provide an alternative file format for storing large human genotype datasets, to reduce loading times and speed-up computation (e.g., with computation on the encoded data directly).
 
 *Note :* This is under development and no stable release / version / tag is available yet. The first stable release will be announced soon.
 
@@ -134,6 +134,7 @@ Options :
 
 #### Region extraction
 - `-r,--regions <regions>`
+- `-R,--regions-file <filename>`
 
 ```shell
 # Extraction (requires both files generated above) :
@@ -145,11 +146,14 @@ Options :
 
 #### Sample extraction
 - `-s,--samples <samples>`
+- `-S,--samples-file <filename>`
 
 ```shell
 # Extraction (requires both files generated above) :
 ./xsqueezeit -x -s HG00101,NA12878 -f output/chr20.xsi -o output/chr20.bcf # To compressed BCF
 ./xsqueezeit -x -s HG00101,NA12878 -f output/chr20.xsi | bcftools view # Pipes uncompressed BCF
+# List of samples in file
+./xsqueezeit -x -S samples.txt -f output/chr20.xsi -o output/chr20.bcf
 ```
 
 ### Pipe into bcftools
@@ -233,6 +237,12 @@ The `BM` entry allows to extract GT data directly from a region query on the BCF
 ### Version 4
 
 Will be described soon and will be the version for the first release.
+
+The compressor takes an input BCF and output two files :
+1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These fields are unaltered. And a single sample which holds an index at each variant entry.
+2) A binary file `.xsi` with the compressed/encoded information (e.g., "GT" data).
+
+The BCF has the XSI file name in the header and the indices allow to query the data.
 
 ### Version 3
 
