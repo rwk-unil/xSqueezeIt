@@ -207,7 +207,8 @@ bcftools view chr20.xsi_var.bcf | less
 ##FILTER=<ID=PASS,Description="All filters passed">
 ##fileDate=20150218
 ...
-##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT xsiary Matrix">
+##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT Binary Matrix">
+##XSI=filename.xsi
 ##bcftools_viewCommand=view tmp.xsi_var.bcf; Date=Tue Aug 17 16:06:34 2021
 #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  BIN_MATRIX_POS
 20      60343   rs527639301     G       A       100     PASS    AC=1;AF=0.000199681;AN=5008;NS=2504;DP=20377;EAS_AF=0;AMR_AF=0.0014;AFR_AF=0;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP   BM      0
@@ -219,258 +220,182 @@ For example here the AC, AF, AB, etc. entries have not been modified, so they ca
 
 This also shows that the compressor keeps all the information that is sometimes lost with other compressors.
 
-In this snippet we can also see the signle `BIN_MATRIX_POS` sample with a `BM` entry. This corresponds to the position of the variant(s) in the binary matrix that is encoded/compressed in the binary file. This allows for random access to the GT data from a given variant in this BCF file. This number is simply a counter of ALT_ALLELES encountered. In the snippet above it increases from 0 to 1 to 2 etc. Multi-allelic variant sites will increase this counter by the number of ALT_ALLELES. For example :
+In this snippet we can also see the single `BIN_MATRIX_POS` sample with a `BM` entry. This corresponds to the position of the variant(s) in the binary block that is encoded/compressed in the binary file. This allows for random access to the GT data from a given variant in this BCF file. This number is the block:offset (details in file format description). In the snippet above the block is 0 and it increases from 0 to 1 to 2 etc. Multi-allelic variant sites will increase this offset by the number of ALT_ALLELES. For example :
 
 ```
 20      64139   rs186497980     G       A,T     100     PASS    AC=2,2;AF=0.000399361,0.000399361;AN=5008;NS=2504;DP=20791;EAS_AF=0,0;AMR_AF=0,0;AFR_AF=0,0.0008;EUR_AF=0,0.001;SAS_AF=0.002,0;AA=.|||;VT=SNP;MULTI_ALLELIC     BM      103
 20      64150   rs7274499       C       A       100     PASS    AC=102;AF=0.0203674;AN=5008;NS=2504;DP=20555;EAS_AF=0;AMR_AF=0.0058;AFR_AF=0.0741;EUR_AF=0;SAS_AF=0;AA=.|||;VT=SNP      BM      105
 ```
 
-Where BM increases from 103 to 105 because the previous variant has two ALT_ALLELES A and T.
+Where BM increases from 103 to 105 because the previous variant has two ALT_ALLELES A and T. Because in the XSI file each alt allele is stored as a single (encoded) binary line.
 
 The `BM` entry allows to extract GT data directly from a region query on the BCF, this is needed to achieve constant time random access. This also helps when because overlapping a region may not be contiguous (e.g., with indels).
 
-** Note : ** Please note that this is for version 3, version 4 uses a little bit different BM index (block:offset) but the idea is similar.
-
-## File Format Description
-
-### Version 4
-
-Will be described soon and will be the version for the first release.
+## File Format Description (internal version 4)
 
 The compressor takes an input BCF and output two files :
-1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These fields are unaltered. And a single sample which holds an index at each variant entry.
+1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These fields are unaltered. And a single sample `BIN_MATRIX_POS` with `BM` format field which holds an index at each variant entry.
 2) A binary file `.xsi` with the compressed/encoded information (e.g., "GT" data).
 
-The BCF has the XSI file name in the header and the indices allow to query the data.
+<img src="images/xsi_arch.png" alt="XSI architecture" width="1000"/>
 
-### Version 3
+### BCF File contents
 
-#### File organization
+The BCF (named "filename.xsi_var.bcf") has the corresponding XSI file name in the header and the indices allow to query the data.
 
-This compressor takes an input BCF file and outputs two files :
+```
+##FORMAT=<ID=BM,Number=1,Type=Integer,Description="Position in GT Binary Matrix">
+##XSI=filename.xsi
+```
 
-1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These field are unaltered (other compressors often replace fields with `.` (missing))
-2) A binary file with the "GT" information encoded
+The `BM` index is a position, a 32-bit integer that can be decomposed as follows : The 15 upper bits represent the block where the data is stored, the 17 lower bits represent an index inside that block. This field is passed to an "accessor" to seek the block that holds the data and then seek inside the block itself.
 
-Technical details :
+### XSI File contents
 
-the BCF file has a single "sample" `BIN_MATRIX_POS` with a single field `BM` which contains the position of the variant in the "binary matrix" of all variants when encoded as "one-hot" (this is so that multi-allelic variant sites can be encoded efficiently).
-
-The encoded file format has the following organization
+The XSI File has the following organization :
 
 | Header                         |
 |--------------------------------|
-| GT Data Blocks                 |
-| Block indices for random access|
+| Binary Data Blocks             |
 | Sample ID's                    |
-| Missing positions as sparse    |
-| Non standard phase as sparse   |
+| Block indices for random access|
 
-The header is the main entry point to the file and other data can be accessed from there (offsets to other entries given in header).
+- The header is a 256-byte header with version information, compression information, endianness info, and location of the following fields.
+- The binary data blocks as optionnaly zstd compressed blocks (the header will tell if they are zstd compressed or not).
+- The Sample ID's are a list of sample ID strings. These are the names (IDs) of the samples in the original BCF file.
+- Finally a list of indices of the (compressed) blocks, this index is queried to get the location of a binary block inside the file from a `BM` index.
 
-##### Blocks
+#### XSI Binary blocks
 
-GT Data blocks encode a given number of variants, the offset of each block in the file is given by the block indices, this allows for constant time random access to a block.
+If the binary blocks are zstd https://github.com/facebook/zstd compressed each block consists of :
 
-The blocks can be compressed with zstd https://github.com/facebook/zstd, a bit in the header indicates if this is the case. If the blocks are compressed two 32-bit words precede each block in memory to indicate the compressed and uncompressed sizes.
+- A 32-bit number indicating the uncompressed block size.
+- Followed by the compressed data.
 
-Each (uncompressed) block has the following hierarchy :
+The 32-bit number allows to allocate the required memory before uncompressing the block.
 
-| Dictionnary |
-|-------------|
-| Data        |
+The uncompressed binary blocks consist of :
 
-###### Data
-where data are filled with :
+| Dictionnary               |
+|---------------------------|
+| GT Block                  |
+| Other data specific block |
 
-| Data                     |
-|--------------------------|
-| WAH encoded genotypes    |
-| Sparse encoded genotypes |
-| Binary encoding track    |
-| Binary sort track        |
+The dictionnary is a 32-bit associative table (key-value, both 32-bit). The first key-value pair is -1 (key) and the dictionnary size (without this entry). Reading this first key-value pair allows to know the size of the dictionnary. Each subsequent entry represent a data specific block type (key) and location relative to the start of the current block (value).
 
-- WAH encoded genotypes are Word Aligned Hybrid encoded genotypes ordered given the sample order until the binary sort track position is "true" where the haplotypes are then reordered given the current variant (Positional Burrows Wheeler Transform).
-- Sparse encoded genotypes are the id's of the haplotypes that have the minor allele. (Can be ref or alt, if ref, the number of sparse encodings has MSB bit set, this bit is not used to encode the minor allele, because minor allele means that less than 50% of all haplotypes carry that allele).
-- The binary encoding track maps each variant to either a WAH encoding or a sparse encoding.
-- The sort track indicates if the following WAH encoded genotypes ordering must be updated by the current variant (PBWT).
-Note : the encoding and sort track can be the same track.
+For the moment only GT (genotype) data is stored in XSI, the key for this data is 256. 32-bit keys (with -1 being reserved) allow for more than 4 billion data specific types. Ranges of keys can be requested and allocated through a github issue / pull request if developers are interested in encoding other specifc blocks or encode existing data types with alternative compression schemes.
 
-###### Dictionnary
-The dictionnary is a dictionnary with 32-bit keys and 32-bit values. Terminated by a {-1,-1} key pair ({0xFFFF'FFFF, 0xFFFF'FFFF}).
+The binary blocks each encode a fixed number of BCF lines (8192 per default). This is an option the can be set during compression. Because for compression the `BM` index is used and this contains the block number and offset inside the block, the decompressor does not need to explicitely know how many BCF lines are in each block.
 
-The dictionnary allows to store the following information :
-- Block size, if the block has a smaller size (needed for the last block, because the number of variants is not necesarrily a multiple of block length) this information is put in the dictionnary.
-- Offset of the WAH encoded data.
-- Offset of the Sparse encoded data.
-- Offset of the encoding track.
-- Offset of the sort track.
-- Other information, if needed by later extension to the format.
+#### Genotype GT block
 
-##### Sample ID's
+The genotype GT blocks (`include/gt_block.hpp`) consist of :
+
+| Dictionnary                 |
+|-----------------------------|
+| Common variants (PBWT+WAH)  |
+| Rare variants (Sparse)      |
+| Metadata (missing, phasing) |
+
+As for the binary blocks the dictionnary is a 32-bit (key-value associative table). The first key-value pais is -1 (key) and the dictionnary size (without this entry). The following entries can be found in the dictionnary :
+
+Scalar key-values :
+
+- `0x0 KEY_BCF_LINES` : The number of BCF lines in the block.
+- `0x1 KEY_BINARY_LINES` : The number of binary lines in the block (sum of number of alt-alleles for all BCF lines in block for example, a BCF line with multiple alt alleles will be encoded on multiple binary lines (one alt allele per binary line)).
+- `0x2 KEY_MAX_LINE_PLOIDY` : The may ploidy encountered in all the lines in the block.
+- `0x3 KEY_DEFAULT_PHASING` : The default phase state of the majority of samples, either phased `0|1` or unphased `0/1`.
+- `0x4 KEY_WEIRDNESS_STRATEGY` : (For internal use), this desribes the strategy used to compress/encode the missing / end of vector / non default phase information.
+
+Vector key-values : (values are location of the vector)
+
+- `0x10 KEY_LINE_SORT` : Binary vector that indicates if the corresponding binary line is used to sort the PBWT arrangement of subsequent common variant genotypes.
+- `0x11 KEY_LINE_SELECT` : Binary vector that indicates if the corresponding binary line is PBWT WAH encoded or sparse encoded.
+- `0x12 KEY_LINE_HAPLOID` : Optional binary vector that indicates if the corresponding binary line is haploid. (E.g., for handling chromosome X/Y where some lines can be totally haploid).
+- `0x15 KEY_VECTOR_LENGTH` : Unused vector, for future support of mixed ploidy or polyploidy > 2.
+- `0x16 KEY_LINE_MISSING` : Optional binary vector that indicates if the corresponding binary line has missing values.
+- `0x17 KEY_LINE_NON_UNIFORM_PHASING` : Optional binary vector that indicates if the corresponding binary line has non uniform phasing (mixed phased and unphased samples).
+- `0x18 KEY_LINE_END_OF_VECTORS` : Optional binary vector that indicates if the corresponding binary line has "end of vectors", BCF values the represent lower ploidy or lack of information compared to the biggest vector in the BCF line. (This allows support for mixed ploidy).
+
+Matrix key-values : (values are location of the matrix)
+
+- `0x20 KEY_MATRIX_WAH` : Matrix of WAH encoded binary lines
+- `0x21 KEY_MATRIX_SPARSE` : Matrix of sparse encoded binary lines
+- `0x26 KEY_MATRIX_MISSING` : Matrix of `strategy` encoded binary lines of missing values. Where `strategy` is given by `0x4 KEY_WEIRDNESS_STRATEGY`. Which consists of either (WAH, PBWT+WAH, or Sparse (in matrix below)). For performance the strategy is set to sparse for the moment (not possible to change this from command line). The choice intended for development and testing.
+- `0x27 KEY_MATRIX_NON_UNIFORM_PHASING`: Matrix of non uniformly phased positions.
+- `0x28 KEY_MATRIX_END_OF_VECTORS` : Same as missing but for "end of vector" BCF entries.
+- `0x36 KEY_MATRIX_MISSING_SPARSE` : Sparse matrix for missing values, (both missing matrices are used if the strategy is mixed...)
+- `0x38 KEY_MATRIX_END_OF_VECTOR_SPARSE` : Sparse matrix for "end of vector" values, (both end of vector matrices are used if the strategy is mixed...)
+
+Decoding the genotype block uses the vectors (lines) and matrices above to either recreate the original BCF data line or simply give access to the internal data structures.
+
+Internal data structures :
+
+- WAH lines : The WAH (Word Aligned Hybrid) lines are encoded using a 16-bit WAH scheme (see `include/wah.hpp`). If a line updates the PBWT sort all subsequent WAH lines are reordered given the PBWT order.
+- Sparse lines : Depending on the number of samples the sparse lines are either encoded on 16-bits (if less than 65536 samples) or 32-bits. Each sparse binary line starts by the number of sparse values followed by the indices of the samples (corresponding samples IDs strings are stored in the XSI file once). The sparse lines are not PBWT reordered because if makes no difference in compression.
+- `a` : The PBWT arrangement at the current posision as in the Durbin 2014 PBWT paper. This is not stored in the XSI file but created on the fly on traversal of the file. Binary lines that update this structure are marked by a set bit in the `LINE_SORT` vector.
+- Other data structures include the missing, end of vector, and phasing info.
+
+The binary vector lines are themselves WAH encoded to save some space.
+
+#### Sample ID's
 A sequence of null terminated strings corresponding to the sample ID's of the input BCF file.
 
-##### Missing positions as sparse
-Contains a map of variants positions that have samples with a missing entry "." in BCF/VCF. The samples that have missing entries are encoded as sparse (i.e., list of sample haplotypes that show a missing allele).
+## C API
 
-##### Non standard phase
-The compressor will check out a portion of the input BCF file to see if most samples are phased or unphased. Based on the result the format assumes that most other entries will have samples that are also phased (or unphased).
+The C API `include/c_api.h` provides a C compatible API for reading XSI files in a C program. The libxsqueezit library and C API can be exported with the command :
 
-For each variant where there are samples that are not phased in a mostly phased file (respectively phased in a mostly unphased file). The positions of the samples will be encoded as sparse.
-
-These encoded variant site are then stored in a map as for the missing positions above.
-
-#### Notes
-
-- The missing and non standard phase maps are there to support files that are not entirely phased or unphased as well as files with missing data. Theses files are however not the main focus of this compressor, therefore not much care has been put in the encoding of this. Therefore files with lots of missing data or mixed phase will not benefit from good compression ratios.
-- - Improving on this encoding or adding a second compression layer as e.g., zstd could improve this.
-
-### Version 2
-
-**DEPRECATED**
-
-~~But still supported by compressor / decompressor~~
-
-#### File organization
-
-This compressor takes an input BCF file and outputs two files :
-
-1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These field are unaltered (other compressors often replace fields with `.` (missing))
-2) A binary file with the "GT" information encoded
-
-Technical details : 
-
-the BCF file has a single "sample" `BIN_MATRIX_POS` with a single field `BM` which contains the position of the variant in the "binary matrix" of all variants when encoded as "one-hot" (this is so that multi-allelic variant sites can be encoded efficiently).
-
-The encoded file format has the following organization
-
-| Header          |
-|-----------------|
-| Indices WAH     |
-| Indices Sparse  |
-| WAH data        |
-| Sample ID's     |
-| Condition track |
-| Sparse data     |
-
-The header is the main entry point to the file and other data can be accessed from there
-
-##### Header
-
-The header is 256 bytes long and serves as an entry point for the binary file.
-
-It contains information on the data representation for example the number of bytes used for different representations, e.g., 2 bytes for `uint16_t`.
-
-It contains the offsets (addresses) to the different parts of the file.
-
-The exact C representation can be found below :
-
-```C
-struct header_s {
-    // "rsvd" fields are "reserved", unused for the moment and kept for future additions
-
-    // 32 bytes
-    uint32_t endianness = ENDIANNESS; // Endianness sanity check
-    uint32_t first_magic = MAGIC;     // File format sanity check
-    uint32_t version = VERSION;       // File format version
-    uint8_t  ploidy = PLOIDY_DEFAULT; // Ploidy of samples encoded
-    uint8_t  ind_bytes = 0;           // Number of bytes used to save indices
-    uint8_t  aet_bytes = 0;           // Number of bytes used to save positions
-    uint8_t  wah_bytes = 0;           // Number of bytes used for WAH
-    union {
-        uint8_t special_bitset = 0;
-        struct {
-            bool has_missing : 1;     // The input file had missing data
-            bool non_uniform_phasing : 1; // The input file has phased / unphased mixed data
-            uint8_t rsvd__1 : 6;
-        };
-    };
-    union {
-        uint8_t specific_bitset = 0;
-        struct {
-            bool iota_ppa : 1;        // Reset sort instead of saving permutation arrays
-            bool no_sort : 1;         // Data is not permutated
-            uint8_t rsvd__2 : 6;
-        };
-    };
-    uint8_t  rsvd_bs[2] = {0,};
-    uint32_t rsvd_1[3] = {0,};
-
-    // 64 bytes
-    uint64_t hap_samples = 0;         // Number of haplotypes
-    uint64_t num_variants = 0;        // Number of variants (total number of ALTs)
-    uint32_t block_size = 0;          // DEPRECATED
-    uint32_t number_of_blocks = 0;    // DEPRECATED
-    uint32_t ss_rate = 0;             // Sub Sample rate of permutation arrays / reset sort rate
-    // Offsets, positions of data in the binary file
-    uint32_t number_of_ssas = 0;      // Number of sampled loci for random access = ceil(num_variants/ss_rate)
-    uint32_t indices_offset = 0;      // Position in the binary file of WAH indices
-    uint32_t ssas_offset = 0;         // Position in the binary file of sub sampled permutation arrays (if any)
-    uint32_t wahs_offset = 0;         // Position in the binary file of WAH data
-    uint32_t samples_offset = 0;      // Position in the binary file of samples (e.g., "NA12878", "HG00101")
-    uint32_t indices_sparse_offset = 0; // Position in the binary file of indices for the sparse data
-    uint32_t rsvd_offset = 0;
-    uint32_t rearrangement_track_offset = 0; // Position in the binary file of the rearrangement track
-    uint32_t sparse_offset = 0;       // Position in the binary file of the sparse data
-
-    // 128 bytes
-    uint32_t rare_threshold = 0;      // Threshold for the rearrangement track / sorting / wah vs sparse
-    uint64_t xcf_entries = 0;         // Num entries in the BCF file (may be less than num_variants if multi-allelic)
-    uint8_t rsvd_3[116] = {0,};
-
-    // 32 bytes
-    uint32_t rsvd_4[3] = {0,};
-    uint32_t sample_name_chksum = 0;; // Checksum unused for now
-    uint32_t bcf_file_chksum = 0;     // Checksum unused for now
-    uint32_t data_chksum = 0;         // Checksum unused for now
-    uint32_t header_chksum = 0;       // Checksum unused for now
-    uint32_t last_magic = MAGIC;      // Sanity check magic
-} __attribute__((__packed__));
+```shell
+make package-sources
 ```
 
-##### Indices
+which will create a directory `xsqueezeit_export` with a makefile that allows to build `libxsqueezeit.a`, the xsqueezeit library. Including `include/c_api.h` from the same folder and linking with `libxsqueezeit.a` allow for mixed XSI/VCF/BCF file reading from C programs.
 
-Indices allow for random access, they are sampled every `header.ss_rate` variant, they reflect the position of the pointers to the encoded data at the sampled position.
+An example application can be found in `c_api_test`.
 
-Because sparse data as well as WAH data (similar to RLE) encode a fixed number of bits with a variable number of bits, random access is not directly possible. The indices allow for random access at sampled positions from there access to a given position is possible by traversing the data.
+Another example is the addition of XSI support in SHAPEIT4 https://github.com/rwk-unil/shapeit4/tree/dev. Specifically see : https://github.com/rwk-unil/shapeit4/blob/dev/src/io/genotype_reader2.cpp (`#ifdef __XSI__` for reference).
 
-##### Data
+## Allele count and Allele number computation
 
-Variants are represented internally as bi-allelic 0-1 values (0 is REF) (1 is ALT). The BCF is unaltered in this regard.
+See directory `af_stats` which provides a program that recomputes allele counts and allele numbers from an XSI file.
 
-Bi-allelic sites with minor allele frequency (MAF) above a given threshold are encoded as WAH, those below are encoded as Sparse (indices of samples with minor allele).
+## Dot products
 
-##### Condition track
+See directory `dot_prod` which provides a benchmark that computes dot products between all bi-allelic sites and a random phenotype vector. The genotypes can be loaded from either a BCF or XSI files. Internal data structures and "compressive acceleration" is used when an XSI file is provided.
 
-The condition track represents if a given bi-allelic variant is saved as WAH or as Sparse, as well as, if the variant is used to sort the data.
+## Loading time
 
-### Version 1
+Loads all genotypes of a file (either XSI or BCF) into memory, one line at the time, once every line has been loaded once the time is shown. This allows to benchmark data loading from either format. The HTSLIB is used in both cases, only the method `bcf_get_genotypes()` is replaced by our own decompression when an XSI file is used.
 
-**DEPRECATED**
+## Lockstep loader
 
-- Uses reverse prefix sort, as in the Positional Burrows Wheeler Transform (PBWT), to group related haplotypes together.
-- Only uses variants with MAF > 0.01 for sorting
-- Can store permutation arrays for random access (costly if many samples) every 8192 variants
-- Can reset the sort for faster random access every 8192 variants
-  - The sort being reset reduces compression of genotype data but this is offset by the fact that     permutation arrays are not stored
-- Encodes the genotype data with Word Aligned Hybrid (WAH) on 16-bits
+Load genotypes from two files and checks that the two files have the same genotypes for all variants they contain. This allows to check if an XSI file and a BCF file hold the same data. This also allows to compare XSI against XSI or BCF against BCF.
 
-## Notes / TODO
+Example :
 
-- Document v4 format and update changes above
-- ~~Rename the compressor (currently named console_app ...)~~ Done !
-- ~~Only outputs data as phased for the moment~~ Done !
-- ~~Handle missing~~ Done !
-- ~~Only supports bi-allelic sites for the moment~~ Done !
-    - (not needed anymore) Convert multi-allelic VCF/BCF to bi-allelic with bcftools :  
-      ```shell
-      bcftools norm -m any multi_allelic.bcf -o bi_allelic.bcf -O b
-      ```
+```
+lockstep_loader % ./lockstep_loader --file1 ../../Data/1kgp3/chrX.bcf --file2 ../chrX/chrX.xsi
+Lockstep loader test
+ext1 bcf ext2 xsi
+Checked 17368209744 GT entries
+Files have the same GT data
+```
 
-## Further works
+## Validation through integration testing
 
-- ~~Extraction~~Done !
-- ~~Filtering~~ Done !
-- ~~Based on the block compression scheme for faster access~~ Done !
-- ~~Based on permutation sub sampling for faster / parallel access~~ Done !
+The directory `test` provides cukinia scripts to run integration tests that check that the features of XSI work.
+
+- Check if missing data works
+- Check if end of vector works (samples with smaller ploidy mixed in)
+- Check if non uniform phasing works (samples that are unphased at some variants)
+- Check if missing and non uniform phasing work together
+- Check if some variants can have a global different ploidy than other (does not yet work)
+- Check if files that span multiple blocks are recovered
+- Check if zstd compression works
+- Check if region extraction works
+- Check if sample extraction works
+- Check combinations of the above...
+
+The tests rely on comparing the output of `bcftools view` of the XSI compressed-decompressed files through the utility `diff` against the reference input files, diff may run out of memory on big files (because the uncompressed textual result of bcftools is checked, i.e. plain VCF). These test allow to check that the files contain the same data.
+
+For testing bigger files we recommend either using the lockstep loader above (for checking GT data) or bcftools to compare the rest of the data.
