@@ -237,7 +237,7 @@ The compressor takes an input BCF and output two files :
 1) A BCF file with the original variant info, with following fields (`CHROM POS ID REF ALT QUAL FILTER INFO FORMAT`). These fields are unaltered. And a single sample `BIN_MATRIX_POS` with `BM` format field which holds an index at each variant entry.
 2) A binary file `.xsi` with the compressed/encoded information (e.g., "GT" data).
 
-<img src="images/xsi_arch.png" alt="XSI architecture" width="1000"/>
+<img src="images/XSI_arch.png" alt="XSI architecture" width="1000"/>
 
 ### BCF File contents
 
