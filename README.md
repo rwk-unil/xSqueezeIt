@@ -1,5 +1,16 @@
 # xSqueezeIt (XSI) - VCF / BCF Genotype Compressor
 
+Publication : https://doi.org/10.1093/bioinformatics/btac413
+
+```
+@article{wertenbroek2022xsi,
+  title={XSI-A genotype compression tool for compressive genomics in large biobanks},
+  author={Wertenbroek, Rick and Rubinacci, Simone and Xenarios, Ioannis and Thoma, Yann and Delaneau, Olivier},
+  journal={Bioinformatics},
+  year={2022}
+}
+```
+
 VCF / BCF Genotype data compressor based on sparse representation for rare variants and positional Burrows-Wheeler transform (PBWT) followed by 16-bit Word Aligned Hybrid (WAH) encoding for common variants. (Minor Allele Frequency threshold is selectable for rare/common variants).
 
 Variant information is left in BCF format to remain compatible with HTSLIB / BCFTools, genotype data is custom encoded as described above. The encoded genotype data can then optionnaly be further compressed with zstd https://github.com/facebook/zstd/.
