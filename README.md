@@ -53,6 +53,15 @@ while (bcf_sr_next_line (reader)) { // While there are records in the BCF
 
 ## Build
 
+### Dockerfile
+
+```shell
+# Build
+docker build -f Dockerfile -t xsi:xsi .
+# Run
+docker run xsi:xsi xsqueezeit # arguments ...
+```
+
 ### Building the xSqueezeIt command line tool
 
 This build requires GCC 8+ because modern C++17 features are used.
