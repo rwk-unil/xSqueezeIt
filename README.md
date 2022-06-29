@@ -403,7 +403,7 @@ Files have the same GT data
 
 ## Validation through integration testing
 
-The directory `test` provides cukinia scripts to run integration tests that check that the features of XSI work.
+The directory `test` provides [cukinia](https://github.com/savoirfairelinux/cukinia) scripts to run integration tests that check that the features of XSI work.
 
 - Check if missing data works
 - Check if end of vector works (samples with smaller ploidy mixed in)
