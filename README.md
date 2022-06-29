@@ -1,6 +1,6 @@
 # xSqueezeIt (XSI) - VCF / BCF Genotype Compressor
 
-Publication : https://doi.org/10.1093/bioinformatics/btac413
+Publication : [XSI - A genotype compression tool for compressive genomics in large biobanks](https://doi.org/10.1093/bioinformatics/btac413)
 
 ```
 @article{wertenbroek2022xsi,
