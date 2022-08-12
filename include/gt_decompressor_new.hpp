@@ -117,26 +117,18 @@ private:
             } else {
                 initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions_file, true /*is file*/);
             }
-
-            create_output_file(ofname, fp, hdr);
-            if (output_file_is_xsi) {
-                decompress_inner_loop<true /* Non linear access */, true /* XSI */>(bcf_fri, hdr, fp);
-            } else {
-                decompress_inner_loop<true /* Non linear access */, false /* XSI */>(bcf_fri, hdr, fp);
-            }
         } else {
-            // Read the bcf without the samples (variant info)
             initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
+        }
 
-            create_output_file(ofname, fp, hdr);
+        create_output_file(ofname, fp, hdr);
 
-            // Decompress and add the genotype data to the new file
-            // This is the main loop, where most of the time is spent
-            if (output_file_is_xsi) {
-                decompress_inner_loop<false /* Non linear access */, true /* XSI */>(bcf_fri, hdr, fp);
-            } else {
-                decompress_inner_loop<false /* Non linear access */, false /* XSI */>(bcf_fri, hdr, fp);
-            }
+        // Decompress and add the genotype data to the new file
+        // This is the main loop, where most of the time is spent
+        if (output_file_is_xsi) {
+            decompress_inner_loop<true /* XSI */>(bcf_fri, hdr, fp);
+        } else {
+            decompress_inner_loop<false /* XSI */>(bcf_fri, hdr, fp);
         }
 
         if (output_file_is_xsi) {
@@ -160,7 +152,7 @@ private:
     }
 
     // Is templated for performance reasons
-    template<const bool RECORD_NONLINEAR = false, const bool XSI = false>
+    template<const bool XSI = false>
     inline void decompress_inner_loop(bcf_file_reader_info_t& bcf_fri, bcf_hdr_t *hdr, htsFile *fp) {
         uint32_t bm_index = 0;
         //const int32_t an = samples_to_use.size() * header.ploidy;
