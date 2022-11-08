@@ -88,13 +88,13 @@ protected:
 /// @todo check this derivation !
 class EncodingBinaryBlockWithGT : public EncodingBinaryBlock<uint32_t, uint32_t, BlockWithZstdCompressor> {
 public:
-    EncodingBinaryBlockWithGT(const size_t num_samples, const size_t block_bcf_lines, const size_t MAC_THRESHOLD, const int32_t default_phasing) :
+    EncodingBinaryBlockWithGT(const size_t num_hap_samples, const size_t block_bcf_lines, const size_t MAC_THRESHOLD, const int32_t default_phasing) :
         EncodingBinaryBlock(block_bcf_lines) {
         // Add the gt writable encoder
         this->writable_block_encoders[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY] =
-            ((num_samples <= std::numeric_limits<uint16_t>::max()) ?
-            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint16_t, uint16_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)) :
-            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)));
+            ((num_hap_samples <= std::numeric_limits<uint16_t>::max()) ?
+            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint16_t, uint16_t> >(num_hap_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)) :
+            std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_hap_samples, block_bcf_lines, MAC_THRESHOLD, default_phasing)));
         this->writable_dictionary[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY] =
             std::static_pointer_cast<IWritable>(this->writable_block_encoders[IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY]);
     }
@@ -227,7 +227,7 @@ private:
     inline void create_new_block() {
         auto generic_encoder = std::make_unique<GenericEncodingBinaryBlock<BlockWithZstdCompressor> >(params.BLOCK_LENGTH_IN_BCF_LINES);
         if (params.active_encoders.find(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GT_ENTRY) != params.active_encoders.end()) {
-            generic_encoder->add_encoder((num_samples <= std::numeric_limits<uint16_t>::max()) ?
+            generic_encoder->add_encoder((N_HAPS <= std::numeric_limits<uint16_t>::max()) ?
                 std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint16_t, uint16_t> >(num_samples, params.BLOCK_LENGTH_IN_BCF_LINES, params.MINOR_ALLELE_COUNT_THRESHOLD, params.default_phased)) :
                 std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_samples, params.BLOCK_LENGTH_IN_BCF_LINES, params.MINOR_ALLELE_COUNT_THRESHOLD, params.default_phased)));
         }
