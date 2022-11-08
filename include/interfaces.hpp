@@ -153,7 +153,7 @@ public:
 
 class IWritableBCFLineEncoder : public IWritable, public IBCFLineEncoder {
 public:
-    // Abstract
+    /// @note Abstract made to require the combination of the two interfaces above
 
     virtual ~IWritableBCFLineEncoder() {}
 };
@@ -161,9 +161,11 @@ public:
 template <typename T_KEY = uint32_t, typename T_VAL = uint32_t>
 class IBinaryBlock {
 public:
+    /** @note Absolutely Never Ever change the values below under any circumstance ! */
     enum Dictionary_Keys : T_KEY {
         KEY_DICTIONNARY_SIZE = (T_KEY)-1,
         KEY_BCF_LINES = 0,
+        KEY_SHAPEIT5_ENTRY = 195,
         KEY_GT_ENTRY = 256,
     };
 
@@ -191,21 +193,7 @@ public:
 
         // Block starts with dictionary size (key could be removed but helps recognize this)
         dictionary.erase(KEY_DICTIONNARY_SIZE); // Make sure the size is not in the dictionary
-#if 0
-        s.write(reinterpret_cast<const char*>(&DICTIONNARY_SIZE_KEY), sizeof(T_KEY));
-        T_VAL dictionary_size = dictionary.size();
-        s.write(reinterpret_cast<const char*>(&dictionary_size), sizeof(T_VAL));
-
-        dictionary_pos = s.tellp();
-
-        // Write dictionary (both combined)
-        for (const auto& kv : dictionary) {
-            s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(T_KEY));
-            s.write(reinterpret_cast<const char*>(&(kv.second)), sizeof(T_VAL));
-        }
-#else
         dictionary_pos = write_dictionary(s, dictionary);
-#endif
 
         // Write all the writables (extended entries)
         for (const auto& kv : writable_dictionary) {
@@ -223,20 +211,7 @@ public:
         block_end_pos = s.tellp();
 
         // Update the entries in dictionary on file
-#if 0
-        s.seekp(dictionary_pos, std::ios_base::beg);
-
-        /// @todo here all entries are rewritten, this can be optimized if needed
-        for (const auto& kv : dictionary) {
-            s.write(reinterpret_cast<const char*>(&(kv.first)), sizeof(T_KEY));
-            s.write(reinterpret_cast<const char*>(&(kv.second)), sizeof(T_VAL));
-        }
-
-        // Set stream back to end of file
-        s.seekp(block_end_pos, std::io_bas::beg);
-#else
         update_dictionary(s, dictionary_pos, dictionary);
-#endif
 
         if (compressed) {
             size_t tmp_file_size = block_end_pos - block_start_pos;
@@ -285,6 +260,10 @@ class BlockEntry {
 #include <iostream>
 #include <zstd.h>
 template<typename T_KEY, typename T_VAL> /// @todo maybe not template this
+/**
+ * @brief This allows to compress with ZSTD, another compressor could be used, and therefore provide
+ *        an alternative compress_and_write() implementation
+ */
 class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
     typedef uint32_t T;
     static_assert(std::numeric_limits<T>::is_integer, "");
