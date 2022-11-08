@@ -56,12 +56,12 @@ public:
     virtual void compress_to_file(std::string filename) = 0;
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
-    void set_reset_sort_block_length(size_t new_block_length) {RESET_SORT_BLOCK_LENGTH = new_block_length;}
+    void set_reset_sort_block_length(size_t new_block_length) {BLOCK_LENGTH_IN_BCF_LINES = new_block_length;}
 
     virtual ~GtCompressor() {}
 
     double MAF = 0.01;
-    size_t RESET_SORT_BLOCK_LENGTH = 8192;
+    size_t BLOCK_LENGTH_IN_BCF_LINES = 8192;
 };
 
 #include "xsi_factory.hpp" // Depends on InternalGtRecord
@@ -104,8 +104,10 @@ protected:
 
         this->default_phased = seek_default_phased(this->ifname);
 
-        // Requires the bcf gile reader to have been handled to extract the relevant information, this also means we are in the "traverse phase"
-        this->factory = make_unique<XSIF>(ofname, this->RESET_SORT_BLOCK_LENGTH, this->MINOR_ALLELE_COUNT_THRESHOLD, this->default_phased, this->sample_list, zstd_compression_on, zstd_compression_level);
+        // Requires the bcf file reader to have been handled to extract the relevant information, this also means we are in the "traverse phase"
+        XsiFactoryInterface::XsiFactoryParameters params(ofname, this->BLOCK_LENGTH_IN_BCF_LINES, this->MAF, this->MINOR_ALLELE_COUNT_THRESHOLD,
+            this->sample_list, this->default_phased, zstd_compression_on, zstd_compression_level);
+        this->factory = make_unique<XSIF>(params);
     }
 
     void handle_bcf_line() override {
@@ -167,7 +169,7 @@ public:
     NewCompressor(uint32_t version) : VERSION(version) {}
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
-    void set_reset_sort_block_length(size_t reset_sort_block_length) {RESET_SORT_BLOCK_LENGTH = reset_sort_block_length;}
+    void set_reset_sort_block_length(size_t reset_sort_block_length) {BLOCK_LENGTH_IN_BCF_LINES = reset_sort_block_length;}
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
@@ -186,7 +188,7 @@ public:
             _compressor = make_unique<GtCompressorStream<XsiFactoryExt<uint32_t> > >(zstd_compression_on, zstd_compression_level);
         }
         _compressor->set_maf(MAF);
-        _compressor->set_reset_sort_block_length(RESET_SORT_BLOCK_LENGTH);
+        _compressor->set_reset_sort_block_length(BLOCK_LENGTH_IN_BCF_LINES);
         _compressor->init_compression(filename);
     }
     void compress_to_file(std::string filename) {
@@ -201,7 +203,7 @@ protected:
     const uint32_t VERSION;
     std::unique_ptr<GtCompressor> _compressor = nullptr;
     double MAF = 0.01;
-    size_t RESET_SORT_BLOCK_LENGTH = 8192;
+    size_t BLOCK_LENGTH_IN_BCF_LINES = 8192;
     bool zstd_compression_on = false;
     int zstd_compression_level = 7;
 };

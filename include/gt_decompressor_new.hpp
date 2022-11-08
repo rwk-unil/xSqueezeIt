@@ -492,13 +492,15 @@ public:
             const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * global_app_options.maf;
             int32_t default_phased = header.default_phased ? 1 : 0;
             const size_t BLOCK_SIZE = header.ss_rate;
-            /// @todo integrate v4 instead of v3 !!
+
+            XsiFactoryInterface::XsiFactoryParameters params(
+                ofname, BLOCK_SIZE, NAN /** @todo */, MINOR_ALLELE_COUNT_THRESHOLD, samples, default_phased,
+                global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level
+            );
             if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-                xsi_factory = make_unique<XsiFactoryExt<uint16_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
-                    samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
+                xsi_factory = make_unique<XsiFactoryExt<uint16_t, uint16_t> >(params);
             } else {
-                xsi_factory = make_unique<XsiFactoryExt<uint32_t, uint16_t> >(ofname, BLOCK_SIZE, MINOR_ALLELE_COUNT_THRESHOLD, default_phased,
-                    samples, global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level);
+                xsi_factory = make_unique<XsiFactoryExt<uint32_t, uint16_t> >(params);
             }
         } else {
             // Remove BM Format
