@@ -176,17 +176,9 @@ public:
     void init_compression(std::string filename) {
         bcf_file_reader_info_t bcf_fri;
         initialize_bcf_file_reader(bcf_fri, filename);
-        size_t PLOIDY = 2;
-        size_t N_HAPS = bcf_fri.n_samples * PLOIDY;
         destroy_bcf_file_reader(bcf_fri);
 
-        // If less than 2^16 haplotypes use a compressor that uses uint16_t as indices
-        if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-            // If needed handle versions here
-            _compressor = make_unique<GtCompressorStream<XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
-        } else { // Else use a compressor that uses uint32_t as indices
-            _compressor = make_unique<GtCompressorStream<XsiFactoryExt<uint32_t> > >(zstd_compression_on, zstd_compression_level);
-        }
+        _compressor = make_unique<GtCompressorStream<XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
         _compressor->set_maf(MAF);
         _compressor->set_reset_sort_block_length(BLOCK_LENGTH_IN_BCF_LINES);
         _compressor->init_compression(filename);
