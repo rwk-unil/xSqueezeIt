@@ -497,11 +497,7 @@ public:
                 ofname, BLOCK_SIZE, NAN /** @todo */, MINOR_ALLELE_COUNT_THRESHOLD, samples, default_phased,
                 global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level
             );
-            if (N_HAPS <= std::numeric_limits<uint16_t>::max()) {
-                xsi_factory = make_unique<XsiFactoryExt<uint16_t, uint16_t> >(params);
-            } else {
-                xsi_factory = make_unique<XsiFactoryExt<uint32_t, uint16_t> >(params);
-            }
+            xsi_factory = make_unique<XsiFactoryExt<uint16_t> >(params);
         } else {
             // Remove BM Format
             bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");

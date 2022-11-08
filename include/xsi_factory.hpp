@@ -139,8 +139,9 @@ public:
     virtual ~GenericEncodingBinaryBlock() {}
 };
 
-template <typename A_T = uint32_t, typename WAH_T = uint16_t>
+template <typename WAH_T = uint16_t>
 class XsiFactoryExt : public XsiFactoryInterface {
+    static_assert(sizeof(WAH_T) == sizeof(uint16_t)); /** @note make sure this is enforced for the moment */
 public:
     XsiFactoryExt(const XsiFactoryParameters& params) :
         params(params),
@@ -161,6 +162,8 @@ public:
             throw "Failed to open file";
         }
 
+        size_t aet_bytes = ((N_HAPS <= std::numeric_limits<uint16_t>::max()) ? sizeof(uint16_t) : sizeof(uint32_t));
+
         ////////////////////////
         // Prepare the header //
         ////////////////////////
@@ -168,7 +171,7 @@ public:
             .version = (uint32_t)4, // New testing version
             .ploidy = (uint8_t)-1, // Will be rewritten
             .ind_bytes = sizeof(uint32_t), // Should never change
-            .aet_bytes = sizeof(A_T), // Depends on number of hap samples
+            .aet_bytes = (uint8_t)aet_bytes, // Depends on number of hap samples
             .wah_bytes = sizeof(WAH_T), // Should never change
             .hap_samples = (uint64_t)-1, // Will be rewritten
             .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
