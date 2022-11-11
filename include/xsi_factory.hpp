@@ -271,6 +271,18 @@ public:
             current_block->write_to_file(s, params.compression_on, params.compression_level);
         }
 
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << "blocks " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+
+        ////////////////////////////
+        // Write the sample names //
+        ////////////////////////////
+        header.samples_offset = total_bytes;
+        for(const auto& sample : params.sample_list) {
+            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
+        }
+
         // Alignment padding...
         size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
         if (mod_uint32) {
@@ -282,7 +294,7 @@ public:
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << "blocks " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         ///////////////////////
         // Write the indices //
@@ -296,18 +308,6 @@ public:
 
         header.indices_sparse_offset = (uint32_t)-1; // Not used
         header.ssas_offset = (uint32_t)-1; // Not used in this compressor
-
-        ////////////////////////////
-        // Write the sample names //
-        ////////////////////////////
-        header.samples_offset = total_bytes;
-        for(const auto& sample : params.sample_list) {
-            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
-        }
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
         header.sparse_offset = (uint32_t)-1; // Not used
 
