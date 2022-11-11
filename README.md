@@ -87,7 +87,7 @@ git clone https://github.com/rwk-unil/xSqueezeIt.git
 cd xSqueezeIt
 
 # Clone and build htslib (if you already have htslib set Makefile accordingly and skip)
-git submodule update --init htslib
+git submodule update --init --recursive htslib
 cd htslib
 autoheader
 autoconf
