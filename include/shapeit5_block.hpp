@@ -177,6 +177,7 @@ private:
         // Those are offsets
         dictionary[ShapeIt5BlockDict::KEY_LINE_NON_BIALLELIC] = ShapeIt5BlockDict::VAL_UNDEFINED;
         dictionary[ShapeIt5BlockDict::KEY_LINE_SPARSE] = ShapeIt5BlockDict::VAL_UNDEFINED;
+        dictionary[ShapeIt5BlockDict::KEY_LINE_SEEK] = ShapeIt5BlockDict::VAL_UNDEFINED;
         dictionary[ShapeIt5BlockDict::KEY_MATRIX_COMMON] = ShapeIt5BlockDict::VAL_UNDEFINED;
         dictionary[ShapeIt5BlockDict::KEY_MATRIX_SPARSE] = ShapeIt5BlockDict::VAL_UNDEFINED;
     }
