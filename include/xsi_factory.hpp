@@ -257,6 +257,19 @@ private:
 public:
 
     void finalize_file(const size_t max_ploidy) override {
+        /** @note Represents the layout written below, the layout has no impact on access, only on how to compute the sizes of layout elements
+         *        0 is old layout, 1 is layout that reflects the oxbio paper diagram (indices and sample names were swapped in old), note that the
+         *        layout has no impact on file size (if we want to be really picky it can have up to 3 bytes difference because of 32-bit alignment
+         *        of indices), file access performace has no difference, it's just how we concat the data.
+         *        0 was : Header - Binary Blocks - (0-3 bytes padding) - Indices - Sample Names
+         *        1 is : Header - Binary Blocks - Sample Names - (0-3 bytes padding) Indices
+         *
+         *        The only time the layout is important is to compute the size of each of the concatenated elements, because the size is computed by :
+         *        "offset of the next element" - "offset of the current element", this size is not used in decompression or access functions, only
+         *        when a file is passed with the "--info" command to show the size of the elements (most of the file size is the Binary Blocks).
+         */
+        header.xsi_layout = 1;
+
         header.num_variants = this->variant_counter;
 
         header.xcf_entries = this->entry_counter;

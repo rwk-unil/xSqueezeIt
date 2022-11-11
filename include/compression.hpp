@@ -66,7 +66,8 @@ struct header_s {
             uint8_t rsvd__2 : 5;
         };
     };
-    uint8_t  rsvd_bs[2] = {0,};
+    uint8_t  xsi_layout = 0;          // Layout version of the XSI binary file (does not matter for access)
+    uint8_t  rsvd_bs[1] = {0,};
     uint32_t rsvd_1[3] = {0,};
 
     // 64 bytes

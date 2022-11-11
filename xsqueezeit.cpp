@@ -86,12 +86,15 @@ int main(int argc, const char *argv[]) {
             if (ret == 0) {
                 print_header_info(hdr);
                 std::cerr << "INFO : Header is\t\t\t" << sizeof(header_t) << " bytes" << std::endl;
-                if (hdr.version < 3) {
-                    std::cerr << "INFO : Indices is\t\t\t" << hdr.ssas_offset - hdr.indices_offset << " bytes" << std::endl;
-                    std::cerr << "INFO : Subsampled permutation arrays is\t" << hdr.wahs_offset - hdr.ssas_offset << " bytes" << std::endl;
+                if (hdr.xsi_layout == 0) {
+                    std::cerr << "INFO : Binary data is \t\t\t" << hdr.indices_offset - sizeof(header_t) << " bytes" << std::endl;
+                    std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
+                    std::cerr << "INFO : Indices are\t\t\t" << hdr.samples_offset - hdr.indices_offset << " bytes" << std::endl;
+                } else if (hdr.xsi_layout == 1) {
+                    std::cerr << "INFO : Binary data is \t\t\t" << hdr.samples_offset - sizeof(header_t) << " bytes" << std::endl;
+                    std::cerr << "INFO : Samples list is\t\t\t" << hdr.indices_offset - hdr.samples_offset << " bytes" << std::endl;
+                    std::cerr << "INFO : Indices are\t\t\t" << fs::file_size(filename) - hdr.indices_offset << " bytes" << std::endl;
                 }
-                std::cerr << "INFO : WAH Genotype data is\t\t" << hdr.samples_offset - hdr.wahs_offset << " bytes" << std::endl;
-                //std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
             }
         }
         std::cerr << std::endl;
