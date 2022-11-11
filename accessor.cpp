@@ -23,6 +23,35 @@
  ******************************************************************************/
 #include "accessor.hpp"
 
+static void extract_sample_list(std::vector<std::string>& sample_list, std::fstream& s, size_t offset, size_t num_samples) {
+    sample_list.clear();
+    s.seekg(offset);
+    std::string str;
+    while(std::getline(s, str, '\0').good() and (sample_list.size() < num_samples)) {
+        sample_list.push_back(str);
+    }
+}
+
+std::vector<std::string> Accessor::extract_sample_list(std::string filename) {
+    std::vector<std::string> sample_list;
+
+    std::fstream s(filename, s.binary | s.in);
+    if (!s.is_open()) {
+        std::cerr << "Failed to open file " << filename << std::endl;
+        throw "Failed to open file";
+    }
+
+    // Read the header
+    header_t header;
+    s.read((char *)(&header), sizeof(header_t));
+
+    ::extract_sample_list(sample_list, s, header.samples_offset, header.hap_samples/header.ploidy);
+
+    s.close();
+
+    return sample_list;
+}
+
 Accessor::Accessor(std::string& filename) : filename(filename) {
     std::fstream s(filename, s.binary | s.in);
     if (!s.is_open()) {
@@ -41,23 +70,13 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
     }
 
     // Check version
-    if (header.version != 2 and header.version != 3) {
-        if (header.version == 4) {
-            //std::cerr << "Experimental version" << std::endl;
-        } else {
-            std::cerr << "Bad version" << std::endl;
-            throw "Bad version";
-        }
+    if (header.version != 4) {
+        std::cerr << "Bad version" << std::endl;
+        throw "Bad version";
     }
 
     // Extract the sample list
-    sample_list.clear();
-    s.seekg(header.samples_offset);
-    std::string str;
-    while(std::getline(s, str, '\0').good() and (sample_list.size() < (header.hap_samples/header.ploidy))) {
-        sample_list.push_back(str);
-    }
-    s.close();
+    sample_list = extract_sample_list(filename);
 
     if (header.aet_bytes == 2) {
         if (header.version == 4) {

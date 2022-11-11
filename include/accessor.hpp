@@ -110,6 +110,7 @@ public:
         }
     }
 
+    static std::vector<std::string> extract_sample_list(std::string filename);
     std::vector<std::string>& get_sample_list() {return sample_list;}
     size_t get_number_of_samples() const {return sample_list.size();}
     const header_t& get_header_ref() const {return header;}
