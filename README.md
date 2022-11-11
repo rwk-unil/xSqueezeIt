@@ -21,7 +21,9 @@ Variant information is left in BCF format to remain compatible with HTSLIB / BCF
 
 The compressor was realized with haploid/diploid genotype data in mind (human population genetics data). The compressor supports multi-allelic variant sites. Polyploid samples with ploidy > 2 are not supported yet, mixed ploidy samples are supported (e.g., chrX). The main goal is to provide an alternative file format for storing large human genotype datasets, to reduce loading times and speed-up computation (e.g., with computation on the encoded data directly).
 
-Current version : 4
+Release version : `v4.0.0`
+Development version : `v4.0.1`
+Versions 1-3 are deprecated and were never published, they can still be built from the git history, but are not intended to be used anymore.
 
 ## Example results
 
