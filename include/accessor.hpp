@@ -25,7 +25,6 @@
 #define __ACCESSOR_HPP__
 
 #include "accessor_internals.hpp"
-#include "accessor_internals_new.hpp"
 #include "fs.hpp"
 
 class Accessor {
