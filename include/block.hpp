@@ -36,7 +36,6 @@
 #include "fs.hpp"
 
 #include "wah.hpp"
-using namespace wah;
 
 class Writable {
 public:
@@ -51,7 +50,7 @@ inline void write_vector(std::fstream& s, const std::vector<T>& v) {
     s.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(decltype(v.back())));
 }
 
-template <typename T = uint32_t, class Pred = DefaultPred>
+template <typename T = uint32_t, class Pred = wah::DefaultPred>
 class Sparse {
 public:
     Sparse() {}
@@ -77,12 +76,12 @@ public:
 
 
 template <typename T = uint32_t>
-class SparseGtLine : public Sparse<T, DefaultPred> {
+class SparseGtLine : public Sparse<T, wah::DefaultPred> {
 public:
     SparseGtLine() {}
 
     SparseGtLine(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t sparse_allele) :
-        Sparse<T, DefaultPred>(index, gt_array, ngt, sparse_allele), sparse_allele(sparse_allele) {}
+        Sparse<T, wah::DefaultPred>(index, gt_array, ngt, sparse_allele), sparse_allele(sparse_allele) {}
 
     int32_t sparse_allele = 0;
 
