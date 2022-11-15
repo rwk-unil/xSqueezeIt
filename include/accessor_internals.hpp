@@ -71,10 +71,6 @@ private:
         // If block ID is not current block
         if (!dp or current_block != block_id) {
             set_gt_block_ptr(block_id);
-
-            // Make DecompressPointer
-            dp = make_unique<DecompressPointerGTBlock<A_T, WAH_T> >(header, gt_block_p);
-            //std::cerr << "Block ID : " << block_id << " offset : " << offset << std::endl;
         }
 
         dp->seek(offset);
@@ -98,9 +94,10 @@ public:
         return dp->get_allele_count_ref();
     }
 
+    /** @todo template the function and cast */
     inline InternalGtAccess get_internal_access(size_t n_alleles, size_t position) override {
         seek(position);
-        return dp->get_internal_access(n_alleles);
+        return static_cast<DecompressPointerGTBlock<A_T, WAH_T>* >(dp.get())->get_internal_access(n_alleles);
     }
 
     AccessorInternalsNewTemplate(std::string filename) {
@@ -175,14 +172,22 @@ protected:
         current_block = block_id;
         char* p = (char*)block_p;
 
-        try {
-            p += block_dictionary.at(IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY);
-        } catch (...) {
+        auto kv_p = block_dictionary.find(IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY);
+        if (kv_p != block_dictionary.end()) {
+            p += kv_p->second;
+            gt_block_p = p;
+            // Make DecompressPointer
+            dp = make_unique<DecompressPointerGTBlock<A_T, WAH_T> >(header, gt_block_p);
+            //std::cerr << "Block ID : " << block_id << " offset : " << offset << std::endl;
+        } else if ((kv_p = block_dictionary.find(IBinaryBlock<uint32_t, uint32_t>::KEY_SHAPEIT5_ENTRY)) != block_dictionary.end()) {
+            p += kv_p->second;
+            gt_block_p = p;
+            //dp = make_unique<DecompressPointerShapeIt5Block>(header, gt_block_p);
+        } else {
             std::cerr << "Binary block does not have GT block" << std::endl;
+            gt_block_p = nullptr;
             throw "block error";
         }
-
-        gt_block_p = p;
     }
 
     inline void set_block_ptr(const size_t block_id) {
@@ -227,7 +232,7 @@ protected:
 
     void* block_p = nullptr;
     void* gt_block_p = nullptr;
-    std::unique_ptr<DecompressPointerGTBlock<A_T, WAH_T> > dp = nullptr;
+    std::unique_ptr<DecompressPointerGT> dp = nullptr;
     size_t current_block = -1;
     std::map<uint32_t, uint32_t> block_dictionary;
 };

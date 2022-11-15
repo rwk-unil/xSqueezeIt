@@ -740,8 +740,20 @@ public:
     }
 };
 
+class DecompressPointerGT : public GTBlockDict {
+public:
+    DecompressPointerGT() {}
+
+    virtual void seek(const size_t position) = 0;
+    virtual size_t fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) = 0;
+    virtual void fill_allele_counts_advance(const size_t n_alleles) = 0;
+    virtual const std::vector<size_t>& get_allele_count_ref() const = 0;
+
+    virtual ~DecompressPointerGT() {}
+};
+
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
-class DecompressPointerGTBlock : /* public DecompressPointer<A_T, WAH_T>, */ public GTBlockDict, protected PBWTSorter {
+class DecompressPointerGTBlock : public DecompressPointerGT, protected PBWTSorter {
 public:
     DecompressPointerGTBlock(const header_t& header, void* block_p) :
         header(header), block_p(block_p), N_SAMPLES(header.num_samples), N_HAPS(N_SAMPLES ? N_SAMPLES*2 : header.hap_samples), /// @todo fix ploidy
@@ -845,7 +857,7 @@ public:
     /**
      * @brief Updates all internal structures to point to the requested binary gt entry
      * */
-    inline void seek(const size_t position) /*override*/ {
+    inline void seek(const size_t position) override {
         if (internal_binary_gt_line_position == position) {
             return;
         } else {
@@ -889,7 +901,7 @@ public:
         }
     }
 
-    inline size_t fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) {
+    inline size_t fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) override {
         allele_counts.resize(n_alleles);
         size_t total_alt = 0;
         size_t n_missing = 0;
@@ -1098,7 +1110,7 @@ public:
         }
     }
 
-    inline void fill_allele_counts_advance(const size_t n_alleles) {
+    inline void fill_allele_counts_advance(const size_t n_alleles) override {
         allele_counts.resize(n_alleles);
         size_t total_alt = 0;
 
@@ -1131,7 +1143,7 @@ public:
         allele_counts[0] = CURRENT_N_HAPS - total_alt; // - total missing/eovs ?
     }
 
-    inline const std::vector<size_t>& get_allele_count_ref() const {
+    inline const std::vector<size_t>& get_allele_count_ref() const override {
         return allele_counts;
     }
 
