@@ -30,7 +30,6 @@
 #include "wah.hpp"
 #include "compression.hpp"
 #include "make_unique.hpp"
-#include "internal_gt_record.hpp"
 
 #include <algorithm>
 #include <numeric>

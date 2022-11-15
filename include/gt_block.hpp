@@ -26,7 +26,7 @@
 #define __GT_BLOCK_HPP__
 
 #include "interfaces.hpp"
-#include "internal_gt_record.hpp"
+#include "block.hpp"
 
 class GTBlockDict {
 public:
@@ -145,6 +145,36 @@ public:
             }
         }
         std::copy(b.begin(), b.begin()+v, a.begin()+u);
+    }
+
+    /// @todo remove unused variable ngt
+    template<typename T, const size_t V_LEN_RATIO = 1>
+    inline void pbwt_sort_(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, int32_t alt_allele) {
+        size_t u = 0;
+        size_t v = 0;
+
+        for (size_t i = 0; i < a.size(); ++i) {
+            const auto haplotype_id = a[i];
+            if (bcf_gt_allele(gt_arr[haplotype_id/V_LEN_RATIO]) != alt_allele) { // If non alt allele
+                a[u] = a[i];
+                u++;
+            } else { // if alt allele
+                b[v] = a[i];
+                v++;
+            }
+        }
+        std::copy(b.begin(), b.begin()+v, a.begin()+u);
+    }
+
+    template<typename T>
+    inline void pbwt_sort(std::vector<T>& a, std::vector<T>& b, int32_t* gt_arr, const size_t ngt, int32_t alt_allele) {
+        pbwt_sort_<T, 1>(a, b, gt_arr, ngt, alt_allele);
+    }
+
+    // Sort a haplotype pairs given single haplotype
+    template<typename T>
+    inline void pbwt_sort1(std::vector<T>&a, std::vector<T>&b, int32_t* gt_arr, const size_t ngt, int32_t alt_allele) {
+        pbwt_sort_<T, 2>(a, b, gt_arr, ngt, alt_allele);
     }
 };
 
@@ -936,7 +966,7 @@ public:
                 } else {
                     for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
                         if (y[i]) {
-                            gt_arr[a[i]] = bcf_gt_unphased(alt_allele) | ((a[i] & 1) & DEFAULT_PHASING); /// @todo Phase
+                            gt_arr[a[i]] = bcf_gt_unphased(alt_allele) | ((a[i] & 1) & DEFAULT_PHASING);
                         }
                     }
                 }

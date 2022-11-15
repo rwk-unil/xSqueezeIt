@@ -29,7 +29,6 @@
 
 #include "block.hpp"
 #include "fs.hpp"
-#include "internal_gt_record.hpp"
 
 #include "gt_block.hpp"
 #include "shapeit5_block.hpp"
