@@ -32,6 +32,8 @@
 #include "xcf.hpp"
 #include "block.hpp"
 #include "make_unique.hpp"
+#include "gt_block.hpp"
+#include "shapeit5_block.hpp"
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -46,31 +48,6 @@ static constexpr bool DEBUG_DECOMP = false;
 static constexpr bool DEBUG_DECOMP = true;
 #endif
 using namespace wah;
-
-class InternalGtAccess {
-public:
-    size_t position;
-    size_t n_alleles;
-    size_t sparse_bytes;
-    size_t wah_bytes;
-    size_t a_bytes;
-    int32_t default_allele;
-    const void *a;
-    std::vector<bool> sparse;
-    std::vector<void *> pointers;
-
-    void print_info() const {
-        std::cerr << "Position = " << position << "\n";
-        std::cerr << "n_alleles = " << n_alleles << "\n";
-        std::cerr << "sparse_bytes = " << sparse_bytes << "\n";
-        std::cerr << "wah_bytes = " << wah_bytes << "\n";
-        std::cerr << "Sparse vector : ";
-        for (size_t i = 0; i < sparse.size(); ++i) {
-            std::cerr << (sparse[i] ? "1" : "0");
-        }
-        std::cerr << std::endl;
-    }
-};
 
 class AccessorInternals {
 public:

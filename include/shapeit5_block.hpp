@@ -244,4 +244,25 @@ private:
 
 };
 
+class InternalShapeIt5Access {
+public:
+    size_t position;
+    bool is_sparse;
+    int num_sparse; /** @note int instead of size_t because of ShapeIt5 format */
+    void *gt_sparse;
+    int *gt_array;
+    int ngt; /** @note int instead of size_t because of ShapeIt5 format */
+
+    template <std::ostream& o>
+    void print_info() const {
+        o << "Position = " << position << "\n";
+        o << "Is sparse = " << (is_sparse ? "yes" : "no") << "\n";
+        if (is_sparse) {
+            o << "Num sparse = " << num_sparse << "\n";
+        } else {
+            o << "Num gt = " << ngt << "\n";
+        }
+    }
+};
+
 #endif /* __SHAPEIT5_BLOCK_HPP__ */
