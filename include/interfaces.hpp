@@ -30,6 +30,7 @@
 #include <sys/mman.h>
 
 #include "xcf.hpp"
+#include "fs.hpp"
 
 // This could be changed and is not necessarily useful, it helps recognizing and checking the metadata
 const uint32_t DICTIONARY_SIZE_SYMBOL = -1;
