@@ -41,8 +41,6 @@ extern GlobalAppOptions global_app_options;
 #include <sys/mman.h>
 #include <unistd.h>
 
-using namespace wah;
-
 #include "constexpr.hpp"
 
 class NewDecompressor {

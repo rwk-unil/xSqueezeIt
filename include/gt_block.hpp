@@ -831,9 +831,9 @@ public:
                     /// @todo
                     // Resize y based on the vector length
                     if (binary_gt_line_is_sorting[internal_binary_gt_line_position]) {
-                        wah_p = wah2_extract(wah_p, y, CURRENT_N_HAPS);
+                        wah_p = wah::wah2_extract(wah_p, y, CURRENT_N_HAPS);
                     } else {
-                        /* reference advance */ wah2_advance_pointer(wah_p, CURRENT_N_HAPS);
+                        /* reference advance */ wah::wah2_advance_pointer(wah_p, CURRENT_N_HAPS);
                     }
                 } else {
                     // Is sparse
@@ -882,7 +882,7 @@ public:
                 gt_arr[i] = bcf_gt_unphased(sparse_gt) | ((i & 1) & DEFAULT_PHASING);
             }
         } else { /* SORTED WAH */
-            wah_p = wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
+            wah_p = wah::wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
             if (haploid_binary_gt_line[internal_binary_gt_line_position]) {
                 auto a1 = haploid_rearrangement_from_diploid(a);
                 for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
@@ -925,7 +925,7 @@ public:
                     }
                 }
             } else { /* SORTED WAH */
-                wah_p = wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
+                wah_p = wah::wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
                 if (haploid_binary_gt_line[internal_binary_gt_line_position]) {
                     auto a1 = haploid_rearrangement_from_diploid(a);
                     for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
@@ -971,7 +971,7 @@ public:
                 } else if ((weirdness_strat == WS_PBWT_WAH) or (weirdness_strat == WS_WAH)) {
                     // Fill missing without advance
                     //std::cerr << "Extracting missing from wah p" << std::endl;
-                    /*missing_p =*/ (void) wah2_extract_count_ones(missing_p, y_missing, CURRENT_N_HAPS, n_missing);
+                    /*missing_p =*/ (void) wah::wah2_extract_count_ones(missing_p, y_missing, CURRENT_N_HAPS, n_missing);
                     for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
                         if (y_missing[i]) {
                             const auto index = a_weird[i];
@@ -993,7 +993,7 @@ public:
                     }
                 } else if ((weirdness_strat == WS_PBWT_WAH) or (weirdness_strat == WS_WAH)) {
                     // Fill eovs without advance
-                    /*eovs_p =*/ (void) wah2_extract_count_ones(eovs_p, y_eovs, CURRENT_N_HAPS, n_eovs);
+                    /*eovs_p =*/ (void) wah::wah2_extract_count_ones(eovs_p, y_eovs, CURRENT_N_HAPS, n_eovs);
                     for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
                         if (y_eovs[i]) {
                             const auto index = a_weird[i];
@@ -1021,7 +1021,7 @@ public:
             }
 
             if (line_has_non_uniform_phasing.size() and line_has_non_uniform_phasing[START_OFFSET]) {
-                (void) wah2_extract(non_uniform_phasing_p, y_phase, CURRENT_N_HAPS);
+                (void) wah::wah2_extract(non_uniform_phasing_p, y_phase, CURRENT_N_HAPS);
                 for (size_t i = 0; i < CURRENT_N_HAPS; ++i) {
                     if (y_phase[i]) {
                         //std::cerr << "Toggling phase bit" << std::endl;
@@ -1079,9 +1079,9 @@ public:
                 /// @todo
                 // Resize y based on the vector length
                 if (binary_gt_line_is_sorting[internal_binary_gt_line_position]) {
-                    wah_p = wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
+                    wah_p = wah::wah2_extract_count_ones(wah_p, y, CURRENT_N_HAPS, ones);
                 } else {
-                    /* reference advance */ ones = wah2_advance_pointer_count_ones(wah_p, CURRENT_N_HAPS);
+                    /* reference advance */ ones = wah::wah2_advance_pointer_count_ones(wah_p, CURRENT_N_HAPS);
                 }
             } else {
                 // Is sparse (both methods count ones)
@@ -1156,12 +1156,12 @@ protected:
                 if (line_has_missing.size() and line_has_missing[internal_binary_weirdness_position]) {
                     current_line_has_missing = true;
                     // Advance missing pointer
-                    missing_p = wah2_extract(missing_p, y_missing, CURRENT_N_HAPS);
+                    missing_p = wah::wah2_extract(missing_p, y_missing, CURRENT_N_HAPS);
                 }
                 if (line_has_end_of_vector.size() and line_has_end_of_vector[internal_binary_weirdness_position]) {
                     current_line_has_eovs = true;
                     // Fill eovs;
-                    eovs_p = wah2_extract(eovs_p, y_eovs, CURRENT_N_HAPS);
+                    eovs_p = wah::wah2_extract(eovs_p, y_eovs, CURRENT_N_HAPS);
                 }
 
                 if (weirdness_strat == WS_PBWT_WAH) {
@@ -1203,7 +1203,7 @@ protected:
     inline void phase_advance(const size_t STEPS, const size_t CURRENT_N_HAPS) {
         for (size_t i = 0; i < STEPS; ++i) {
             if (line_has_non_uniform_phasing.size() and line_has_non_uniform_phasing[internal_binary_phase_position]) {
-                wah2_advance_pointer(non_uniform_phasing_p, CURRENT_N_HAPS);
+                wah::wah2_advance_pointer(non_uniform_phasing_p, CURRENT_N_HAPS);
             }
             internal_binary_phase_position++;
         }
@@ -1257,7 +1257,7 @@ protected:
             if (dictionary[key] != VAL_UNDEFINED) {
                 v.resize(size+sizeof(WAH_T)*8-1);
                 WAH_T* wah_p = (WAH_T*)(((char*)block_p)+dictionary[key]);
-                wah2_extract<WAH_T>(wah_p, v, size);
+                wah::wah2_extract<WAH_T>(wah_p, v, size);
                 return true;
             } else {
                 return false;

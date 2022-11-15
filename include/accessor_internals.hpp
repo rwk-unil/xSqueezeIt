@@ -41,8 +41,6 @@
 #include "fs.hpp"
 #include "wah.hpp"
 
-using namespace wah;
-
 #include "interfaces.hpp"
 
 class AccessorInternals {
