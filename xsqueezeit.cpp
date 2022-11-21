@@ -140,8 +140,8 @@ int main(int argc, const char *argv[]) {
                 c.set_reset_sort_block_length(opt.reset_sort_block_length);
                 c.set_zstd_compression_on(opt.zstd);
                 c.set_zstd_compression_level(opt.zstd_compression_level);
-                c.init_compression(filename);
-                c.compress_to_file(ofname);
+                c.init_compression(filename, ofname);
+                c.compress_to_file();
             } catch (const char* e) {
                 std::cerr << e << std::endl;
                 fail = true;
