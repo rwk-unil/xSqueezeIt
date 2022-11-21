@@ -25,7 +25,6 @@
 
 #include <iostream>
 #include "fs.hpp"
-#include <thread>
 
 #include "gt_compressor_new.hpp"
 #include "gt_decompressor_new.hpp"
@@ -123,39 +122,20 @@ int main(int argc, const char *argv[]) {
         }
 
         bool fail = false;
-        std::string variant_file(ofname + XSI_BCF_VAR_EXTENSION);
-        auto variant_thread = std::thread([&]{
-            try {
-                replace_samples_by_pos_in_binary_matrix(filename, variant_file, ofname, opt.v4, opt.reset_sort_block_length);
-            } catch (const char *e) {
-                std::cerr << e << std::endl;
-                fail = true;
-            }
-            create_index_file(variant_file);
-        });
-        auto compress_thread = std::thread([&]{
-            try {
-                NewCompressor c(-1 /* v4 is -1, this will be unused */);
-                c.set_maf(opt.maf);
-                c.set_reset_sort_block_length(opt.reset_sort_block_length);
-                c.set_zstd_compression_on(opt.zstd);
-                c.set_zstd_compression_level(opt.zstd_compression_level);
-                c.init_compression(filename, ofname);
-                c.compress_to_file();
-            } catch (const char* e) {
-                std::cerr << e << std::endl;
-                fail = true;
-            }
-        });
-
-        variant_thread.join();
-        if (!fail) {
-            std::cout << "Generated file " << variant_file << " containing variants only" << std::endl;
+        try {
+            NewCompressor c;
+            c.set_maf(opt.maf);
+            c.set_reset_sort_block_length(opt.reset_sort_block_length);
+            c.set_zstd_compression_on(opt.zstd);
+            c.set_zstd_compression_level(opt.zstd_compression_level);
+            c.init_compression(filename, ofname);
+            c.compress();
+        } catch (const char* e) {
+            std::cerr << e << std::endl;
+            fail = true;
         }
-        compress_thread.join();
-        if (!fail) {
-            std::cout << "File " << ofname << " written" << std::endl;
-        } else {
+
+        if (fail) {
             std::cerr << "Failure occurred, exiting..." << std::endl;
             exit(-1);
         }
