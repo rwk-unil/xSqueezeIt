@@ -495,7 +495,16 @@ public:
                 ofname, BLOCK_SIZE, NAN /** @todo */, MINOR_ALLELE_COUNT_THRESHOLD, samples, default_phased,
                 global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level
             );
-            xsi_factory = make_unique<XsiFactoryExt<uint16_t> >(params);
+
+            s = std::fstream(ofname, s.binary | s.out | s.trunc);
+            if (!s.is_open()) {
+                std::cerr << "Failed to open file " << ofname << std::endl;
+                throw "Failed to open file";
+            }
+            header_t _ = {0,}; // Placeholder, is overwritten by factory at the end
+            s.write(reinterpret_cast<const char*>(&_), sizeof(header_t));
+
+            xsi_factory = make_unique<XsiFactoryExt<uint16_t> >(s, params);
         } else {
             // Remove BM Format
             bcf_hdr_remove(hdr, BCF_HL_FMT, "BM");
@@ -550,6 +559,7 @@ protected:
     bool select_samples = false;
 
     bool output_file_is_xsi = false;
+    std::fstream s;
     std::unique_ptr<XsiFactoryInterface> xsi_factory = nullptr;
 
     int32_t* genotypes{NULL};

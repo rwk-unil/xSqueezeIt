@@ -51,16 +51,63 @@ extern GlobalAppOptions global_app_options;
 
 class GtCompressor {
 public:
-    virtual void init_compression(std::string filename) = 0;
-    virtual void compress_to_file(std::string filename) = 0;
+    virtual void init_compression(std::string ifname, std::string ofname) {
+        this->ifname = ifname;
+        this->ofname = ofname;
+        s = std::fstream(ofname, s.binary | s.out | s.trunc);
+        if (!s.is_open()) {
+            std::cerr << "Failed to open file " << ofname << std::endl;
+            throw "Failed to open file";
+        }
+
+        ////////////////////////
+        // Prepare the header //
+        ////////////////////////
+
+        /** @brief This is a placeholder header that will be written first, then overwritten */
+        header_t header = {
+            .version = (uint32_t)4, // New version
+            .ploidy = (uint8_t)-1, // Will be rewritten
+            .ind_bytes = sizeof(uint32_t), // Should never change
+            .aet_bytes = (uint8_t)-1, // Will be rewritten
+            .wah_bytes = (uint8_t)-1, // Will be rewritten
+            .hap_samples = (uint64_t)-1, // Will be rewritten
+            .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
+            .block_size = (uint32_t)0,
+            .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
+            .ss_rate = (uint32_t)-1, // Will be rewritten
+            .number_of_ssas = (uint32_t)-1, /* Set later */
+            .indices_offset = (uint32_t)-1, /* Set later */
+            .ssas_offset = (uint32_t)-1, /* Unused */
+            .wahs_offset = (uint32_t)-1, /* Set later */
+            .samples_offset = (uint32_t)-1, /* Set later */
+            .rearrangement_track_offset = (uint32_t)-1, /* Unused */
+            .xcf_entries = (uint64_t)0, //this->entry_counter,
+            .num_samples = (uint64_t)-1, // Will be rewritten
+            .sample_name_chksum = 0 /* TODO */,
+            .bcf_file_chksum = 0 /* TODO */,
+            .data_chksum = 0 /* TODO */,
+            .header_chksum = 0 /* TODO */
+        };
+
+        /////////////////////////////
+        // Write Unfinished Header //
+        /////////////////////////////
+        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+    }
+    virtual void compress_to_file() = 0;
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
     void set_reset_sort_block_length(size_t new_block_length) {BLOCK_LENGTH_IN_BCF_LINES = new_block_length;}
 
     virtual ~GtCompressor() {}
 
+protected:
+    std::fstream s;
     double MAF = 0.01;
     size_t BLOCK_LENGTH_IN_BCF_LINES = 8192;
+    std::string ifname;
+    std::string ofname;
 };
 
 #include "xsi_factory.hpp" // Depends on InternalGtRecord
@@ -75,13 +122,7 @@ public:
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
-    virtual void init_compression(std::string filename) override {
-        this->ifname = filename;
-        // Do nothing, everything is done in compress_to_file
-    }
-
-    void compress_to_file(std::string filename) override {
-        this->ofname = filename;
+    void compress_to_file() override {
         // This also writes to file (because of overrides below)
         default_phased = seek_default_phased(ifname);
         PLOIDY = seek_max_ploidy_from_first_entry(ifname);
@@ -104,9 +145,10 @@ protected:
         this->default_phased = seek_default_phased(this->ifname);
 
         // Requires the bcf file reader to have been handled to extract the relevant information, this also means we are in the "traverse phase"
-        XsiFactoryInterface::XsiFactoryParameters params(ofname, this->BLOCK_LENGTH_IN_BCF_LINES, this->MAF, this->MINOR_ALLELE_COUNT_THRESHOLD,
+        XsiFactoryInterface::XsiFactoryParameters params(this->ofname, this->BLOCK_LENGTH_IN_BCF_LINES, this->MAF, this->MINOR_ALLELE_COUNT_THRESHOLD,
             this->sample_list, this->default_phased, zstd_compression_on, zstd_compression_level);
-        this->factory = make_unique<XSIF>(params);
+
+        this->factory = make_unique<XSIF>(this->s, params);
     }
 
     void handle_bcf_line() override {
@@ -153,8 +195,6 @@ protected:
     size_t entry_counter = 0;
     size_t variant_counter = 0;
 
-    std::string ifname;
-    std::string ofname;
     bool zstd_compression_on = false;
     int  zstd_compression_level = 7; // Some acceptable default value
     std::unique_ptr<XsiFactoryInterface> factory = nullptr;
@@ -172,19 +212,19 @@ public:
     void set_zstd_compression_on(bool on) {zstd_compression_on = on;}
     void set_zstd_compression_level(int level) {zstd_compression_level = level;}
 
-    void init_compression(std::string filename) {
+    void init_compression(std::string ifname, std::string ofname) {
         bcf_file_reader_info_t bcf_fri;
-        initialize_bcf_file_reader(bcf_fri, filename);
+        initialize_bcf_file_reader(bcf_fri, ifname);
         destroy_bcf_file_reader(bcf_fri);
 
         _compressor = make_unique<GtCompressorStream<XsiFactoryExt<uint16_t> > >(zstd_compression_on, zstd_compression_level);
         _compressor->set_maf(MAF);
         _compressor->set_reset_sort_block_length(BLOCK_LENGTH_IN_BCF_LINES);
-        _compressor->init_compression(filename);
+        _compressor->init_compression(ifname, ofname);
     }
-    void compress_to_file(std::string filename) {
+    void compress_to_file() {
         if (_compressor) {
-            _compressor->compress_to_file(filename);
+            _compressor->compress_to_file();
         } else {
             std::cerr << "No file compressed yet, call init_compression() first" << std::endl;
         }
