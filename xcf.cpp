@@ -326,6 +326,206 @@ size_t count_entries(const std::string& ifname) {
     return lines;
 }
 
+#include <sys/stat.h>
+#include <htslib/vcf.h>
+#include <htslib/tbx.h>
+#include <htslib/hts.h>
+size_t entries_from_index(const std::string& ifname) {
+    /*
+        Based on code from :
+        vcfindex.c -- Index bgzip compressed VCF/BCF files for random access.
+
+        Copyright (C) 2014-2021 Genome Research Ltd.
+
+        Author: Shane McCarthy <sm15@sanger.ac.uk>
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.  */
+    enum {
+        per_contig = 1,
+        all_contigs = 2,
+        total = 4
+    };
+    int stats = total;
+    char *fname = (char *)ifname.c_str(); /** @note Dirty cast but code below doesn't modify it, it reassigns the pointer */
+    const char **seq = NULL;
+    int tid, nseq = 0, ret = 0;
+    tbx_t *tbx = NULL;
+    bcf_hdr_t *hdr = NULL;
+    hts_idx_t *idx = NULL;
+    htsFile *fp = NULL;
+    uint64_t sum = 0;
+    char *fntemp = NULL, *fnidx = NULL;
+
+    /*
+     * First, has the user provided an index file? If per contig stats
+     * are requested, open the variant file (together with the index file,
+     * if provided), since the contig names can only be retrieved from its
+     * header. Otherwise, use just the corresponding index file to count
+     * the total number of records.
+     */
+    int len = strlen(fname);
+    int idx_only = 0;
+    if ( (fnidx = strstr(fname, HTS_IDX_DELIM)) != NULL ) {
+        fntemp = strdup(fname);
+        if ( !fntemp ) return 1;
+        fntemp[fnidx-fname] = 0;
+        fname = fntemp;
+        fnidx += strlen(HTS_IDX_DELIM);
+    }
+    else if ( len>4 && (!strcasecmp(".csi",fname+len-4) || !strcasecmp(".tbi",fname+len-4)) )
+    {
+        fnidx  = fname;
+        fntemp = strdup(fname);
+        fname  = fntemp;
+        fname[len-4] = 0;
+        idx_only = 1;
+        std::cerr << "INDEX ONLY" << std::endl;
+    }
+
+    if ( stats&per_contig )
+    {
+        if ( idx_only )
+        {
+            struct stat buf;
+            if ( stat(fname, &buf)==0 ) idx_only = 0;
+        }
+
+        enum htsExactFormat fmt;
+        if ( !idx_only )
+        {
+            fp = hts_open(fname,"r");
+            if ( !fp ) {
+                fprintf(stderr,"Could not read %s\n", fname);
+                ret = 1; goto cleanup;
+            }
+            hdr = bcf_hdr_read(fp);
+            if ( !hdr ) {
+                fprintf(stderr,"Could not read the header: %s\n", fname);
+                ret = 1; goto cleanup;
+            }
+            fmt = hts_get_format(fp)->format;
+        }
+        else
+        {
+            int len = strlen(fnidx);
+            if ( !strcasecmp(".tbi",fnidx+len-4) ) fmt = vcf;
+            else fmt = bcf;
+        }
+
+        if ( fmt==vcf )
+        {
+            tbx = tbx_index_load2(fname, fnidx);
+            if ( !tbx ) { fprintf(stderr,"Could not load index for VCF: %s\n", fname); return 1; }
+        }
+        else if ( fmt==bcf )
+        {
+            idx = bcf_index_load2(fname, fnidx);
+            if ( !idx ) { fprintf(stderr,"Could not load index for BCF file: %s\n", fname); return 1; }
+        }
+        else
+        {
+            fprintf(stderr,"Could not detect the file type as VCF or BCF: %s\n", fname);
+            return 1;
+        }
+    }
+    else if ( fnidx )
+    {
+        char *ext = strrchr(fnidx, '.');
+        if ( ext && strcmp(ext, ".tbi") == 0 ) {
+            tbx = tbx_index_load2(fname, fnidx);
+        } else if ( ext && strcmp(ext, ".csi") == 0 ) {
+            idx = bcf_index_load2(fname, fnidx);
+        }
+        if ( !tbx && !idx ) {
+            fprintf(stderr,"Could not load index file '%s'\n", fnidx);
+            ret = 1; goto cleanup;
+        }
+    } else {
+        char *ext = strrchr(fname, '.');
+        if ( ext && strcmp(ext, ".bcf") == 0 ) {
+            idx = bcf_index_load(fname);
+        } else if ( ext && (ext-fname) > 4 && strcmp(ext-4, ".vcf.gz") == 0 ) {
+            tbx = tbx_index_load(fname);
+        }
+    }
+
+    if ( !tbx && !idx ) {
+        fprintf(stderr,"No index file could be found for '%s'. Use 'bcftools index' to create one\n", fname);
+        ret = 1; goto cleanup;
+    }
+
+    if ( tbx ) {
+        seq = tbx_seqnames(tbx, &nseq);
+    } else {
+        nseq = hts_idx_nseq(idx);
+    }
+    if ( !tbx && !hdr ) {
+        /** @note we don't care about the names of the contigs */
+        //fprintf(stderr,"Warning: cannot determine contig names given the .csi index alone\n");
+    }
+    for (tid=0; tid<nseq; tid++)
+    {
+        uint64_t records, v;
+        int ret = hts_idx_get_stat(tbx ? tbx->idx : idx, tid, &records, &v);
+        (void)ret;
+        sum += records;
+        if ( (stats&total) || (records == 0 && !(stats&all_contigs)) ) continue;
+        const char *ctg_name = tbx ? seq[tid] : hdr ? bcf_hdr_id2name(hdr, tid) : "n/a";
+        bcf_hrec_t *hrec = hdr ? bcf_hdr_get_hrec(hdr, BCF_HL_CTG, "ID", ctg_name, NULL) : NULL;
+        int hkey = hrec ? bcf_hrec_find_key(hrec, "length") : -1;
+        (void)hkey;
+        //printf("%s\t%s\t", ctg_name, hkey<0?".":hrec->vals[hkey]);
+        //if (ret >= 0) printf("%" PRIu64 "\n", records);
+        //else printf(".\n");
+    }
+    if ( !sum )
+    {
+        // No counts found.
+        // Is this because index version has no stored count data, or no records?
+        bcf1_t *rec = bcf_init1();
+        if (fp && hdr && rec && bcf_read1(fp, hdr, rec) >= 0) {
+            fprintf(stderr,"index of %s does not contain any count metadata. Please re-index with a newer version of bcftools or tabix.\n", fname);
+            ret = 1;
+        }
+        bcf_destroy1(rec);
+    }
+    if ( (stats&total) && !ret ) {
+        //printf("%" PRIu64 "\n", sum);
+    }
+
+cleanup:
+    free(seq);
+    free(fntemp);
+    if ( fp && hts_close(fp)!=0 ) {
+        //error("[%s] Error: close failed\n", __func__);
+    }
+    bcf_hdr_destroy(hdr);
+    if (tbx)
+        tbx_destroy(tbx);
+    if (idx)
+        hts_idx_destroy(idx);
+    if (ret) {
+        throw "VCF/BCF index error";
+    }
+    return size_t(sum);
+}
+
 /**
  * @brief extract a matrix of bits for the genotype data, outer index is variant,
  *        inner index is samples (two bits per diploid individual)

@@ -119,6 +119,16 @@ std::string get_entry_from_bcf(const std::string& filename, const char *entry_ke
 size_t count_entries(const std::string& ifname);
 
 /**
+ * @brief gets the number of entries (lines) in VCF / BCF file
+ *        This relies on the index (.csi/.tbi) so if the index is
+ *        wrong, the result will be wrong (e.g., old index)
+ *
+ * @param ifname Input file name
+ * @return size_t number of entries
+ */
+size_t entries_from_index(const std::string& ifname);
+
+/**
  * @brief extract a matrix of bits for the genotype data, outer index is variant,
  *        inner index is samples (two bits per diploid individual)
  *
