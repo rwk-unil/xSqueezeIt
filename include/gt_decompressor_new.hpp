@@ -132,6 +132,8 @@ private:
         if (output_file_is_xsi) {
             if (xsi_factory) {
                 xsi_factory->finalize_file();
+                xsi_factory->overwrite_header(s);
+                s.close();
                 xsi_factory = nullptr; // Destroy the factory (unique_ptr)
             } else {
                 throw "Missing XSI factory !";

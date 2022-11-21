@@ -39,6 +39,7 @@ class XsiFactoryInterface {
 public:
     virtual void append(const bcf_file_reader_info_t& bcf_fri) = 0;
     virtual void finalize_file(const size_t max_ploidy = 2) = 0;
+    virtual void overwrite_header(std::fstream& s) = 0;
 
     virtual ~XsiFactoryInterface() {}
 
@@ -161,8 +162,6 @@ public:
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         assert(total_bytes == sizeof(header_t));
-        std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
-
         create_new_block();
     }
 
@@ -209,21 +208,23 @@ private:
 
 public:
 
-    void finalize_file(const size_t max_ploidy) override {
+    void overwrite_header(std::fstream& s) override {
+        assert(file_finalized);
+
         ////////////////////////
         // Prepare the header //
         ////////////////////////
-        header = {
-            .version = (uint32_t)4, // New testing version
+        header_t header = {
+            .version = (uint32_t)4, // New version
             .ploidy = (uint8_t)-1, // Will be rewritten
             .ind_bytes = sizeof(uint32_t), // Should never change
-            .aet_bytes = (uint8_t)-1, // Depends on number of hap samples
-            .wah_bytes = sizeof(WAH_T), // Should never change
+            .aet_bytes = (uint8_t)-1, // Will be rewritten
+            .wah_bytes = (uint8_t)-1, // Will be rewritten
             .hap_samples = (uint64_t)-1, // Will be rewritten
             .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
             .block_size = (uint32_t)0,
             .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
-            .ss_rate = (uint32_t)this->params.BLOCK_LENGTH_IN_BCF_LINES,
+            .ss_rate = (uint32_t)-1, // Will be rewritten
             .number_of_ssas = (uint32_t)-1, /* Set later */
             .indices_offset = (uint32_t)-1, /* Set later */
             .ssas_offset = (uint32_t)-1, /* Unused */
@@ -231,12 +232,19 @@ public:
             .samples_offset = (uint32_t)-1, /* Set later */
             .rearrangement_track_offset = (uint32_t)-1, /* Unused */
             .xcf_entries = (uint64_t)0, //this->entry_counter,
-            .num_samples = (uint64_t)num_samples,
+            .num_samples = (uint64_t)-1, // Will be rewritten
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,
             .header_chksum = 0 /* TODO */
         };
+
+        ///////////////////////
+        // Update the header //
+        ///////////////////////
+        header.wah_bytes = sizeof(WAH_T);
+        header.ss_rate = (uint32_t)this->params.BLOCK_LENGTH_IN_BCF_LINES,
+        header.num_samples = (uint64_t)num_samples,
         header.aet_bytes = ((N_HAPS <= std::numeric_limits<uint16_t>::max()) ? sizeof(uint16_t) : sizeof(uint32_t));
         header.iota_ppa = true;
         header.no_sort = false;
@@ -244,7 +252,6 @@ public:
         header.rare_threshold = this->params.MINOR_ALLELE_COUNT_THRESHOLD;
         header.default_phased = this->params.default_phased;
         header.wahs_offset = sizeof(header_t);
-
         /** @note Represents the layout written below, the layout has no impact on access, only on how to compute the sizes of layout elements
          *        0 is old layout, 1 is layout that reflects the oxbio paper diagram (indices and sample names were swapped in old), note that the
          *        layout has no impact on file size (if we want to be really picky it can have up to 3 bytes difference because of 32-bit alignment
@@ -257,13 +264,30 @@ public:
          *        when a file is passed with the "--info" command to show the size of the elements (most of the file size is the Binary Blocks).
          */
         header.xsi_layout = 1;
-
-        header.num_variants = this->variant_counter;
-
-        header.xcf_entries = this->entry_counter;
+        header.num_variants = this->variant_counter; // Depends on the number of BCF lines handled
+        header.xcf_entries = this->entry_counter; // Depends on the number of BCF lines handled
         header.number_of_ssas = (this->entry_counter+(uint32_t)this->params.BLOCK_LENGTH_IN_BCF_LINES-1)/(uint32_t)this->params.BLOCK_LENGTH_IN_BCF_LINES;
         header.ploidy = max_ploidy;
         header.hap_samples = params.sample_list.size() * max_ploidy;
+
+        header.indices_sparse_offset = (uint32_t)-1; // Not used
+        header.ssas_offset = (uint32_t)-1; // Not used in this compressor
+        header.sparse_offset = (uint32_t)-1; // Not used
+
+        header.default_phased = params.default_phased;
+
+        header.samples_offset = header_samples_offset;
+        header.indices_offset = header_indices_offset;
+
+        ///////////////////////////
+        // Rewrite Filled Header //
+        ///////////////////////////
+        s.seekp(0, std::ios_base::beg);
+        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
+    }
+
+    void finalize_file(const size_t max_ploidy) override {
+        this->max_ploidy = max_ploidy;
 
         // Write the last block if necessary
         if (current_block->get_effective_bcf_lines_in_block()) {
@@ -279,7 +303,7 @@ public:
         ////////////////////////////
         // Write the sample names //
         ////////////////////////////
-        header.samples_offset = total_bytes;
+        header_samples_offset = total_bytes;
         for(const auto& sample : params.sample_list) {
             s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
         }
@@ -300,29 +324,15 @@ public:
         ///////////////////////
         // Write the indices //
         ///////////////////////
-        header.indices_offset = total_bytes;
+        header_indices_offset = total_bytes;
         s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices.back())));
 
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
 
-        header.indices_sparse_offset = (uint32_t)-1; // Not used
-        header.ssas_offset = (uint32_t)-1; // Not used in this compressor
-
-        header.sparse_offset = (uint32_t)-1; // Not used
-
-        header.default_phased = params.default_phased;
-
         s.flush();
-
-        ///////////////////////////
-        // Rewrite Filled Header //
-        ///////////////////////////
-        s.seekp(0, std::ios_base::beg);
-        s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
-
-        s.close();
+        file_finalized = true;
     }
 
 protected:
@@ -344,10 +354,14 @@ protected:
     /** @deprecated */
     size_t PLOIDY = 2;
 
-    header_t header;
-
     size_t written_bytes = 0;
     size_t total_bytes = 0;
+
+    size_t header_samples_offset = 0;
+    size_t header_indices_offset = 0;
+
+    size_t max_ploidy = 0;
+    bool file_finalized = false;
 };
 
 }
