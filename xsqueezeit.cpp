@@ -79,6 +79,7 @@ int main(int argc, const char *argv[]) {
             std::string variants(filename + XSI_BCF_VAR_EXTENSION);
             if (fs::exists(variants)) {
                 std::cerr << "INFO : " << variants << " size is " << fs::file_size(variants) << " bytes" << std::endl;
+                std::cerr << "INFO : " << variants << " has " << entries_from_index(variants) << " records" << std::endl;
             }
             header_t hdr;
             int ret = fill_header_from_file(filename, hdr);
