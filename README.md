@@ -95,8 +95,6 @@ autoheader
 autoconf
 ./configure
 make
-sudo make install
-sudo ldconfig
 cd ..
 
 # Clone and build zstd (if you already have zstd set Makefile accordingly and skip)
