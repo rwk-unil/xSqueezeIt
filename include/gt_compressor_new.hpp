@@ -36,6 +36,7 @@
 #include <sstream>
 #include <string>
 #include <memory>
+#include <thread>
 
 #include "block.hpp"
 
@@ -102,7 +103,6 @@ public:
 
     virtual ~GtCompressor() {}
 
-protected:
     std::fstream s;
     double MAF = 0.01;
     size_t BLOCK_LENGTH_IN_BCF_LINES = 8192;
@@ -205,7 +205,7 @@ protected:
 
 class NewCompressor {
 public:
-    NewCompressor(uint32_t version) : VERSION(version) {}
+    NewCompressor() {}
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
     void set_reset_sort_block_length(size_t reset_sort_block_length) {BLOCK_LENGTH_IN_BCF_LINES = reset_sort_block_length;}
@@ -222,16 +222,35 @@ public:
         _compressor->set_reset_sort_block_length(BLOCK_LENGTH_IN_BCF_LINES);
         _compressor->init_compression(ifname, ofname);
     }
-    void compress_to_file() {
-        if (_compressor) {
-            _compressor->compress_to_file();
-        } else {
+    void compress() {
+        if (_compressor == nullptr) {
             std::cerr << "No file compressed yet, call init_compression() first" << std::endl;
+            throw "Compression error";
+        }
+
+        // Launch a thread to generate the variant file
+        bool fail = false;
+        std::string variant_file(_compressor->ofname + XSI_BCF_VAR_EXTENSION);
+        auto variant_thread = std::thread([&]{
+            try {
+                replace_samples_by_pos_in_binary_matrix(_compressor->ifname, variant_file, _compressor->ofname, true /** @todo remove opt.v4 */, BLOCK_LENGTH_IN_BCF_LINES);
+            } catch (const char *e) {
+                std::cerr << e << std::endl;
+                fail = true;
+            }
+            create_index_file(variant_file);
+        });
+
+        _compressor->compress_to_file();
+        variant_thread.join();
+        if (!fail) {
+            std::cout << "File " << _compressor->ofname << " written" << std::endl;
+        } else {
+            throw "Failed to write variant file";
         }
     }
 
 protected:
-    const uint32_t VERSION;
     std::unique_ptr<GtCompressor> _compressor = nullptr;
     double MAF = 0.01;
     size_t BLOCK_LENGTH_IN_BCF_LINES = 8192;
