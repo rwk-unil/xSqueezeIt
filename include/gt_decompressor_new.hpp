@@ -132,7 +132,9 @@ private:
         if (output_file_is_xsi) {
             if (xsi_factory) {
                 xsi_factory->finalize_file();
-                xsi_factory->overwrite_header(s);
+                header.samples_offset = XsiFactoryInterface::write_samples(s, xsi_samples);
+                header.indices_offset = XsiFactoryInterface::write_indices(s, xsi_factory->get_indices());
+                xsi_factory->overwrite_header(s, header);
                 s.close();
                 xsi_factory = nullptr; // Destroy the factory (unique_ptr)
             } else {
@@ -480,13 +482,13 @@ public:
 
             // Create the XSI factory (requires to know the sample names)
             const size_t num_samples = (select_samples ? samples_to_use.size() : sample_list.size());
-            std::vector<std::string>& samples = sample_list;
-            std::vector<std::string> smaller_list;
             if (samples_to_use.size() < sample_list.size()) {
+                xsi_samples.clear();
                 for (size_t i = 0; i < samples_to_use.size(); ++i) {
-                    smaller_list.push_back(sample_list[samples_to_use[i]]);
+                    xsi_samples.push_back(sample_list[samples_to_use[i]]);
                 }
-                samples = smaller_list;
+            } else {
+                xsi_samples = sample_list;
             }
             const size_t N_HAPS = num_samples * header.ploidy; /// @todo mixed ploidy
             const size_t MINOR_ALLELE_COUNT_THRESHOLD = N_HAPS * global_app_options.maf;
@@ -494,7 +496,7 @@ public:
             const size_t BLOCK_SIZE = header.ss_rate;
 
             XsiFactoryInterface::XsiFactoryParameters params(
-                ofname, BLOCK_SIZE, NAN /** @todo */, MINOR_ALLELE_COUNT_THRESHOLD, samples, default_phased,
+                ofname, BLOCK_SIZE, NAN /** @todo */, MINOR_ALLELE_COUNT_THRESHOLD, xsi_samples, default_phased,
                 global_app_options.zstd | header.zstd, global_app_options.zstd_compression_level
             );
 
@@ -503,8 +505,8 @@ public:
                 std::cerr << "Failed to open file " << ofname << std::endl;
                 throw "Failed to open file";
             }
-            header_t _ = {0,}; // Placeholder, is overwritten by factory at the end
-            s.write(reinterpret_cast<const char*>(&_), sizeof(header_t));
+            // is overwritten by factory at the end
+            s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
 
             xsi_factory = make_unique<XsiFactoryExt<uint16_t> >(s, params);
         } else {
@@ -557,6 +559,7 @@ protected:
     Accessor accessor;
 
     std::vector<std::string> sample_list;
+    std::vector<std::string> xsi_samples;
     std::vector<size_t> samples_to_use;
     bool select_samples = false;
 
