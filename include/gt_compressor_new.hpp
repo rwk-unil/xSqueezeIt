@@ -64,17 +64,45 @@ public:
         ////////////////////////
         // Prepare the header //
         ////////////////////////
-        /** @brief This is a placeholder header that will be written first, then overwritten */
-        header_t header = {0,};
+        header = {
+            .version = (uint32_t)4, // New version
+            .ploidy = (uint8_t)-1, // Will be rewritten
+            .ind_bytes = sizeof(uint32_t), // Should never change
+            .aet_bytes = (uint8_t)-1, // Will be rewritten
+            .wah_bytes = (uint8_t)-1, // Will be rewritten
+            .hap_samples = (uint64_t)-1, // Will be rewritten
+            .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
+            .block_size = (uint32_t)0,
+            .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
+            .ss_rate = (uint32_t)-1, // Will be rewritten
+            .number_of_ssas = (uint32_t)-1, /* Set later */
+            .indices_offset = (uint32_t)-1, /* Set later */
+            .ssas_offset = (uint32_t)-1, /* Unused */
+            .wahs_offset = (uint32_t)-1, /* Set later */
+            .samples_offset = (uint32_t)-1, /* Set later */
+            .rearrangement_track_offset = (uint32_t)-1, /* Unused */
+            .xcf_entries = (uint64_t)0, //this->entry_counter,
+            .num_samples = (uint64_t)-1, // Will be rewritten
+            .sample_name_chksum = 0 /* TODO */,
+            .bcf_file_chksum = 0 /* TODO */,
+            .data_chksum = 0 /* TODO */,
+            .header_chksum = 0 /* TODO */
+        };
 
         /////////////////////////////
         // Write Unfinished Header //
         /////////////////////////////
         s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
-        size_t written_bytes = size_t(s.tellp());
-        size_t total_bytes = written_bytes;
-        std::cout << "header " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+        message_write(s, "header");
     }
+
+    template<typename T>
+    void message_write(std::fstream& s, T msg) {
+        written_bytes = size_t(s.tellp()) - total_bytes;
+        total_bytes += written_bytes;
+        std::cout << msg << " " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+    }
+
     virtual void compress_to_file() = 0;
 
     void set_maf(double new_MAF) {MAF = new_MAF;}
@@ -82,6 +110,9 @@ public:
 
     virtual ~GtCompressor() {}
 
+    header_t header = {0,};
+    size_t written_bytes = 0;
+    size_t total_bytes = 0;
     std::fstream s;
     double MAF = 0.01;
     size_t BLOCK_LENGTH_IN_BCF_LINES = 8192;
@@ -110,7 +141,12 @@ public:
 
         // Write the final bits of the file
         factory->finalize_file(this->PLOIDY);
-        factory->overwrite_header(this->s);
+        message_write(s, "blocks");
+        header.samples_offset = XsiFactoryInterface::write_samples(s, sample_list);
+        message_write(s, "sample id's");
+        header.indices_offset = XsiFactoryInterface::write_indices(s, factory->get_indices());
+        message_write(s, "indices");
+        factory->overwrite_header(this->s, this->header);
         this->s.close();
     }
 protected:

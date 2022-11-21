@@ -38,12 +38,41 @@ namespace {
 class XsiFactoryInterface {
 public:
     virtual void append(const bcf_file_reader_info_t& bcf_fri) = 0;
+    const std::vector<uint32_t>& get_indices() const {return indices;}
     virtual void finalize_file(const size_t max_ploidy = 2) = 0;
-    virtual void overwrite_header(std::fstream& s) = 0;
+    virtual void overwrite_header(std::fstream& s, header_t header) = 0;
+
+    static size_t write_samples(std::fstream& s, const std::vector<std::string>& samples) {
+        size_t sample_offset = size_t(s.tellp());
+        for(const auto& sample : samples) {
+            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
+        }
+
+        // Alignment padding... Indices (after samples in layout) require to be aligned
+        size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
+        if (mod_uint32) {
+            size_t padding = sizeof(uint32_t) - mod_uint32;
+            for (size_t i = 0; i < padding; ++i) {
+                s.write("", sizeof(char));
+            }
+        }
+
+        return sample_offset;
+    }
+
+    static size_t write_indices(std::fstream& s, const std::vector<uint32_t>& indices) {
+        // Indices require to be aligned
+        assert((size_t(s.tellp()) % sizeof(uint32_t)) == 0);
+
+        size_t indices_offset = size_t(s.tellp());
+        s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices.back())));
+
+        return indices_offset;
+    }
 
     virtual ~XsiFactoryInterface() {}
 
-class XsiFactoryParameters {
+    class XsiFactoryParameters {
     public:
         XsiFactoryParameters(const std::string& filename, const size_t BLOCK_LENGTH_IN_BCF_LINES,
             const double MINOR_ALLELE_FREQUENCY_THRESHOLD, const size_t MINOR_ALLELE_COUNT_THRESHOLD,
@@ -65,6 +94,9 @@ class XsiFactoryParameters {
         int compression_level;
         std::set<IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys> active_encoders = {IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GT_ENTRY};
     };
+
+protected:
+    std::vector<uint32_t> indices;
 };
 
 template <typename T_K, typename T_V, template<typename, typename> class IBinaryBlock>
@@ -157,11 +189,6 @@ public:
         //for (auto s : sample_list) std::cerr << s;
         //std::cerr << std::endl;
 
-        written_bytes = 0;
-        total_bytes = 0;
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        assert(total_bytes == sizeof(header_t));
         create_new_block();
     }
 
@@ -208,36 +235,8 @@ private:
 
 public:
 
-    void overwrite_header(std::fstream& s) override {
+    void overwrite_header(std::fstream& s, header_t header) override {
         assert(file_finalized);
-
-        ////////////////////////
-        // Prepare the header //
-        ////////////////////////
-        header_t header = {
-            .version = (uint32_t)4, // New version
-            .ploidy = (uint8_t)-1, // Will be rewritten
-            .ind_bytes = sizeof(uint32_t), // Should never change
-            .aet_bytes = (uint8_t)-1, // Will be rewritten
-            .wah_bytes = (uint8_t)-1, // Will be rewritten
-            .hap_samples = (uint64_t)-1, // Will be rewritten
-            .num_variants = (uint64_t)-1, /* Set later */ //this->variant_counter,
-            .block_size = (uint32_t)0,
-            .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
-            .ss_rate = (uint32_t)-1, // Will be rewritten
-            .number_of_ssas = (uint32_t)-1, /* Set later */
-            .indices_offset = (uint32_t)-1, /* Set later */
-            .ssas_offset = (uint32_t)-1, /* Unused */
-            .wahs_offset = (uint32_t)-1, /* Set later */
-            .samples_offset = (uint32_t)-1, /* Set later */
-            .rearrangement_track_offset = (uint32_t)-1, /* Unused */
-            .xcf_entries = (uint64_t)0, //this->entry_counter,
-            .num_samples = (uint64_t)-1, // Will be rewritten
-            .sample_name_chksum = 0 /* TODO */,
-            .bcf_file_chksum = 0 /* TODO */,
-            .data_chksum = 0 /* TODO */,
-            .header_chksum = 0 /* TODO */
-        };
 
         ///////////////////////
         // Update the header //
@@ -276,9 +275,6 @@ public:
 
         header.default_phased = params.default_phased;
 
-        header.samples_offset = header_samples_offset;
-        header.indices_offset = header_indices_offset;
-
         ///////////////////////////
         // Rewrite Filled Header //
         ///////////////////////////
@@ -296,41 +292,6 @@ public:
             current_block->write_to_file(s, params.compression_on, params.compression_level);
         }
 
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "blocks " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
-
-        ////////////////////////////
-        // Write the sample names //
-        ////////////////////////////
-        header_samples_offset = total_bytes;
-        for(const auto& sample : params.sample_list) {
-            s.write(reinterpret_cast<const char*>(sample.c_str()), sample.length()+1 /*termination char*/);
-        }
-
-        // Alignment padding...
-        size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
-        if (mod_uint32) {
-            size_t padding = sizeof(uint32_t) - mod_uint32;
-            for (size_t i = 0; i < padding; ++i) {
-                s.write("", sizeof(char));
-            }
-        }
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "sample id's " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        ///////////////////////
-        // Write the indices //
-        ///////////////////////
-        header_indices_offset = total_bytes;
-        s.write(reinterpret_cast<const char*>(indices.data()), indices.size() * sizeof(decltype(indices.back())));
-
-        written_bytes = size_t(s.tellp()) - total_bytes;
-        total_bytes += written_bytes;
-        std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
         s.flush();
         file_finalized = true;
     }
@@ -344,7 +305,6 @@ protected:
     std::unique_ptr<EncodingBinaryBlock<uint32_t, uint32_t, BlockWithZstdCompressor> > current_block;
 
     size_t block_counter = 0;
-    std::vector<uint32_t> indices;
 
     size_t num_samples;
     size_t N_HAPS;
@@ -353,12 +313,6 @@ protected:
     size_t variant_counter = 0;
     /** @deprecated */
     size_t PLOIDY = 2;
-
-    size_t written_bytes = 0;
-    size_t total_bytes = 0;
-
-    size_t header_samples_offset = 0;
-    size_t header_indices_offset = 0;
 
     size_t max_ploidy = 0;
     bool file_finalized = false;
