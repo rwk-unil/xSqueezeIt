@@ -3,8 +3,12 @@
 Publication : [XSI - A genotype compression tool for compressive genomics in large biobanks](https://doi.org/10.1093/bioinformatics/btac413)
 
 ```
+Wertenbroek, R., Rubinacci, S., Xenarios, I., Thoma, Y., & Delaneau, O. (2022). XSI—a genotype compression tool for compressive genomics in large biobanks. Bioinformatics, 38(15), 3778-3784.
+```
+
+```
 @article{wertenbroek2022xsi,
-  title={XSI-A genotype compression tool for compressive genomics in large biobanks},
+  title={{XSI-A genotype compression tool for compressive genomics in large biobanks}},
   author={Wertenbroek, Rick and Rubinacci, Simone and Xenarios, Ioannis and Thoma, Yann and Delaneau, Olivier},
   journal={Bioinformatics},
   year={2022}
