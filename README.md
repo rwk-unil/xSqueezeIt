@@ -1,3 +1,7 @@
+# Development branch of XSI
+
+** Warning you are on the development branch of XSI which is experimental and may contain bugs, switch to master if you want to use XSI **
+
 # xSqueezeIt (XSI) - VCF / BCF Genotype Compressor
 
 Publication : [XSI - A genotype compression tool for compressive genomics in large biobanks](https://doi.org/10.1093/bioinformatics/btac413)
