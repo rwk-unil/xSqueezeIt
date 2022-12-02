@@ -26,7 +26,7 @@
 #define __GT_BLOCK_HPP__
 
 #include "interfaces.hpp"
-#include "block.hpp"
+#include "wah.hpp"
 
 class GTBlockDict {
 public:
@@ -228,6 +228,53 @@ public:
     }
 
 private:
+    template <typename T = uint32_t, class Pred = wah::DefaultPred>
+    class Sparse {
+    public:
+        Sparse() {}
+
+        Sparse(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t _) : index(index) {
+            for (int32_t i = 0; i < ngt; ++i) {
+                if (Pred::check(gt_array[i], _)) {
+                    sparse_encoding.push_back(i);
+                }
+            }
+        }
+
+        size_t index = 0;
+        std::vector<T> sparse_encoding;
+
+        void write_to_stream(std::fstream& s) const {
+            const auto& sparse = sparse_encoding;
+            T number_of_positions = sparse.size();
+            s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+            write_vector(s, sparse);
+        }
+    };
+
+
+    template <typename T = uint32_t>
+    class SparseGtLine : public Sparse<T, wah::DefaultPred> {
+    public:
+        SparseGtLine() {}
+
+        SparseGtLine(uint32_t index, int32_t* gt_array, int32_t ngt, int32_t sparse_allele) :
+            Sparse<T, wah::DefaultPred>(index, gt_array, ngt, sparse_allele), sparse_allele(sparse_allele) {}
+
+        int32_t sparse_allele = 0;
+
+        void write_to_stream(std::fstream& s) const {
+            const auto& sparse = this->sparse_encoding;
+            T number_of_positions = sparse.size();
+            if (sparse_allele == 0) {
+                // Set the MSB Bit
+                number_of_positions |= (T)1 << (sizeof(T)*8-1);
+            }
+            s.write(reinterpret_cast<const char*>(&number_of_positions), sizeof(T));
+            write_vector(s, sparse);
+        }
+    };
+
     inline void scan_genotypes(const bcf_file_reader_info_t& bcf_fri) {
         num_missing_in_current_line = 0;
         num_eovs_in_current_line = 0;
@@ -950,6 +997,7 @@ public:
         // If other ALTs (ALTs are 1 indexed, because 0 is REF)
         for (size_t alt_allele = 2; alt_allele < n_alleles; ++alt_allele) {
             if (!binary_gt_line_is_wah[internal_binary_gt_line_position]) { /* SPARSE */
+                /** @note sparse_extract counts "ones", i.e., updates the "ones" variable */
                 sparse_p = sparse_extract(sparse_p, sparse);
                 if (sparse_negated) { // There can only be one negated because must be more than all others combined
                     // All non set positions are now filled

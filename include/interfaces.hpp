@@ -93,8 +93,14 @@ inline void read_dictionary(MAP_T& map, uint32_t* p) {
 template<typename MAP_T>
 inline void print_dictionary(const MAP_T& map) {
     for (const auto& kv : map) {
-        std::cerr << "Key : " << kv.first << " Value : " << kv.second << std::endl;
+        std::cerr << "Key : 0x" << std::hex << kv.first << std::dec << " Value : " << kv.second << std::endl;
     }
+}
+
+template<typename T>
+inline void write_vector(std::fstream& s, const std::vector<T>& v) {
+    static_assert(!std::is_same<T, bool>::value, "bool is implementation defined therefore is not portable");
+    s.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(decltype(v.back())));
 }
 
 class IBCFLineEncoder {
