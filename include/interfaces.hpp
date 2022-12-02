@@ -179,6 +179,8 @@ public:
     void write_to_file(std::fstream& ofs, bool compressed, int compression_level) {
         int fd(0);
         auto ts = get_temporary_file(&fd);
+        size_t real_block_start = ofs.tellp();
+        size_t real_block_end = real_block_start; // Will be filled
         std::fstream& s = compressed ? ts.stream : ofs;
 
         size_t block_start_pos = s.tellp();
@@ -234,13 +236,16 @@ public:
             size_t padding = sizeof(uint32_t) - mod_uint32;
             for (size_t i = 0; i < padding; ++i) {
                 //std::cerr << "A byte of padding was written" << std::endl;
-                ofs.write("", sizeof(char));
+                ofs.write("P", sizeof(char)); /** @note 'P' for "padding" */
             }
         }
         if (fd) {
             close(fd);
         }
         remove(ts.filename.c_str()); // Delete temp file
+
+        real_block_end = ofs.tellp();
+        //std::cerr << "Wrote a block of " << (real_block_end - real_block_start) << " bytes" << std::endl;
     }
 
     //size_t block_size;
