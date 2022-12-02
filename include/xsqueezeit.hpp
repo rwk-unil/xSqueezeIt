@@ -35,8 +35,8 @@ public:
     GlobalAppOptions() {
         app.add_option("-f,--file", filename, "Input file name, default is stdio");
         app.add_option("-o,--output", ofname, "Output file name, default is stdio");
-        app.add_option("-O, --output-type", output_type, "Output type b|u|z|v|x");
-        app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs uncompressed BCF (-Ou) when writing to stdout");
+        app.add_option("-O, --output-type", output_type, "Output type b (BCF) u (uncompressed BCF) z (VCF.gz) v (VCF) x (XSI)");
+        app.add_flag("-p,--fast-pipe", fast_pipe, "Outputs uncompressed BCF (-Ou) when writing to stdout (default)");
         app.add_flag("-c,--compress", compress, "Compress");
         app.add_flag("-v,--verbose", verbose, "Verbose, prints progress");
         app.add_flag("-d,--decompress", decompress, "Decompress");
@@ -90,7 +90,7 @@ public:
         app.add_option("-t,--targets", targets, ""); //"Similar as -r, --regions, but the next position is accessed by streaming the whole VCF/BCF rather than using the tbi/csi index. Both -r and -t options can be applied simultaneously: -r uses the index to jump to a region and -t discards positions which are not in the targets. Unlike -r, targets can be prefixed with "^" to request logical complement. For example, "^X,Y,MT" indicates that sequences X, Y and MT should be skipped. Yet another difference between the -t/-T and -r/-R is that -r/-R checks for proper overlaps and considers both POS and the end position of an indel, while -t/-T considers the POS coordinate only. Note that -t cannot be used in combination with -T.");
         //app.add_option("-T,--targets-file", targets_file, ""); // "Same -t, --targets, but reads regions from a file. Note that -T cannot be used in combination with -t.\nWith the call -C alleles command, third column of the targets file must be comma-separated list of alleles, starting with the reference allele. Note that the file must be compressed and indexed.");
         app.add_flag("-H,--no-header", no_header, "Suppress the header in VCF output (-Ov/-Oz)");
-        app.add_option("--nthreads", n_threads, "EXPERIMENTAL - Number of threads for compression");
+        app.add_option("--nthreads", n_threads, "Number of threads for compression");
 
         app.add_flag("--shapeit5", shapeit5_format, "EXPERIMENTAL - Generate an XSI file with SHAPEIT5 internal format");
     }
