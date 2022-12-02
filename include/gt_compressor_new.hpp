@@ -135,25 +135,27 @@ public:
     void compress_to_file() override {
         // This also writes to file (because of overrides below)
         default_phased = seek_default_phased(ifname);
-        PLOIDY = seek_max_ploidy_from_first_entry(ifname);
+        this->PLOIDY = seek_max_ploidy_from_first_entry(ifname);
         std::cerr << "It seems the file " << ifname << " is mostly " << (default_phased ? "phased" : "unphased") << std::endl;
         traverse(ifname);
 
         // Write the final bits of the file
-        factory->finalize_file(this->PLOIDY);
+        factory->finalize_file();
         message_write(s, "blocks");
         header.samples_offset = XsiFactoryInterface::write_samples(s, sample_list);
         message_write(s, "sample id's");
         header.indices_offset = XsiFactoryInterface::write_indices(s, factory->get_indices());
         message_write(s, "indices");
+        header.ploidy = this->PLOIDY;
+        header.hap_samples = this->sample_list.size() * this->PLOIDY;
         factory->overwrite_header(this->s, this->header);
         this->s.close();
     }
 protected:
     void handle_bcf_file_reader() override {
         sample_list = extract_samples(bcf_fri);
-        N_HAPS = bcf_fri.n_samples * PLOIDY;
-        MINOR_ALLELE_COUNT_THRESHOLD = (size_t)((double)N_HAPS * MAF);
+        N_HAPS = bcf_fri.n_samples * this->PLOIDY;
+        size_t MINOR_ALLELE_COUNT_THRESHOLD = (size_t)((double)N_HAPS * MAF);
 
         entry_counter = 0;
         variant_counter = 0;

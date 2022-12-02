@@ -132,6 +132,8 @@ private:
         if (output_file_is_xsi) {
             if (xsi_factory) {
                 xsi_factory->finalize_file();
+                // header.ploidy = ... should be good already /** @todo optimize mixed => haploid via -s option */
+                header.hap_samples = xsi_samples.size() * header.ploidy;
                 header.samples_offset = XsiFactoryInterface::write_samples(s, xsi_samples);
                 header.indices_offset = XsiFactoryInterface::write_indices(s, xsi_factory->get_indices());
                 xsi_factory->overwrite_header(s, header);
