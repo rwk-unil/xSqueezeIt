@@ -48,6 +48,7 @@ struct header_s {
     uint8_t  ind_bytes = 0;           // Number of bytes used to save indices
     uint8_t  aet_bytes = 0;           // Number of bytes used to save positions
     uint8_t  wah_bytes = 0;           // Number of bytes used for WAH
+    // 4 32-bit words above
     union {
         uint8_t special_bitset = 0;
         struct {
@@ -69,23 +70,28 @@ struct header_s {
     uint8_t  xsi_layout = 0;          // Layout version of the XSI binary file (does not matter for access)
     uint8_t  rsvd_bs[1] = {0,};
     uint32_t rsvd_1[3] = {0,};
+    // 8 32-bit words above
 
     // 64 bytes
     uint64_t hap_samples = 0;         // Number of haplotypes
-    uint64_t num_variants = 0;        // Number of variants (total number of ALTs)
+    uint64_t num_variants = 0;        // DEPRECATED Number of variants (total number of ALTs)
+    // 12 32-bit words above
     uint32_t block_size = 0;          // DEPRECATED
     uint32_t number_of_blocks = 0;    // DEPRECATED
     uint32_t ss_rate = 0;             // Sub Sample rate of permutation arrays / reset sort rate
     // Offsets, positions of data in the binary file
     uint32_t number_of_ssas = 0;      // Number of sampled loci for random access = ceil(num_variants/ss_rate)
+    // 16 32-bit words above
     uint32_t indices_offset = 0;      // Position in the binary file of WAH indices
     uint32_t ssas_offset = 0;         // Position in the binary file of sub sampled permutation arrays (if any)
     uint32_t wahs_offset = 0;         // Position in the binary file of WAH data
     uint32_t samples_offset = 0;      // Position in the binary file of samples (e.g., "NA12878", "HG00101")
+    // 20 32-bit words above
     uint32_t indices_sparse_offset = 0; // Position in the binary file of indices for the sparse data
     uint32_t missing_offset = 0;
     uint32_t rearrangement_track_offset = 0; // Position in the binary file of the rearrangement track
     uint32_t sparse_offset = 0;       // Position in the binary file of the sparse data
+    // 24 32-bit words above
 
     // 128 bytes
     uint32_t rare_threshold = 0;      // Threshold for the rearrangement track / sorting / wah vs sparse
@@ -124,8 +130,8 @@ void print_header_info(const header_t& header) {
     std::cerr << "Haplotype samples  : " << header.hap_samples << std::endl;
     std::cerr << "Number of samples  : " << header.num_samples << std::endl;
     std::cerr << "Number of variants : " << header.num_variants << std::endl;
-    std::cerr << "--" << std::endl;
     std::cerr << "VCF records : " << header.xcf_entries << std::endl;
+    std::cerr << "--" << std::endl;
     //std::cerr << "Permutation arrays  : " << header.wahs_offset - header.ssas_offset << " bytes" << std::endl;
     std::cerr << "GT Data WAH encoded : " << header.samples_offset - header.wahs_offset << " bytes" << std::endl;
 }
