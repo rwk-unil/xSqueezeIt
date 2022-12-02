@@ -56,7 +56,7 @@ typedef struct bcf_file_reader_info_t {
     int size_gt_arr = 0; /* Size of above array as given by bcf_get_genotypes() */
     int ngt = 0;
     bcf1_t* line = nullptr; /* Current line pointer */
-    size_t line_num = 0; /* Current line number */
+    size_t line_num = 0; /* Current line number 1 based because the first call to "next_line" increments it */
     int line_alt_alleles_extracted = 0; /* For multi ALT alleles */
 
 } bcf_file_reader_info_t;
