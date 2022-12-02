@@ -49,6 +49,7 @@ protected:
     virtual void handle_bcf_file_reader() {}
     virtual void handle_bcf_line() {}
 
+    bool stop = false;
     bcf_file_reader_info_t bcf_fri;
     int ngt = 0;
     size_t line_max_ploidy = 0;

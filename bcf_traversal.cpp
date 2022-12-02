@@ -5,6 +5,8 @@ void BcfTraversal::traverse(const std::string filename) {
 
     handle_bcf_file_reader();
     while(bcf_next_line(bcf_fri)) {
+        if (stop) break;
+
         // Unpack the line and get genotypes
         bcf_unpack(bcf_fri.line, BCF_UN_STR);
         bcf_fri.ngt = bcf_get_genotypes(bcf_fri.sr->readers[0].header, bcf_fri.line, &(bcf_fri.gt_arr), &(bcf_fri.size_gt_arr));
