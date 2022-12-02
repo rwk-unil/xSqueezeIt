@@ -39,7 +39,7 @@ class XsiFactoryInterface {
 public:
     virtual void append(const bcf_file_reader_info_t& bcf_fri) = 0;
     const std::vector<uint32_t>& get_indices() const {return indices;}
-    virtual void finalize_file(const size_t max_ploidy = 2) = 0;
+    virtual void finalize_file() = 0;
     virtual void overwrite_header(std::fstream& s, header_t header) = 0;
 
     static size_t write_samples(std::fstream& s, const std::vector<std::string>& samples) {
@@ -266,8 +266,6 @@ public:
         header.num_variants = this->variant_counter; // Depends on the number of BCF lines handled
         header.xcf_entries = this->entry_counter; // Depends on the number of BCF lines handled
         header.number_of_ssas = (this->entry_counter+(uint32_t)this->params.BLOCK_LENGTH_IN_BCF_LINES-1)/(uint32_t)this->params.BLOCK_LENGTH_IN_BCF_LINES;
-        header.ploidy = max_ploidy;
-        header.hap_samples = params.sample_list.size() * max_ploidy;
 
         header.indices_sparse_offset = (uint32_t)-1; // Not used
         header.ssas_offset = (uint32_t)-1; // Not used in this compressor
@@ -282,9 +280,7 @@ public:
         s.write(reinterpret_cast<const char*>(&header), sizeof(header_t));
     }
 
-    void finalize_file(const size_t max_ploidy) override {
-        this->max_ploidy = max_ploidy;
-
+    void finalize_file() override {
         // Write the last block if necessary
         if (current_block->get_effective_bcf_lines_in_block()) {
             block_counter++;
@@ -314,7 +310,6 @@ protected:
     /** @deprecated */
     size_t PLOIDY = 2;
 
-    size_t max_ploidy = 0;
     bool file_finalized = false;
 };
 
