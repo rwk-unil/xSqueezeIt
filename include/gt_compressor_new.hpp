@@ -223,7 +223,6 @@ protected:
     std::vector<std::string> sample_list;
 };
 
-#if 1
 template<class XSIF>
 class GtCompressorParallel : public GtCompressor {
 public:
@@ -482,7 +481,6 @@ protected:
     size_t indices_offset;
     bool default_phased = false;
 };
-#endif
 
 /** @todo remove this layer ? */
 class NewCompressor {
