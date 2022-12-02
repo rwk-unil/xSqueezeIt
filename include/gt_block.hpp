@@ -740,20 +740,25 @@ public:
     }
 };
 
-class DecompressPointerGT : public GTBlockDict {
+class DecompressPointerGT {
 public:
     DecompressPointerGT() {}
 
     virtual void seek(const size_t position) = 0;
     virtual size_t fill_genotype_array_advance(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles) = 0;
     virtual void fill_allele_counts_advance(const size_t n_alleles) = 0;
-    virtual const std::vector<size_t>& get_allele_count_ref() const = 0;
+    inline const std::vector<size_t>& get_allele_count_ref() const {
+        return allele_counts;
+    }
 
     virtual ~DecompressPointerGT() {}
+
+protected:
+    std::vector<size_t> allele_counts;
 };
 
 template <typename A_T = uint32_t, typename WAH_T = uint16_t>
-class DecompressPointerGTBlock : public DecompressPointerGT, protected PBWTSorter {
+class DecompressPointerGTBlock : public DecompressPointerGT, private GTBlockDict, protected PBWTSorter {
 public:
     DecompressPointerGTBlock(const header_t& header, void* block_p) :
         header(header), block_p(block_p), N_SAMPLES(header.num_samples), N_HAPS(N_SAMPLES ? N_SAMPLES*2 : header.hap_samples), /// @todo fix ploidy
@@ -1143,10 +1148,6 @@ public:
         allele_counts[0] = CURRENT_N_HAPS - total_alt; // - total missing/eovs ?
     }
 
-    inline const std::vector<size_t>& get_allele_count_ref() const override {
-        return allele_counts;
-    }
-
     InternalGtAccess get_internal_access(size_t n_alleles) {
         InternalGtAccess ia;
         ia.position = internal_binary_gt_line_position;
@@ -1409,8 +1410,6 @@ protected:
     //std::map<size_t, int32_t> non_default_vector_length_positions;
     std::vector<bool> haploid_binary_gt_line;
 
-
-    std::vector<size_t> allele_counts;
     size_t ones;
 
     // Internal
