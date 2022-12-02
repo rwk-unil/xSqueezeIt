@@ -316,10 +316,9 @@ size_t count_entries(const std::string& ifname) {
         throw "Failed to count entries";
     }
 
-    size_t lines = 0;
-    while (bcf_next_line(bcf_fri)) {
-        lines++;
-    }
+
+    while (bcf_next_line(bcf_fri)) {}
+    size_t lines = bcf_fri.line_num;
 
     destroy_bcf_file_reader(bcf_fri);
 
