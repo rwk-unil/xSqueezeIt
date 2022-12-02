@@ -14,6 +14,13 @@ component following the final '/'. Trailing '/' characters are not counted as
 part of the pathname.
 */
 
+#if __cplusplus < 201703L
+#define MAYBE_UNUSED
+#warning "Warnings about unused functions are expected"
+#else
+#define MAYBE_UNUSED [[maybe_unused]]
+#endif
+
 /// @todo move this to an object file
 namespace
 {
@@ -24,12 +31,12 @@ namespace
         std::string filename;
     };
 
-    NamedFileStream get_temporary_file(int* file_desc = nullptr /** @todo flags */) {
-        char *tmpname = strdup("/tmp/tmpfileXXXXXX");
-        int fd = mkstemp(tmpname); /// @todo check return code
+    MAYBE_UNUSED NamedFileStream get_temporary_file(int* file_desc, const char* name_template /** @todo flags */) {
+        char *tmpname = strdup(name_template);
+        int fd = mkstemp(tmpname);
         std::string filename(tmpname);
         free(tmpname);
-        if (fd) {
+        if (fd != -1) {
             NamedFileStream nfs(filename); // Opens as stream
             if (file_desc) {
                 *file_desc = fd;
@@ -47,6 +54,10 @@ namespace
         }
 
         return NamedFileStream(filename);
+    }
+
+    MAYBE_UNUSED NamedFileStream get_temporary_file(int* file_desc = nullptr /** @todo flags */) {
+        return get_temporary_file(file_desc, "/tmp/tmpfileXXXXXX");
     }
 } // namespace
 
@@ -76,5 +87,7 @@ namespace
         }
     };
 #endif
+
+#undef MAYBE_UNUSED
 
 #endif /* __FS_HPP__ */
