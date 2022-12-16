@@ -35,6 +35,14 @@ void print_vector_(const std::vector<T>& v) {
     std::cout << std::endl;
 }
 
+template <typename T>
+void print_vector_cpy(const std::vector<T>& v) {
+    for (auto e : v) {
+        std::cout << e << " ";
+    }
+    std::cout << std::endl;
+}
+
 /*
  * Word Aligned Hybrid (WAH)
  * If you have no idea about WAH check out :
@@ -122,6 +130,13 @@ namespace wah {
         }
     }
 
+    template<typename T>
+    void print_wah2_vector(std::vector<T>& v) {
+        for (auto& w : v) {
+            print_wah2(w);
+        }
+    }
+
     template<typename T = uint16_t>
     inline size_t wah2_advance_pointer_count_ones(T*& wah_p, size_t size) {
         constexpr size_t WAH_BITS = sizeof(T)*8-1;
@@ -190,6 +205,8 @@ namespace wah {
             word = *wah_p;
             if (word & WAH_HIGH_BIT) {
                 const size_t stop = bit_position + (word & WAH_MAX_COUNTER)*WAH_BITS;
+                //std::cerr << "Wah word : 0x" << std::hex << word << std::dec << std::endl;
+                //std::cerr << "[DEBUG] WAH bit position : " << bit_position << " stop : " << stop << std::endl;
                 if (word & WAH_COUNT_1_BIT) {
                     // Expand with ones
                     for (size_t _ = bit_position; _ < stop; ++_) {
@@ -265,6 +282,7 @@ namespace wah {
             BITS_WAH_SIZE += 1;
             bits.resize(bits.size() + (WAH_BITS-BITS_REM), 0);
         }
+        //std::cerr << "Number of bits : " << bits.size() << " in wah size : " << BITS_WAH_SIZE << " rem : " << BITS_REM << std::endl;
 
         std::vector<T> wah;
 
