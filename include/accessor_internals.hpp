@@ -100,6 +100,12 @@ public:
         return static_cast<DecompressPointerGTBlock<A_T, WAH_T>* >(dp.get())->get_internal_access(n_alleles);
     }
 
+    template <class DP = DecompressPointerShapeIt5Block<WAH_T> >
+    inline typename DP::InternalAccess get_internal_access_template(size_t n_alleles, size_t position) {
+        seek(position);
+        return static_cast<DP*>(dp.get())->get_internal_access(n_alleles);
+    }
+
     AccessorInternalsNewTemplate(std::string filename) {
         std::fstream s(filename, s.binary | s.in);
         if (!s.is_open()) {
@@ -173,6 +179,7 @@ protected:
         char* p = (char*)block_p;
 
         auto kv_p = block_dictionary.find(IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY);
+        /** @todo the accesses here don't have to be mutually exclusive */
         if (kv_p != block_dictionary.end()) {
             p += kv_p->second;
             gt_block_p = p;
@@ -182,7 +189,7 @@ protected:
         } else if ((kv_p = block_dictionary.find(IBinaryBlock<uint32_t, uint32_t>::KEY_SHAPEIT5_ENTRY)) != block_dictionary.end()) {
             p += kv_p->second;
             gt_block_p = p;
-            //dp = make_unique<DecompressPointerShapeIt5Block>(header, gt_block_p);
+            dp = make_unique<DecompressPointerShapeIt5Block<WAH_T> >(header, gt_block_p);
         } else {
             std::cerr << "Binary block does not have GT block" << std::endl;
             gt_block_p = nullptr;
