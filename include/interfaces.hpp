@@ -155,6 +155,25 @@ public:
      * */
     virtual uint32_t get_id() const = 0;
 
+    /**
+     * @brief The type size to which the stream must be padded
+     *
+     * @tparam T
+     */
+    template<typename T = uint32_t>
+    static void padd_align(std::ostream& ofs) {
+        // Alignment padding...
+        size_t mod_T = size_t(ofs.tellp()) % sizeof(T);
+        //std::cerr << "mod : " << mod_uint32 << std::endl;
+        if (mod_T) {
+            size_t padding = sizeof(uint32_t) - mod_T;
+            for (size_t i = 0; i < padding; ++i) {
+                //std::cerr << "A byte of padding was written" << std::endl;
+                ofs.write("P", sizeof(char)); /** @note 'P' for "padding" (write single char) */
+            }
+        }
+    }
+
     virtual ~IWritable() {}
 };
 
@@ -236,15 +255,8 @@ public:
         }
 
         // Alignment padding...
-        size_t mod_uint32 = size_t(ofs.tellp()) % sizeof(uint32_t);
-        //std::cerr << "mod : " << mod_uint32 << std::endl;
-        if (mod_uint32) {
-            size_t padding = sizeof(uint32_t) - mod_uint32;
-            for (size_t i = 0; i < padding; ++i) {
-                //std::cerr << "A byte of padding was written" << std::endl;
-                ofs.write("P", sizeof(char)); /** @note 'P' for "padding" */
-            }
-        }
+        IWritable::padd_align<uint32_t>(ofs);
+
         if (fd) {
             close(fd);
         }
