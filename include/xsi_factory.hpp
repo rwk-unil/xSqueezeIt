@@ -32,6 +32,9 @@
 #include "gt_block.hpp"
 #include "shapeit5_block.hpp"
 
+#include "xsqueezeit.hpp"
+extern GlobalAppOptions global_app_options;
+
 namespace {
 
 class XsiFactoryInterface {
@@ -48,13 +51,7 @@ public:
         }
 
         // Alignment padding... Indices (after samples in layout) require to be aligned
-        size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
-        if (mod_uint32) {
-            size_t padding = sizeof(uint32_t) - mod_uint32;
-            for (size_t i = 0; i < padding; ++i) {
-                s.write("", sizeof(char));
-            }
-        }
+        IWritable::padd_align<uint32_t>(s);
 
         return sample_offset;
     }
@@ -71,6 +68,7 @@ public:
 
     virtual ~XsiFactoryInterface() {}
 
+    /** @todo these parameters need to be refactored (and do params per block) */
     class XsiFactoryParameters {
     public:
         XsiFactoryParameters(const std::string& filename, const size_t BLOCK_LENGTH_IN_BCF_LINES,
@@ -80,7 +78,19 @@ public:
             filename(filename), BLOCK_LENGTH_IN_BCF_LINES(BLOCK_LENGTH_IN_BCF_LINES),
             MINOR_ALLELE_FREQUENCY_THRESHOLD(MINOR_ALLELE_FREQUENCY_THRESHOLD), MINOR_ALLELE_COUNT_THRESHOLD(MINOR_ALLELE_COUNT_THRESHOLD),
             sample_list(sample_list), default_phased(default_phased),
-            compression_on(compression_on), compression_level(compression_level) {
+            compression_on(compression_on), compression_level(compression_level),
+            global_app_options_ref(global_app_options) {
+                /** @todo this active encoder set may be directly replace by encoders insted of keys...
+                 *        but this would require some more in-depth rework and refactoring
+                 */
+
+                /** @todo it's a bit dirty to use the global app options here, especially if used outside of xsqueezit */
+                /** @todo this has not necessarily to be mutually exclusive */
+                if (global_app_options.shapeit5_format) {
+                    active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_SHAPEIT5_ENTRY);
+                } else {
+                    active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GT_ENTRY);
+                }
         }
 
         const std::string filename;
@@ -91,7 +101,8 @@ public:
         const int32_t default_phased;
         bool compression_on;
         int compression_level;
-        std::set<IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys> active_encoders = {IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GT_ENTRY};
+        std::set<IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys> active_encoders;
+        const GlobalAppOptions& global_app_options_ref;
     };
 
 protected:
