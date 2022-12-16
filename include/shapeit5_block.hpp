@@ -50,13 +50,6 @@ public:
     enum Dictionary_Vals : uint32_t {
         VAL_UNDEFINED = (uint32_t)-1,
     };
-
-    enum Weirdness_Strategy : uint32_t {
-        WS_PBWT_WAH = 0,
-        WS_WAH = 1,
-        WS_SPARSE = 2,
-        WS_MIXED = 3,
-    };
 };
 
 template<typename WAH_T = uint16_t>
