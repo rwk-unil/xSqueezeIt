@@ -39,8 +39,6 @@
 #include <memory>
 #include <thread>
 
-#include "block.hpp"
-
 #ifndef DEBUGGG
 static constexpr bool DEBUG_COMPRESSION = false;
 #else
