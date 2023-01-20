@@ -199,7 +199,7 @@ public:
         //for (auto s : sample_list) std::cerr << s;
         //std::cerr << std::endl;
 
-        create_new_block();
+        //create_new_block();
     }
 
     void append(const bcf_file_reader_info_t& bcf_fri) override {
