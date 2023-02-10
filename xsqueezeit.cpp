@@ -115,10 +115,15 @@ int main(int argc, const char *argv[]) {
             std::cerr << "Cannot output compressed file(s) to stdout" << std::endl << std::endl;
             exit(app.exit(CLI::CallForHelp()));
         }
-        if(file_has_no_samples(filename)) {
-            exit(app.exit(CLI::RuntimeError()));
-        }
-        if(file_has_no_entries(filename)) {
+        try {
+            if(file_has_no_samples(filename)) {
+                exit(app.exit(CLI::RuntimeError()));
+            }
+            if(file_has_no_entries(filename)) {
+                exit(app.exit(CLI::RuntimeError()));
+            }
+        } catch (const char* e) {
+            std::cerr << "Failure occurred : " << e << std::endl;
             exit(app.exit(CLI::RuntimeError()));
         }
 
