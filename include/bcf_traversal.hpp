@@ -42,6 +42,8 @@ public:
     // Todo set region / samples
 
     void traverse(const std::string filename);
+    void traverse_no_destroy(const std::string filename);
+    void destroy();
 
     virtual ~BcfTraversal() {}
 
@@ -49,6 +51,7 @@ protected:
     virtual void handle_bcf_file_reader() {}
     virtual void handle_bcf_line() {}
 
+    bool destroyed = true;
     bool stop = false;
     bcf_file_reader_info_t bcf_fri;
     int ngt = 0;
