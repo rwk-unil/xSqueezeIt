@@ -1,4 +1,4 @@
-FROM ubuntu:21.04
+FROM ubuntu:20.04
 
 # This is a Dockerfile for running xSqueezeIt
 MAINTAINER Rick Wertenbroek <rick.wertenbroek@unil.ch>
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y \
 	apt-get clean && apt-get purge && \
 	rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Clone Source Code Repository and build fat jar plus wrapper execution script
+# Clone Source Code Repository and build
 RUN mkdir -p /usr/src/ && \
     cd /usr/src/ && \
     git clone https://github.com/rwk-unil/xSqueezeIt.git && \
