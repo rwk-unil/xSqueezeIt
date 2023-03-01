@@ -97,10 +97,12 @@ sudo make install
 sudo ldconfig
 cd ..
 
-# Clone and build zstd (if you already have zstd set Makefile accordingly and skip)
+# Clone, build, and install zstd (if you already have zstd set Makefile accordingly and skip)
 git clone https://github.com/facebook/zstd.git
 cd zstd
 make
+sudo make install
+sudo ldconfig
 cd ..
 
 # Build application
