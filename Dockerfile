@@ -23,6 +23,7 @@ RUN mkdir -p /usr/src/ && \
     cd htslib && \
     autoheader && \
     autoconf && \
+    automake --add-missing 2>/dev/null ; \
     ./configure && \
     make && \
     make install && \

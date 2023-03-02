@@ -91,6 +91,7 @@ git submodule update --init htslib
 cd htslib
 autoheader
 autoconf
+automake --add-missing 2>/dev/null
 ./configure
 make
 sudo make install
