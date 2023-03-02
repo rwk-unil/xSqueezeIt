@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # This is a Dockerfile for running xSqueezeIt
 MAINTAINER Rick Wertenbroek <rick.wertenbroek@unil.ch>
@@ -23,6 +23,7 @@ RUN mkdir -p /usr/src/ && \
     cd htslib && \
     autoheader && \
     autoconf && \
+    automake --add-missing 2>/dev/null ; \
     ./configure && \
     make && \
     make install && \
