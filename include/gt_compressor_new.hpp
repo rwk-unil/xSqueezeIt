@@ -523,7 +523,12 @@ public:
             create_index_file(variant_file);
         });
 
-        _compressor->compress_to_file();
+        try {
+            _compressor->compress_to_file();
+        } catch (const char * e) {
+            std::cerr << "error : " << e << std::endl;
+            throw "Compression error";
+        }
         variant_thread.join();
         if (!fail) {
             std::cout << "File " << _compressor->ofname << " written" << std::endl;
