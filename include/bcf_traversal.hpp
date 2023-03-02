@@ -42,6 +42,13 @@ public:
     // Todo set region / samples
 
     void traverse(const std::string filename);
+    /**
+     * @brief A non packing traversal, also doesn't destroy the BCF file reader info at the end
+     *        This is used for performance reason when we need to traverse without unpacking each line
+     *
+     * @param filename
+     */
+    void traverse_no_unpack_no_destroy(const std::string filename);
     void traverse_no_destroy(const std::string filename);
     void destroy();
 
