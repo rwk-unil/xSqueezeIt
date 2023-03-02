@@ -1,5 +1,17 @@
 #include "bcf_traversal.hpp"
 
+void BcfTraversal::traverse_no_unpack_no_destroy(const std::string filename) {
+    initialize_bcf_file_reader(bcf_fri, filename);
+    destroyed = false;
+
+    handle_bcf_file_reader();
+    while(bcf_next_line(bcf_fri)) {
+        if (stop) break;
+
+        handle_bcf_line();
+    }
+}
+
 void BcfTraversal::traverse_no_destroy(const std::string filename) {
     initialize_bcf_file_reader(bcf_fri, filename);
     destroyed = false;
