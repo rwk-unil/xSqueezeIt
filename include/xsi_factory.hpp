@@ -121,6 +121,10 @@ public:
         effective_bcf_lines_in_block++;
     }
 
+    bool has_encoder(T_K id) {
+        return this->writable_block_encoders.find(id) != writable_block_encoders.end();
+    }
+
     virtual ~EncodingBinaryBlock() {}
 
 protected:
