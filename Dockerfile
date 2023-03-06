@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 # This is a Dockerfile for running xSqueezeIt
 MAINTAINER Rick Wertenbroek <rick.wertenbroek@unil.ch>
