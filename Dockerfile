@@ -3,6 +3,8 @@ FROM ubuntu:20.04
 # This is a Dockerfile for running xSqueezeIt
 MAINTAINER Rick Wertenbroek <rick.wertenbroek@unil.ch>
 
+ENV DEBIAN_FRONTEND noninteractive
+
 # Install required software and clean as not to make the layer dirty
 RUN apt-get update && apt-get -y upgrade && apt-get install -y \
 	apt-utils curl gnupg gcc g++ make autoconf && \
