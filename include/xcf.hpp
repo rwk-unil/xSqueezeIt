@@ -65,7 +65,9 @@ void initialize_bcf_file_reader(bcf_file_reader_info_t& bcf_fri, const std::stri
 
 void destroy_bcf_file_reader(bcf_file_reader_info_t& bcf_fri);
 
-void initialize_bcf_file_reader_with_region(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file = 0);
+void initialize_bcf_file_reader_with_region(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file = false);
+
+void initialize_bcf_file_reader_with_target(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file = false);
 
 unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri);
 
