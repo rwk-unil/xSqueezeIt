@@ -12,6 +12,7 @@ SCRIPTPATH=$(realpath  $(dirname "$0"))
 
 ZSTD=""
 REGIONS=""
+TARGETS=""
 SAMPLES=""
 ZSTD_LEVEL=""
 unset -v NO_KEEP
@@ -31,6 +32,11 @@ case $key in
     ;;
     -r|--regions)
     REGIONS="-r $2"
+    shift # past argument
+    shift # past value
+    ;;
+    -t|--targets)
+    TARGETS="-t $2"
     shift # past argument
     shift # past value
     ;;
@@ -72,6 +78,7 @@ TMPDIR=$(mktemp -d -t xsi_XXXXXX) || { echo "Failed to create temporary director
 
 echo "Temporary director : ${TMPDIR}"
 echo "Region : ${REGIONS}"
+echo "Targets : ${TARGETS}"
 echo "Samples : ${SAMPLES}"
 
 function exit_fail_rm_tmp {
@@ -83,7 +90,7 @@ function exit_fail_rm_tmp {
 # --variant-block-length 65536
 # --variant-block-length 1024
 "${SCRIPTPATH}"/../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
-"${SCRIPTPATH}"/../../xsqueezeit -x ${REGIONS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -x ${REGIONS} ${TARGETS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }
 
@@ -96,7 +103,7 @@ echo
 # a streaming program, it will load everything in memory first...
 # E.g., 1KGP3 chr20 -> about 9 GB (uncompressed view output) times 2 (two files)
 #diff <(bcftools view ${FILENAME}) <(bcftools view ${TMPDIR}/uncompressed.bcf) | tee ${TMPDIR}/difflog.txt
-diff <(bcftools view ${REGIONS} ${SAMPLES} ${FILENAME}) <(bcftools view ${TMPDIR}/uncompressed.bcf) > ${TMPDIR}/difflog.txt
+diff <(bcftools view ${REGIONS} ${TARGETS} ${SAMPLES} ${FILENAME}) <(bcftools view ${TMPDIR}/uncompressed.bcf) > ${TMPDIR}/difflog.txt
 DIFFLINES=$(wc -l ${TMPDIR}/difflog.txt | awk '{print $1}')
 #echo $DIFFLINES
 if [ ${DIFFLINES} -gt 4 ]
