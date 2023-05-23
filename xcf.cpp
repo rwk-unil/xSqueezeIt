@@ -125,6 +125,19 @@ void initialize_bcf_file_reader_with_region(bcf_file_reader_info_t& bcf_fri, con
     initialize_bcf_file_reader_common(bcf_fri, filename);
 }
 
+void initialize_bcf_file_reader_with_target(bcf_file_reader_info_t& bcf_fri, const std::string& filename, const std::string& region, bool is_file) {
+    bcf_fri.sr = bcf_sr_init();
+    bcf_fri.sr->collapse = COLLAPSE_NONE;
+    bcf_fri.sr->require_index = 1;
+    if (bcf_sr_set_targets(bcf_fri.sr, region.c_str(), is_file, 0) < 0) {
+        std::cerr << "Failed to read the regions : " << region << std::endl;
+        destroy_bcf_file_reader(bcf_fri);
+        throw "Failed to read the regions";
+    }
+
+    initialize_bcf_file_reader_common(bcf_fri, filename);
+}
+
 unsigned int bcf_next_line(bcf_file_reader_info_t& bcf_fri) {
     unsigned int nset = bcf_sr_next_line(bcf_fri.sr);
     if (nset) {

@@ -115,6 +115,8 @@ private:
             } else {
                 initialize_bcf_file_reader_with_region(bcf_fri, bcf_nosamples, global_app_options.regions_file, true /*is file*/);
             }
+        } else if (global_app_options.targets != "") {
+            initialize_bcf_file_reader_with_target(bcf_fri, bcf_nosamples, global_app_options.targets);
         } else {
             initialize_bcf_file_reader(bcf_fri, bcf_nosamples);
         }
