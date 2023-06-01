@@ -246,15 +246,15 @@ protected:
             /* Create temporary file but close it now (will be repopened) */
             auto nfs = get_temporary_file(nullptr, "/tmp/xsi_threadXXXXXX");
             nfs.stream.close();
-            ifname = ifile;
-            ofname = nfs.filename;
+            this->ifname = ifile;
+            this->ofname = nfs.filename;
 
             //std::cerr << "Thread " << id << " starts at " << start << " and ends at " << stop << std::endl;
         }
 
         ~Worker() {
             /* Delete the temporary file */
-            remove(ofname);
+            remove(this->ofname);
         }
 
         void launch_thread() {
@@ -280,11 +280,11 @@ protected:
         void run() {
             fail = false;
             try {
-                init_compression(ifname, ofname);
-                GtCompressorStream<XSIF>::default_phased = seek_default_phased(ifname);
+                init_compression(this->ifname, this->ofname);
+                GtCompressorStream<XSIF>::default_phased = seek_default_phased(this->ifname);
                 //std::cerr << "It seems the file " << ifname << " is mostly " << (GtCompressorStream<XSIF>::default_phased ? "phased" : "unphased") << std::endl;
-                GtCompressorStream<XSIF>::PLOIDY = seek_max_ploidy_from_first_entry(ifname);
-                BcfTraversal::traverse(ifname);
+                GtCompressorStream<XSIF>::PLOIDY = seek_max_ploidy_from_first_entry(this->ifname);
+                BcfTraversal::traverse(this->ifname);
                 GtCompressorStream<XSIF>::factory->finalize_file();
                 GtCompressor::s.close();
             } catch (...) {
@@ -297,9 +297,10 @@ protected:
             this->ifname = ifname;
             this->ofname = ofname;
             /* The reason it is reopened is because s is not an nfs, also streams cannot be simply copied */
-            s = std::fstream(ofname, s.binary | s.out | s.trunc);
-            if (!s.is_open()) {
-                std::cerr << "Failed to open file " << ofname << std::endl;
+            this->s = std::fstream(this->ofname, this->s.binary | this->s.out | this->s.trunc);
+            if (!this->s.is_open())
+            {
+                std::cerr << "Failed to open file " << this->ofname << std::endl;
                 throw "Failed to open file";
             }
         }
