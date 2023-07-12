@@ -310,6 +310,7 @@ private:
         } else {
             // Else just fill the GT values
             ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * CURRENT_LINE_PLOIDY); // 15% of time spent in here
+            // TODO: ADD BCF_UPDATE_FORMAT<GP> HERE
         }
         if (ret) {
             std::cerr << "Failed to update genotypes" << std::endl;
@@ -522,6 +523,7 @@ public:
                 std::cerr << "Failed to remove samples from header for" << bcf_ofname << std::endl;
                 throw "Failed to remove samples";
             }
+            // TODO: ADD HEADER LINE FOR GP
 
             if (select_samples) {
                 for (const auto& sample_index : samples_to_use) {

@@ -93,6 +93,7 @@ public:
         app.add_option("--nthreads", n_threads, "Number of threads for compression");
 
         app.add_flag("--shapeit5", shapeit5_format, "EXPERIMENTAL - Generate an XSI file with SHAPEIT5 internal format");
+        app.add_flag("--GP", compress_gp, "EXPERIMENTAL - Compress GP array");
     }
     CLI::App app{"xSqueezeIt - VCF/BCF Compressor"};
 
@@ -149,6 +150,7 @@ public:
     size_t n_threads = 0;
 
     bool shapeit5_format = false;
+    bool compress_gp = false;
 };
 
 #endif /* __XSQUEEZEIT_HPP__ */

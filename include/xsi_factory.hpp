@@ -90,6 +90,8 @@ public:
                     active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_SHAPEIT5_ENTRY);
                 } else {
                     active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GT_ENTRY);
+                    active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GP_ENTRY);
+                    // * ADD GP ENCODER
                 }
         }
 

@@ -28,6 +28,7 @@
 
 #include "gt_compressor_new.hpp"
 #include "gt_decompressor_new.hpp"
+#include "gp_compressor.hpp"
 #include "time.hpp"
 
 // Getting some insights (remove for release)
@@ -128,6 +129,11 @@ int main(int argc, const char *argv[]) {
         }
 
         bool fail = false;
+        if (opt.compress_gp)
+        {
+            GPCompressor gpc = GPCompressor();
+            gpc.traverse(filename, GPCompressor::Mode::TABLE);
+        }
         try {
             NewCompressor c;
             c.set_maf(opt.maf);

@@ -32,6 +32,7 @@
 #include "xcf.hpp"
 #include "gt_block.hpp"
 #include "shapeit5_block.hpp"
+#include "gp_block.hpp"
 #include "make_unique.hpp"
 
 #include <fcntl.h>
@@ -77,6 +78,7 @@ private:
     }
 
 public:
+    // TODO: fill_gp_array()
     size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t new_position) override {
         seek(new_position);
 
@@ -240,6 +242,7 @@ protected:
     void* block_p = nullptr;
     void* gt_block_p = nullptr;
     std::unique_ptr<DecompressPointerGT> dp = nullptr;
+    std::unique_ptr<DecompressPointer> dp_gp = nullptr; // TODO: Make it generic
     size_t current_block = -1;
     std::map<uint32_t, uint32_t> block_dictionary;
 };
