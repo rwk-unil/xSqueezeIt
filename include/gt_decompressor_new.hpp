@@ -71,9 +71,11 @@ public:
             // Can still be used to "extract" the variant BCF (i.e. loop through the variant BCF and copy it to output... which is useless but ok)
             genotypes = NULL;
             selected_genotypes = NULL;
+            genotypes_posteriors = NULL;
         } else {
             genotypes = new int32_t[header.hap_samples];
             selected_genotypes = new int32_t[header.hap_samples];
+            genotypes_posteriors = new float[header.num_samples * 3];
         }
     }
 
@@ -96,6 +98,9 @@ public:
         }
         if (selected_genotypes) {
             delete[] selected_genotypes;
+        }
+        if (genotypes_posteriors){
+            delete[] genotypes_posteriors;
         }
     }
 
@@ -200,6 +205,7 @@ private:
             } else {
                 // Fill the genotype array (as bcf_get_genotypes() would do)
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                current_line_num_gp = accessor.fill_gp_array(genotypes_posteriors, header.num_samples, bcf_fri.line->n_allele, bm_index); // TODO: What to do if not present
 
                 update_and_write_bcf_record(bcf_fri, hdr, fp, rec, ac_s);
             }
@@ -310,6 +316,7 @@ private:
         } else {
             // Else just fill the GT values
             ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * CURRENT_LINE_PLOIDY); // 15% of time spent in here
+            ret |= bcf_update_format_float(hdr, rec, "GP", genotypes_posteriors, bcf_hdr_nsamples(hdr) * 3);
             // TODO: ADD BCF_UPDATE_FORMAT<GP> HERE
         }
         if (ret) {
@@ -523,13 +530,17 @@ public:
                 std::cerr << "Failed to remove samples from header for" << bcf_ofname << std::endl;
                 throw "Failed to remove samples";
             }
+            bcf_hdr_append(hdr, std::string("##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Genotype posteriors\">").c_str());
             // TODO: ADD HEADER LINE FOR GP
 
-            if (select_samples) {
+            if (select_samples)
+            {
                 for (const auto& sample_index : samples_to_use) {
                     bcf_hdr_add_sample(hdr, sample_list[sample_index].c_str());
                 }
-            } else {
+            }
+            else
+            {
                 for (const auto& sample : sample_list) {
                     bcf_hdr_add_sample(hdr, sample.c_str());
                 }
@@ -574,7 +585,9 @@ protected:
     std::unique_ptr<XsiFactoryInterface> xsi_factory = nullptr;
 
     int32_t* genotypes{NULL};
+    float* genotypes_posteriors{NULL};
     size_t current_line_num_genotypes;
+    size_t current_line_num_gp;
     int32_t* selected_genotypes{NULL};
 };
 
