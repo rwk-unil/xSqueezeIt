@@ -67,6 +67,13 @@ public:
         return indices_offset;
     }
 
+    static size_t write_huffman_table(std::fstream& s) {
+        size_t huffman_offset = size_t(s.tellp());
+        HuffmanNew::get_instance().save_lookup_table(s);
+        IWritable::padd_align<uint32_t>(s);
+        return huffman_offset;
+    }
+
     virtual ~XsiFactoryInterface() {}
 
     /** @todo these parameters need to be refactored (and do params per block) */

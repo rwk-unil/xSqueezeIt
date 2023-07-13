@@ -1,5 +1,7 @@
+#ifndef __GP_COMPRESSOR_HPP__
+#define __GP_COMPRESSOR_HPP__
+
 #include "bcf_traversal.hpp"
-#include "huffman.hpp"
 #include "huffman_new.hpp"
 #include "utils.hpp"
 #include <string>
@@ -17,7 +19,7 @@ private:
     int m_gpArrSize;
     bool m_encoding;
     bool m_decoding;
-    HuffmanNew m_huffman;
+    // HuffmanNew m_huffman;
 
 public:
     std::map<std::string, int> m_gpMapString;
@@ -34,7 +36,7 @@ public:
     GPCompressor() : BcfTraversal(), m_gpArr(NULL), m_gpArrSize(0), m_lineCount(0), m_encoding(false)
     {
         // m_huffman = Huffman<std::string>();
-        m_huffman = HuffmanNew();
+        // m_huffman = HuffmanNew::get_instance();
         m_encodedBits = std::vector<bool>();
     }
 
@@ -47,10 +49,10 @@ public:
         }
     }
 
-    HuffmanNew get_huffman_encoder() const
-    {
-        return m_huffman;
-    }
+    // HuffmanNew get_huffman_encoder() const
+    // {
+    //     return m_huffman;
+    // }
 
     void traverse(std::string filename, Mode mode)
     {
@@ -110,7 +112,7 @@ public:
                 stream.str(std::string());
                 stream.clear();
             }
-            m_huffman.encode(gps, m_encodedBits);
+            HuffmanNew::get_instance().encode(gps, m_encodedBits);
         }
         else // Build table
         {
@@ -136,7 +138,7 @@ public:
 
     void build_table()
     {
-        m_huffman.build_tree(m_gpMapString);
+        HuffmanNew::get_instance().build_tree(m_gpMapString);
         m_encoding = true;
     }
 
@@ -151,11 +153,11 @@ public:
 
     void saveTableAndData(const std::string &filename, bool wah = false)
     {
-        std::ofstream file(filename, std::ios::binary);
+        std::fstream file(filename, std::ios::binary);
 
         if (file)
         {
-            m_huffman.save_lookup_table(file);
+            HuffmanNew::get_instance().save_lookup_table(file);
 
             size_t total_data_size = 0;
             if (wah)
@@ -212,11 +214,11 @@ public:
 
     void loadTableAndData(const std::string &filename)
     {
-        std::ifstream file(filename, std::ios::binary);
+        std::fstream file(filename, std::ios::binary);
 
         if (file)
         {
-            m_huffman.load_lookup_table(file);
+            HuffmanNew::get_instance().load_lookup_table(file);
             m_encodedBits.clear();
 
             // Read the size of the encoded data in bits
@@ -278,3 +280,5 @@ private:
         }
     };
 };
+
+#endif // __GP_COMPRESSOR_HPP__

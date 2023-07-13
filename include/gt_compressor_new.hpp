@@ -82,6 +82,7 @@ public:
             .rearrangement_track_offset = (uint32_t)-1, /* Unused */
             .xcf_entries = (uint64_t)0, //this->entry_counter,
             .num_samples = (uint64_t)-1, // Will be rewritten
+            .huffman_table_offset = (uint64_t)-1, // Will be rewritten
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,
@@ -145,6 +146,8 @@ public:
         message_write(s, "sample id's");
         header.indices_offset = XsiFactoryInterface::write_indices(s, factory->get_indices());
         message_write(s, "indices");
+        header.huffman_table_offset = XsiFactoryInterface::write_huffman_table(s);
+        message_write(s, "huffman table");
         header.ploidy = this->PLOIDY;
         header.hap_samples = this->sample_list.size() * this->PLOIDY;
         factory->overwrite_header(this->s, this->header);
@@ -423,6 +426,9 @@ public:
         // Write the indices
         this->indices_offset = XsiFactoryInterface::write_indices(s, indices);
 
+        // Write the Huffman table for decoding the GP fields
+        uint64_t huffman_offset = XsiFactoryInterface::write_huffman_table(s);
+
         //for (auto& i : indices) {
         //    std::cerr << "Indice : " << i << std::endl;
         //}
@@ -460,6 +466,7 @@ public:
 
         header.samples_offset = samples_offset;
         header.indices_offset = indices_offset;
+        header.huffman_table_offset = huffman_offset;
 
         ///////////////////////////
         // Rewrite Filled Header //

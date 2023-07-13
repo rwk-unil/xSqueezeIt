@@ -1,5 +1,5 @@
-#ifndef UTILS_HPP
-#define UTILS_HPP
+#ifndef __UTILS_HPP__
+#define __UTILS_HPP__
 
 #include <string>
 
@@ -20,4 +20,4 @@ std::string human_readable_size(size_t size)
     return std::string(output);
 }
 
-#endif // UTILS_HPP
+#endif // __UTILS_HPP__

@@ -61,6 +61,12 @@ public:
 
         // Read the header
         s.read((char *)(&(this->header)), sizeof(header_t));
+
+        // Load Huffman table
+        // size_t pos = s.tellp();
+        s.seekp(header.huffman_table_offset);
+        HuffmanNew::get_instance().load_lookup_table(s);
+        // s.seekp(pos);
         s.close();
 
         samples_to_use.resize(sample_list.size());
@@ -168,6 +174,9 @@ private:
         uint32_t bm_index = 0;
         //const int32_t an = samples_to_use.size() * header.ploidy;
         std::vector<int32_t> ac_s;
+
+        // Reload Huffman table
+        // HuffmanNew::get_instance().load_lookup_table(header.huffman_table_offset);
 
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
@@ -410,7 +419,7 @@ public:
                 file.erase(0,1); // Remove first character
             }
 
-            std::fstream fs(file);
+            std::fstream fs(file); // FIXME: fstream not closed ?
 
             if (!fs.is_open()) {
                 std::cerr << "Could not open file " << file << std::endl;

@@ -98,7 +98,8 @@ struct header_s {
     uint64_t xcf_entries = 0;         // Num entries in the BCF file (may be less than num_variants if multi-allelic)
     uint32_t phase_info_offset = 0;
     uint64_t num_samples = 0;
-    uint8_t rsvd_3[104] = {0,};
+    uint64_t huffman_table_offset = 0; // Position in the binary file of the Huffman table used for GP decoding 
+    uint8_t rsvd_3[96] = {0,};
 
     // 32 bytes
     uint32_t rsvd_4[3] = {0,};
@@ -120,6 +121,7 @@ void print_header_info(const header_t& header) {
     std::cerr << "Indice bytes : " << (size_t)header.ind_bytes << std::endl;
     std::cerr << "Sample id bytes : " << (size_t)header.aet_bytes << std::endl;
     std::cerr << "WAH bytes : " << (size_t)header.wah_bytes << std::endl;
+    std::cerr << "Huffman table bytes : " << (size_t)header.huffman_table_offset << std::endl;
     std::cerr << "--" << std::endl;
     //std::cerr << "Has missing : " << (header.has_missing ? "yes" : "no") << std::endl;
     //std::cerr << "Has non uniform phasing : " << (header.non_uniform_phasing ? "yes" : "no") << std::endl;

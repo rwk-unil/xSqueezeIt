@@ -1,11 +1,12 @@
-#ifndef HUFFMAN_NEW
-#define HUFFMAN_NEW
+#ifndef __HUFFMAN_NEW_HPP__
+#define __HUFFMAN_NEW_HPP__
 
 #include <queue>
 #include <unordered_map>
 #include <string>
-#include <utils.hpp>
 #include <iomanip>
+
+#define BITS_IN_BYTE 8
 
 class Node
 {
@@ -89,13 +90,18 @@ class HuffmanNew
 {
 private:
     std::map<std::string, HuffmanEntry *> m_lookup_table;
-    Node *m_huffman_tree;
+    Node *m_huffman_tree = nullptr;
 
 public:
-    HuffmanNew() : m_huffman_tree(nullptr)
+    // ! For now it's a singleton for ease of use -> change that
+    static HuffmanNew &get_instance()
     {
-        m_lookup_table = std::map<std::string, HuffmanEntry *>();
+        static HuffmanNew instance;
+        return instance;
     }
+
+    HuffmanNew(HuffmanNew const &) = delete;
+    void operator=(HuffmanNew const &) = delete;
 
     void build_tree()
     {
@@ -196,6 +202,49 @@ public:
         }
     }
 
+    // template<typename BOOL_T = uint8_t>
+    // inline size_t decode_one(void *data_p, std::vector<std::string> &decoded) {
+    //     size_t bit_counter = 0;
+
+    // }
+
+    template <typename BOOL_T = uint8_t>
+    size_t decode_stream(const void *data_p, std::vector<std::string> &decoded, size_t number, BOOL_T bit_offset)
+    {
+        size_t bit_counter = 0;
+        size_t val_counter = 0;
+        Node *node = m_huffman_tree;
+
+        BOOL_T *bit_p = (BOOL_T *)data_p;
+
+        while (val_counter < number)
+        {
+            BOOL_T bits = *bit_p++;
+            for (size_t i = bit_offset; i < sizeof(BOOL_T) * BITS_IN_BYTE; ++i)
+            {
+                bit_offset = 0; // Only offset the first
+                bit_counter++;
+                bool bit = (bits >> BITS_IN_BYTE - i - 1) & 1;
+
+                if (bit)
+                    node = node->right;
+                else
+                    node = node->left;
+
+                if (node->is_leaf())
+                {
+                    decoded.push_back(node->value);
+                    node = m_huffman_tree;
+                    val_counter++;
+
+                    if (number > 0 && val_counter >= number)
+                        return bit_counter;
+                }
+            }
+        }
+        return bit_counter;
+    }
+
     void print_tree()
     {
         std::cout << "Huffman tree:" << std::endl;
@@ -224,7 +273,7 @@ public:
         }
     }
 
-    void save_lookup_table(std::ofstream &file)
+    void save_lookup_table(std::fstream &file)
     {
         // Mode is binary
         if (file)
@@ -254,13 +303,13 @@ public:
             }
             auto end_pos = file.tellp();
 
-            std::cout << "Lookup table saved -> " << human_readable_size(end_pos - start_pos) << " bytes" << std::endl;
+            // std::cout << "Lookup table saved -> " << human_readable_size(end_pos - start_pos) << " bytes" << std::endl;
         }
         else
             std::cout << "Error opening file" << std::endl;
     }
 
-    void load_lookup_table(std::ifstream &file)
+    void load_lookup_table(std::fstream &file)
     {
         // Mode is binary
         if (file)
@@ -309,6 +358,11 @@ public:
     }
 
 private:
+    HuffmanNew() : m_huffman_tree(nullptr)
+    {
+        m_lookup_table = std::map<std::string, HuffmanEntry *>();
+    }
+
     void assign_binary_codes(Node *node, std::vector<bool> &code)
     {
         if (node == nullptr)
@@ -374,4 +428,4 @@ private:
     };
 };
 
-#endif // HUFFMAN_NEW
+#endif // __HUFFMAN_NEW_HPP__
