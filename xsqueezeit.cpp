@@ -30,6 +30,7 @@
 #include "gt_decompressor_new.hpp"
 #include "gp_compressor.hpp"
 #include "time.hpp"
+#include "utils.hpp"
 
 // Getting some insights (remove for release)
 #include "sandbox.hpp"
@@ -92,9 +93,10 @@ int main(int argc, const char *argv[]) {
                     std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
                     std::cerr << "INFO : Indices are\t\t\t" << hdr.samples_offset - hdr.indices_offset << " bytes" << std::endl;
                 } else if (hdr.xsi_layout == 1) {
-                    std::cerr << "INFO : Binary data is \t\t\t" << hdr.samples_offset - sizeof(header_t) << " bytes" << std::endl;
-                    std::cerr << "INFO : Samples list is\t\t\t" << hdr.indices_offset - hdr.samples_offset << " bytes" << std::endl;
-                    std::cerr << "INFO : Indices are\t\t\t" << fs::file_size(filename) - hdr.indices_offset << " bytes" << std::endl;
+                    std::cerr << "INFO : Binary data is \t\t\t" << human_readable_size(hdr.samples_offset - sizeof(header_t)) << std::endl;
+                    std::cerr << "INFO : Samples list is\t\t\t" << human_readable_size(hdr.indices_offset - hdr.samples_offset) << std::endl;
+                    std::cerr << "INFO : Indices are\t\t\t" << human_readable_size(hdr.huffman_table_offset - hdr.indices_offset) << std::endl;
+                    std::cerr << "INFO : Huffman table is\t\t\t" << human_readable_size(fs::file_size(filename) - hdr.huffman_table_offset) << std::endl;
                 }
             }
         }

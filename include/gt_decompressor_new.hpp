@@ -63,10 +63,10 @@ public:
         s.read((char *)(&(this->header)), sizeof(header_t));
 
         // Load Huffman table
-        // size_t pos = s.tellp();
-        s.seekp(header.huffman_table_offset);
-        HuffmanNew::get_instance().load_lookup_table(s);
-        // s.seekp(pos);
+        if(header.huffman_table_offset != -1) {
+            s.seekp(header.huffman_table_offset);
+            HuffmanNew::get_instance().load_lookup_table(s);
+        }
         s.close();
 
         samples_to_use.resize(sample_list.size());
@@ -175,9 +175,6 @@ private:
         //const int32_t an = samples_to_use.size() * header.ploidy;
         std::vector<int32_t> ac_s;
 
-        // Reload Huffman table
-        // HuffmanNew::get_instance().load_lookup_table(header.huffman_table_offset);
-
         // The number of variants does not equal the number of lines if multiple ALTs
         size_t num_variants_extracted = 0;
         size_t block_id = 0;
@@ -209,12 +206,15 @@ private:
                 // This is the "non optimal way"
                 /// @todo replace this by implementing the comments below
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                if(global_app_options.compress_gp)
+                    current_line_num_gp = accessor.fill_gp_array(genotypes_posteriors, header.num_samples, bm_index); // TODO: What to do if not present
 
                 update_and_write_xsi(bcf_fri, hdr, fp, rec, ac_s);
             } else {
                 // Fill the genotype array (as bcf_get_genotypes() would do)
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
-                current_line_num_gp = accessor.fill_gp_array(genotypes_posteriors, header.num_samples, bcf_fri.line->n_allele, bm_index); // TODO: What to do if not present
+                if(global_app_options.compress_gp)
+                    current_line_num_gp = accessor.fill_gp_array(genotypes_posteriors, header.num_samples, bm_index); // TODO: What to do if not present
 
                 update_and_write_bcf_record(bcf_fri, hdr, fp, rec, ac_s);
             }
@@ -254,6 +254,18 @@ private:
             }
         }
         return samples_to_use.size() * CURRENT_LINE_PLOIDY;
+    }
+
+    inline float* fill_selected_genotype_posteriors()
+    {
+        float* selected_genotypes_posteriors = new float[samples_to_use.size() * 3];
+        for (size_t i = 0; i < samples_to_use.size(); i++) {
+            for (size_t j = 0; j < 3; ++j)
+            {
+                selected_genotypes_posteriors[i*3+j] = genotypes_posteriors[samples_to_use[i]*3+j];
+            }
+        }
+        return selected_genotypes_posteriors;
     }
 
     /// @todo this factory append bcf file reader info is not the most optimal way
@@ -318,15 +330,22 @@ private:
             int32_t an = fill_selected_genotypes(ac_s);
 
             ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * CURRENT_LINE_PLOIDY);
+
+            if(global_app_options.compress_gp) {
+                float *selected_gp = fill_selected_genotype_posteriors();
+                ret |= bcf_update_format_float(hdr, rec, "GP", selected_gp, samples_to_use.size() * 3);
+                delete[] selected_gp;
+            }
             // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
             // Note that --no-update in bcftools disables this recomputation /// @todo this
             bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
             bcf_update_info_int32(hdr, rec, "AN", &an, 1);
+
         } else {
             // Else just fill the GT values
             ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * CURRENT_LINE_PLOIDY); // 15% of time spent in here
-            ret |= bcf_update_format_float(hdr, rec, "GP", genotypes_posteriors, bcf_hdr_nsamples(hdr) * 3);
-            // TODO: ADD BCF_UPDATE_FORMAT<GP> HERE
+            if(global_app_options.compress_gp)
+                ret |= bcf_update_format_float(hdr, rec, "GP", genotypes_posteriors, bcf_hdr_nsamples(hdr) * 3);
         }
         if (ret) {
             std::cerr << "Failed to update genotypes" << std::endl;

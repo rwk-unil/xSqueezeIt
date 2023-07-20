@@ -49,7 +49,7 @@ public:
     }
 
     // TODO: make generic
-    size_t fill_gp_array(float* gp_arr, size_t gp_arr_size, size_t n_alleles, size_t position) {
+    size_t fill_gp_array(float* gp_arr, size_t gp_arr_size, size_t position) {
         return internals->fill_gp_array(gp_arr, gp_arr_size, position);
     }
 

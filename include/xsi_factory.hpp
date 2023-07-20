@@ -67,9 +67,14 @@ public:
         return indices_offset;
     }
 
-    static size_t write_huffman_table(std::fstream& s) {
+    static size_t write_huffman_table(std::fstream &s, bool zstd_compression_on = false, int zstd_compression_level = 7)
+    {
         size_t huffman_offset = size_t(s.tellp());
-        HuffmanNew::get_instance().save_lookup_table(s);
+        if (zstd_compression_on) {
+            HuffmanNew::get_instance().save_lookup_table_compress(s, zstd_compression_level);
+        } else {
+            HuffmanNew::get_instance().save_lookup_table(s);
+        }
         IWritable::padd_align<uint32_t>(s);
         return huffman_offset;
     }

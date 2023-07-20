@@ -225,7 +225,7 @@ protected:
             p += kv_p->second;
             gp_block_p = p;
             // Make DecompressPointer
-            dp_gp = make_unique<DecompressPointerGPBlock<WAH_T> >(header, gp_block_p);
+            dp_gp = make_unique<DecompressPointerGPBlock>(header, gp_block_p);
             //std::cerr << "Block ID : " << block_id << " offset : " << offset << std::endl;
         } else {
             std::cerr << "Binary block does not have GP block" << std::endl;
@@ -257,7 +257,7 @@ protected:
                 p += kv.second;
                 gp_block_p = p;
                 // Make DecompressPointer
-                dp_gp = make_unique<DecompressPointerGPBlock<WAH_T>>(header, gp_block_p);
+                dp_gp = make_unique<DecompressPointerGPBlock>(header, gp_block_p);
                 dp_gp->seek(offset);
             }
         }

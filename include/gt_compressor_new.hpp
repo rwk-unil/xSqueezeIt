@@ -146,8 +146,10 @@ public:
         message_write(s, "sample id's");
         header.indices_offset = XsiFactoryInterface::write_indices(s, factory->get_indices());
         message_write(s, "indices");
-        header.huffman_table_offset = XsiFactoryInterface::write_huffman_table(s);
-        message_write(s, "huffman table");
+        if(global_app_options.compress_gp) {
+            header.huffman_table_offset = XsiFactoryInterface::write_huffman_table(s, zstd_compression_on, zstd_compression_level);
+            message_write(s, "huffman table");
+        }
         header.ploidy = this->PLOIDY;
         header.hap_samples = this->sample_list.size() * this->PLOIDY;
         factory->overwrite_header(this->s, this->header);
@@ -427,7 +429,9 @@ public:
         this->indices_offset = XsiFactoryInterface::write_indices(s, indices);
 
         // Write the Huffman table for decoding the GP fields
-        uint64_t huffman_offset = XsiFactoryInterface::write_huffman_table(s);
+        uint64_t huffman_offset = (uint64_t)-1;
+        if (global_app_options.compress_gp)
+            huffman_offset = XsiFactoryInterface::write_huffman_table(s);
 
         //for (auto& i : indices) {
         //    std::cerr << "Indice : " << i << std::endl;

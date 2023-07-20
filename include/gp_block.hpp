@@ -11,6 +11,8 @@
 #define GP_DELIMITER ','
 #define BITS_IN_BYTE 8
 
+#define DEBUG 0
+
 typedef uint8_t bool_t;
 
 class GPBlockDict
@@ -20,6 +22,8 @@ public:
     {
         KEY_BCF_LINES = 0,
         KEY_WAH = 1,
+        KEY_WAH_LENGTH = 2,
+        KEY_BITS = 3,
     };
 
     enum Dictionary_Vals : uint32_t
@@ -32,9 +36,8 @@ template <typename WAH_T = uint8_t>
 class GPBlock : public IWritableBCFLineEncoder, public BCFBlock, public GPBlockDict
 {
 public:
-    GPBlock(const size_t BLOCK_BCF_LINES) : BCFBlock(BLOCK_BCF_LINES)
+    GPBlock(const size_t BLOCK_BCF_LINES) : BCFBlock(BLOCK_BCF_LINES), wah_encode(false)
     {
-        // gps = std::vector<std::vector<std::string>>();
         dictionary = std::unordered_map<uint32_t, uint32_t>();
     }
 
@@ -55,16 +58,11 @@ public:
 
         fill_dictionary();
 
-        std::cout << "Encoded " << effective_bcf_lines_in_block << " lines" << std::endl;
-
         dictionary_pos = write_dictionary(ofs, dictionary);
 
-        // ? Rewrites on top of the dictionary ?
-        // write_writables(ofs, block_start_pos);
         write_writables(ofs, dictionary_pos);
 
         update_dictionary(ofs, dictionary_pos, dictionary);
-        std::cout << "Written GP data" << std::endl;
     }
 
     inline void encode_line(const bcf_file_reader_info_t &bcf_fri) override
@@ -92,6 +90,21 @@ public:
             stream.clear();
         }
         HuffmanNew::get_instance().encode(gp, encoded_bits);
+
+#if DEBUG
+        std::vector<bool> encoded;
+        std::vector<std::string> decoded;
+
+        try
+        {
+            HuffmanNew::get_instance().encode(gp, encoded);
+            HuffmanNew::get_instance().decode(encoded, decoded);
+        }
+        catch (const std::exception &e)
+        {
+            std::cout << "Exception: " << e.what() << std::endl;
+        }
+#endif
 
         // gps.push_back(gp);
         // std::vector<float> gp;
@@ -124,33 +137,41 @@ private:
     {
         size_t container_size = sizeof(bool_t) * BITS_IN_BYTE;
         size_t num_bits = encoded_bits.size();
-        size_t container_count = (num_bits + BITS_IN_BYTE - 1) / container_size;
+        size_t container_count = (num_bits + container_size - 1) / container_size;
 
         for (size_t i = 0; i < container_count; ++i)
         {
             bool_t container = 0;
-            for (int j = 0; j < container_size; ++j)
+            for (size_t j = 0; j < container_size; ++j)
             {
-                int index = i * container_size + j;
+                size_t index = i * container_size + j;
                 if (index < num_bits)
                 {
                     container |= encoded_bits[index] << (container_size - 1 - j);
+                    // container |= encoded_bits[index] << (j);
                 }
             }
             s.write(reinterpret_cast<const char *>(&container), sizeof(container));
         }
+
+        // IWritable::padd_align<uint32_t>(s);
     }
 
     inline void fill_dictionary()
     {
         dictionary[KEY_BCF_LINES] = effective_bcf_lines_in_block;
         dictionary[KEY_WAH] = wah_encode;
+        dictionary[KEY_WAH_LENGTH] = (uint32_t)sizeof(WAH_T);
+        dictionary[KEY_BITS] = encoded_bits.size();
     }
 
     inline void write_writables(std::fstream &s, const size_t &block_start_pos)
     {
-        std::cout << "Writing " << effective_bcf_lines_in_block << " lines of GP data" << std::endl;
-        write_boolean_vector(s, encoded_bits);
+        // std::cout << "Writing " << effective_bcf_lines_in_block << " lines of GP data (WAH: " << wah_encode << ")" << std::endl;
+        if (wah_encode)
+            write_boolean_vector_as_wah(s, encoded_bits);
+        else
+            write_boolean_vector(s, encoded_bits);
     }
 
     template <typename T>
@@ -195,7 +216,7 @@ public:
     virtual size_t fill_gp_array_advance(float *arr, const size_t arr_size) = 0;
 };
 
-template <typename WAH_T = uint16_t>
+// template <typename WAH_T = uint16_t>
 class DecompressPointerGPBlock : public DecompressPointerGP, private GPBlockDict
 {
 public:
@@ -204,7 +225,40 @@ public:
         read_dictionary(dictionary, (uint32_t *)block_p);
         size_t data_offset = sizeof(uint32_t) * 2;                 // Sub-block dictionary size entry
         data_offset += (sizeof(uint32_t) * dictionary.size() * 2); // Dictionary size
-        data_p = block_p + data_offset;
+        data_p = static_cast<char *>(block_p) + data_offset;
+
+        if (dictionary.at(KEY_WAH))
+        {
+            fill_bool_vector_from_wah(encoded, dictionary.at(KEY_BITS));
+        }
+
+
+#if DEBUG
+        // Decode all the data
+        // HuffmanNew::get_instance().decode_stream(data_p, decoded, dictionary.at(KEY_BCF_LINES) * NGP_PER_LINE, 0, 0); // ! Error
+
+        // Read all the data in data_p and store in a vector<bool> endianness is little endian
+        size_t num_bits = dictionary.at(KEY_BITS);
+        size_t container_size = sizeof(bool_t) * BITS_IN_BYTE;
+        size_t container_count = (num_bits + BITS_IN_BYTE - 1) / container_size;
+        std::vector<bool> encoded_bits;
+
+        for (size_t i = 0; i < container_count; ++i)
+        {
+            bool_t container = 0;
+            memcpy(&container, data_p + i * sizeof(container), sizeof(container));
+            for (int j = 0; j < container_size; ++j)
+            {
+                int index = i * container_size + j;
+                if (index < num_bits)
+                {
+                    encoded_bits.push_back((container >> (container_size - 1 - j)) & 1);
+                }
+            }
+        }
+
+        HuffmanNew::get_instance().decode(encoded_bits, decoded);
+#endif
 
         effective_bcf_lines_in_block = dictionary.at(KEY_BCF_LINES);
     }
@@ -213,90 +267,60 @@ public:
     {
         // Decode pour parcourir à la position demandée (en lignes et incrémenter le compteur de bits) si on est déjà à la bonne position on ne fait rien
         // Utilisé pour décoder une ligne isolée. Plutôt utilisée pour un look-forward. L'inverse requiert de redécoder tout le bloc jusqu'à la position
+
         /** @note this is all simply to be able to use the "position" from the BM... */
-        // if (binary_line_counter == position)
-        // {
-        //     return;
-        // }
-        // else
-        // {
-        //     if (binary_line_counter > position)
-        //     {
-        //         std::cerr << "Slow backwards seek !" << std::endl;
-        //         std::cerr << "Current position is : " << binary_line_counter << std::endl;
-        //         std::cerr << "Requested position is : " << position << std::endl;
-        //         reset();
-        //     }
-        //     while (binary_line_counter < position)
-        //     {
-        //         // if (binary_line_is_virtual[binary_line_counter])
-        //         // {
-        //         //     // Nothing to do, it is a virtual line
-        //         // }
-        //         // else
-        //         // {
-        //         //     if (line_is_sparse[bcf_line_counter])
-        //         //     {
-        //         //         seek_p += 2;
-        //         //     }
-        //         //     else
-        //         //     {
-        //         //         plain_genotypes_p += NGT_PER_LINE;
-        //         //     }
-        //         //     bcf_line_counter++;
-        //         // }
-        //         // binary_line_counter++;
-        //         bcf_line_counter++;
-        //     }
-        // }
+        if (binary_line_counter == position)
+            return;
+        else
+        {
+            if (position < bcf_line_counter)
+            {
+                std::cerr << "Backward seeking will result in slow operation" << std::endl;
+                std::cerr << "Current position is : " << binary_line_counter << std::endl;
+                std::cerr << "Requested position is : " << position << std::endl;
+                this->reset();
+            }
+
+            float gp_arr[NGP_PER_LINE];
+            while(binary_line_counter < position)
+            {
+                this->fill_gp_array_advance(gp_arr, NGP_PER_LINE);
+            }
+        }
     }
 
     size_t fill_gp_array_advance(float *gp_arr, size_t gp_arr_size)
     {
-        // std::cout << "Filling GP array" << std::endl;
-        if (dictionary[KEY_WAH])
+        std::vector<std::string> decoded;
+        // The whole block is WAH encoded or not so there is no possible mix of WAH and non-WAH encoded data
+        if (dictionary.at(KEY_WAH))
         {
-            std::cerr << "Not implemented" << std::endl;
-            exit(-1);
+            bit_ctr = HuffmanNew::get_instance().decode(encoded, decoded, bit_ctr, gp_arr_size);
         }
         else
         {
-            std::vector<std::string> decoded;
             /*
-            * Need to move pointer relative to the last bit position
-            */
+             * Need to move pointer relative to the last bit position
+             */
             bool_t bit_offset = bit_ctr % (sizeof(bool_t) * BITS_IN_BYTE);
             size_t byte_offset = bit_ctr / (sizeof(bool_t) * BITS_IN_BYTE);
-            bit_ctr += HuffmanNew::get_instance().decode_stream<bool_t>(data_p + byte_offset, decoded, gp_arr_size, bit_offset);
+            bit_ctr += HuffmanNew::get_instance().decode_stream<bool_t>(data_p, decoded, gp_arr_size, byte_offset, bit_offset);
             // TODO: Add check if size is not NGP_PER_LINE
-
-            size_t last = 0;
-            size_t next = 0;
-            for (size_t i = 0; i < decoded.size(); ++i)
-            {
-                for (size_t j = 0; j < FLOATS_PER_GP; ++j)
-                {
-                    next = decoded[i].find(',', last);
-
-                    gp_arr[i * FLOATS_PER_GP + j] = std::stof(decoded[i].substr(last, next - last));
-                    last = next + 1;
-                }
-                last = 0;
-            }
         }
-        // typedef float val_t;
-        // bool_t *line_p = (bool_t *)data_p;
-        // for (size_t i = 0; i < gp_arr_size; ++i)
-        // {
-        //     for (int j = 0; j < 3; ++j)
-        //     {
-        //         // val_t val = *line_p++;
-        //         gp_arr[i * 3 + j] = *line_p++;
-        //     }
-        //     // std::cout << val;
-        // }
-        // // std::cout << std::endl;
-        // data_p += sizeof(val_t) * gp_arr_size * 3;
+
+        size_t last = 0;
+        size_t next = 0;
+        for (size_t i = 0; i < gp_arr_size; ++i)
+        {
+            for (size_t j = 0; j < FLOATS_PER_GP; ++j)
+            {
+                next = decoded[i].find(',', last);
+
+                gp_arr[i * FLOATS_PER_GP + j] = std::stof(decoded[i].substr(last, next - last));
+                last = next + 1;
+            }
+            last = 0;
+        }
         bcf_line_counter++;
         return gp_arr_size;
     }
@@ -310,14 +334,52 @@ protected:
 
     const size_t NGP_PER_LINE;
     size_t effective_bcf_lines_in_block;
+    bool wah_encode;
 
     std::unordered_map<uint32_t, uint32_t> dictionary;
+    std::vector<std::string> decoded;
+    std::vector<bool> encoded;
 
 private:
+    inline bool fill_bool_vector_from_wah(std::vector<bool> &v, const size_t size)
+    {
+        if (dictionary.at(KEY_WAH_LENGTH) != VAL_UNDEFINED)
+        {
+            switch (dictionary.at(KEY_WAH_LENGTH))
+            {
+                case 1:
+                    fill_bool_vector<uint8_t>(v, size);
+                    break;
+                case 2:
+                    fill_bool_vector<uint16_t>(v, size);
+                    break;
+                case 4:
+                    fill_bool_vector<uint32_t>(v, size);
+                    break;
+                default:
+                    std::cerr << "Error: WAH length not supported" << std::endl;
+                    return false;
+            }
+            return true;            
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    template<typename WAH_T>
+    inline void fill_bool_vector(std::vector<bool> &v, const size_t size)
+    {
+        v.resize(size + sizeof(WAH_T) * 8 - 1);
+        WAH_T *wah_p = (WAH_T *)data_p;
+        wah::wah2_extract<WAH_T>(wah_p, v, size);
+    }
+
     inline void reset()
     {
-        binary_line_counter = 0;
         bcf_line_counter = 0;
+        bit_ctr = 0;
     }
 };
 
