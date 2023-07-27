@@ -1,4 +1,4 @@
-#include "bcf_traversal.hpp"
+/*#include "bcf_traversal.hpp"
 #include "CLI11.hpp"
 
 class PPExtractTraversal : public BcfTraversal
@@ -128,4 +128,4 @@ int main(int argc, char **argv)
     }
 
     return 0;
-}
+}*/

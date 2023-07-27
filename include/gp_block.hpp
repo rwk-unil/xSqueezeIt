@@ -46,11 +46,6 @@ public:
         return IBinaryBlock<uint32_t, uint32_t>::KEY_GP_ENTRY;
     }
 
-    // inline void seek(const size_t position)
-    // {
-
-    // }
-
     void write_to_stream(std::fstream &ofs) override
     {
         size_t block_start_pos = ofs.tellp();

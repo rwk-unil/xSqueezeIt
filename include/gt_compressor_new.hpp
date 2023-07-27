@@ -31,6 +31,7 @@
 #include "compression.hpp"
 #include "make_unique.hpp"
 #include "fs.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -100,7 +101,7 @@ public:
     void message_write(std::fstream& s, T msg) {
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << msg << " " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+        std::cout << msg << " " << written_bytes << " bytes, total " << human_readable_size(total_bytes) << " written" << std::endl;
     }
 
     virtual void compress_to_file() = 0;

@@ -133,6 +133,7 @@ int main(int argc, const char *argv[]) {
         bool fail = false;
         if (opt.compress_gp)
         {
+            std::cerr << "Reading file " << filename << " to create a Huffman table" << std::endl;
             GPCompressor gpc = GPCompressor();
             gpc.traverse(filename, GPCompressor::Mode::TABLE);
         }
@@ -154,6 +155,36 @@ int main(int argc, const char *argv[]) {
             exit(-1);
         }
 
+        if(opt.verbose) {
+            std::cerr << "INFO : Compression finished" << std::endl;
+            std::fstream original(filename, std::ios::in | std::ios::binary);
+            std::fstream compressed(ofname, std::ios::in | std::ios::binary);
+
+            if (!original.is_open())
+            {
+                std::cerr << "Cannot open " << filename << std::endl;
+                exit(-1);
+            }
+            if (!compressed.is_open())
+            {
+                std::cerr << "Cannot open " << ofname << std::endl;
+                exit(-1);
+            }
+
+            original.seekg(0, std::ios::end);
+            compressed.seekg(0, std::ios::end);
+
+            size_t original_size = original.tellg();
+            size_t compressed_size = compressed.tellg();
+
+            std::cerr << "INFO : " << filename << " size is " << human_readable_size(original_size) << std::endl;
+            std::cerr << "INFO : " << ofname << " size is " << human_readable_size(compressed_size) << std::endl;
+            std::cerr << "INFO : Compression ratio is " << std::setprecision(2) << (float)original_size / compressed_size << std::endl;
+            if (opt.zstd)
+            {
+                std::cerr << "INFO : ZSTD compression level is " << opt.zstd_compression_level << std::endl;
+            }
+        }
     } else if (opt.decompress) {
         /// @todo query overwrites
 

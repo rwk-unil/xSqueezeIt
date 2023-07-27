@@ -10,7 +10,8 @@
 
 #define BITS_IN_BYTE 8
 
-#define PERF 1
+#define PERF 0
+#define DEBUG 0
 
 class Node
 {
@@ -114,7 +115,7 @@ public:
     void build_tree()
     {
         // Rebuild tree from lookup table using the code instead of the frequency
-        std::cout << "[DEBUG] Building Huffman tree from lookup table..." << std::endl;
+        std::cout << "Building Huffman tree from lookup table..." << std::endl;
 #if PERF
         auto start = std::chrono::high_resolution_clock::now();
 #endif
@@ -152,13 +153,12 @@ public:
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "[DEBUG] Huffman tree built in " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 #endif
-        std::cout << "[DEBUG] Huffman tree built" << std::endl;
-        this->print_lookup_table(false);
+        std::cout << "Huffman tree built" << std::endl;
     }
 
     void build_tree(const std::map<std::string, int> &freq_map)
     {
-        std::cout << "[DEBUG] Building Huffman tree..." << std::endl;
+        std::cout << "Building Huffman tree..." << std::endl;
 #if PERF
         auto start = std::chrono::high_resolution_clock::now();
 #endif
@@ -197,8 +197,7 @@ public:
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "[DEBUG] Huffman tree built in " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 #endif
-        std::cout << "[DEBUG] Huffman tree built" << std::endl;
-        this->print_lookup_table(false);
+        std::cout << "Huffman tree built" << std::endl;
     }
 
     std::map<std::string, HuffmanEntry *> &get_lookup_table()
@@ -441,13 +440,18 @@ public:
             file.write(reinterpret_cast<char *>(buff), compressed_size);
 
             free(buff);
-
+#if DEBUG
             std::cout << "[DEBUG] Lookup table saved -> " << compressed_size << " bytes" << std::endl;
+#endif
         }
         else
             std::cout << "Error opening file" << std::endl;
     }
 
+    /**
+     * @brief Load a lookup table from a file
+     * @param file File stream
+    */
     void load_lookup_table(std::fstream &file)
     {
         // Mode is binary
@@ -458,11 +462,11 @@ public:
             file.read(reinterpret_cast<char *>(&header), sizeof(header));
             if (header.compressed_size != -1)
             {
-                std::cout << "[DEBUG] Loading compressed lookup table -> " << header.original_size << " bytes (" << header.compressed_size << " bytes compressed)" << std::endl;
+                std::cout << "Loading compressed lookup table -> " << header.original_size << " bytes (" << header.compressed_size << " bytes compressed)" << std::endl;
                 this->load_lookup_table_decompress(file, header);
                 return;
             }
-            std::cout << "[DEBUG] Loading lookup table -> " << header.length << " entries" << std::endl;
+            std::cout << "Loading lookup table -> " << header.length << " entries" << std::endl;
             for (int i = 0; i < header.length; i++)
             {
                 LookupTableEntry table_entry;
@@ -491,6 +495,11 @@ public:
             std::cerr << "Error opening file" << std::endl;
     }
 
+    /**
+     * @brief Load a compressed lookup table from a file
+     * @param file File stream
+     * @param header Lookup table header
+    */
     void load_lookup_table_decompress(std::fstream &file, const LookupTableHeader &header)
     {
         void *buff = malloc(header.original_size);
@@ -531,6 +540,9 @@ public:
         build_tree();
     }
 
+    /**
+     * @brief Destructor, delete the lookup table and the tree
+    */
     ~HuffmanNew()
     {
         for (const auto &pair : m_lookup_table)
