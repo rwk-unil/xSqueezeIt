@@ -9,7 +9,7 @@ ifeq ($(ADD_EXTRA),y)
 EXTRA_FLAGS=-fsanitize=address -fsanitize=undefined -fsanitize=pointer-subtract -fsanitize=pointer-compare -fno-omit-frame-pointer -fstack-protector-all -fcf-protection
 endif
 ifeq ($(OLEVEL),)
-OLEVEL=0
+OLEVEL=3
 endif
 CXXFLAGS=-O$(OLEVEL) -g -Wall -std=c++17 $(INCLUDE_DIRS) $(CXXEXTRAFLAGS) $(EXTRA_FLAGS)
 # Linker
