@@ -32,6 +32,7 @@
 #include "xcf.hpp"
 #include "gt_block.hpp"
 #include "shapeit5_block.hpp"
+#include "gp_block.hpp"
 #include "make_unique.hpp"
 
 #include <fcntl.h>
@@ -47,6 +48,7 @@ class AccessorInternals {
 public:
     virtual ~AccessorInternals() {}
     virtual size_t fill_genotype_array(int32_t* gt_arr, size_t gt_arr_size, size_t n_alleles, size_t position) = 0;
+    virtual size_t fill_gp_array(float* gp_arr, size_t gp_arr_size, size_t position) = 0; // TODO: make generic
     // Fill genotype array also fills allele counts, so this is only to be used when fill_genotype_array is not called (e.g., to recompute AC only)
     virtual void fill_allele_counts(size_t n_alleles, size_t position) = 0;
     virtual inline const std::vector<size_t>& get_allele_counts() const {return allele_counts;}
@@ -68,12 +70,21 @@ private:
         // The offset is relative to the start of the block and is binary gt lines
         uint32_t offset = new_position & OFFSET_MASK;
 
-        // If block ID is not current block
-        if (!dp or current_block != block_id) {
-            set_gt_block_ptr(block_id);
+        // FIXME: If no gp block function will be called all the time -> not generic
+        if(!dp or !dp_gp or current_block != block_id) {
+            set_block_ptr(block_id);
+            set_sub_block_ptrs(block_id, offset);
         }
 
-        dp->seek(offset);
+        // If block ID is not current block
+        // if (!dp or current_block != block_id) {
+        //     set_gt_block_ptr(block_id);
+        //     set_gp_block_ptr(block_id);
+        // }
+
+        // ?: What purpose -> can it be moved to set_sub_block_ptrs() ?
+        // dp->seek(offset);
+        // dp_gp->seek(offset);
     }
 
 public:
@@ -81,6 +92,13 @@ public:
         seek(new_position);
 
         return dp->fill_genotype_array_advance(gt_arr, gt_arr_size, n_alleles);
+    }
+
+    // TODO: fill_gp_array() -> generic
+    size_t fill_gp_array(float *gp_arr, size_t gp_arr_size, size_t new_position) override {
+        seek(new_position);
+
+        return dp_gp->fill_gp_array_advance(gp_arr, gp_arr_size);
     }
 
     void fill_allele_counts(size_t n_alleles, size_t new_position) override {
@@ -197,6 +215,54 @@ protected:
         }
     }
 
+    inline void set_gp_block_ptr(const size_t block_id) {
+        set_block_ptr(block_id);
+        current_block = block_id;
+        char* p = (char*)block_p;
+
+        auto kv_p = block_dictionary.find(IBinaryBlock<uint32_t, uint32_t>::KEY_GP_ENTRY);
+        if (kv_p != block_dictionary.end()) {
+            p += kv_p->second;
+            gp_block_p = p;
+            // Make DecompressPointer
+            dp_gp = make_unique<DecompressPointerGPBlock>(header, gp_block_p);
+            //std::cerr << "Block ID : " << block_id << " offset : " << offset << std::endl;
+        } else {
+            std::cerr << "Binary block does not have GP block" << std::endl;
+            gp_block_p = nullptr;
+            throw "block error";
+        }
+    }
+
+    inline void set_sub_block_ptrs(const size_t block_id, uint32_t offset) {
+        //set_block_ptr(block_id);
+        current_block = block_id;
+
+        for (const auto& kv : block_dictionary) {
+            char* p = (char*)block_p;
+            if (kv.first == IBinaryBlock<uint32_t, uint32_t>::KEY_GT_ENTRY) {
+                p += kv.second;
+                gt_block_p = p;
+                // Make DecompressPointer
+                dp = make_unique<DecompressPointerGTBlock<A_T, WAH_T>>(header, gt_block_p);
+                dp->seek(offset);
+            }
+            else if (kv.first == IBinaryBlock<uint32_t, uint32_t>::KEY_SHAPEIT5_ENTRY) {
+                p += kv.second;
+                gt_block_p = p;
+                dp = make_unique<DecompressPointerShapeIt5Block<WAH_T>>(header, gt_block_p);
+                dp->seek(offset);
+            }
+            else if (kv.first == IBinaryBlock<uint32_t, uint32_t>::KEY_GP_ENTRY) {
+                p += kv.second;
+                gp_block_p = p;
+                // Make DecompressPointer
+                dp_gp = make_unique<DecompressPointerGPBlock>(header, gp_block_p);
+                dp_gp->seek(offset);
+            }
+        }
+    }
+
     inline void set_block_ptr(const size_t block_id) {
         uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap_p + header.indices_offset);
         // Find out the block offset
@@ -239,7 +305,9 @@ protected:
 
     void* block_p = nullptr;
     void* gt_block_p = nullptr;
+    void* gp_block_p = nullptr;
     std::unique_ptr<DecompressPointerGT> dp = nullptr;
+    std::unique_ptr<DecompressPointerGP> dp_gp = nullptr; // TODO: Make it generic
     size_t current_block = -1;
     std::map<uint32_t, uint32_t> block_dictionary;
 };

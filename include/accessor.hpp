@@ -48,6 +48,11 @@ public:
         return internals->fill_genotype_array(gt_arr, gt_arr_size, n_alleles, position);
     }
 
+    // TODO: make generic
+    size_t fill_gp_array(float* gp_arr, size_t gp_arr_size, size_t position) {
+        return internals->fill_gp_array(gp_arr, gp_arr_size, position);
+    }
+
     void fill_allele_counts(size_t n_alleles, size_t position) {
         internals->fill_allele_counts(n_alleles, position);
     }

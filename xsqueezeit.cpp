@@ -28,7 +28,9 @@
 
 #include "gt_compressor_new.hpp"
 #include "gt_decompressor_new.hpp"
+#include "gp_compressor.hpp"
 #include "time.hpp"
+#include "utils.hpp"
 
 // Getting some insights (remove for release)
 #include "sandbox.hpp"
@@ -91,9 +93,10 @@ int main(int argc, const char *argv[]) {
                     std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
                     std::cerr << "INFO : Indices are\t\t\t" << hdr.samples_offset - hdr.indices_offset << " bytes" << std::endl;
                 } else if (hdr.xsi_layout == 1) {
-                    std::cerr << "INFO : Binary data is \t\t\t" << hdr.samples_offset - sizeof(header_t) << " bytes" << std::endl;
-                    std::cerr << "INFO : Samples list is\t\t\t" << hdr.indices_offset - hdr.samples_offset << " bytes" << std::endl;
-                    std::cerr << "INFO : Indices are\t\t\t" << fs::file_size(filename) - hdr.indices_offset << " bytes" << std::endl;
+                    std::cerr << "INFO : Binary data is \t\t\t" << human_readable_size(hdr.samples_offset - sizeof(header_t)) << std::endl;
+                    std::cerr << "INFO : Samples list is\t\t\t" << human_readable_size(hdr.indices_offset - hdr.samples_offset) << std::endl;
+                    std::cerr << "INFO : Indices are\t\t\t" << human_readable_size(hdr.huffman_table_offset - hdr.indices_offset) << std::endl;
+                    std::cerr << "INFO : Huffman table is\t\t\t" << human_readable_size(fs::file_size(filename) - hdr.huffman_table_offset) << std::endl;
                 }
             }
         }
@@ -128,6 +131,12 @@ int main(int argc, const char *argv[]) {
         }
 
         bool fail = false;
+        if (opt.compress_gp)
+        {
+            std::cerr << "Reading file " << filename << " to create a Huffman table" << std::endl;
+            GPCompressor gpc = GPCompressor();
+            gpc.traverse(filename, GPCompressor::Mode::TABLE);
+        }
         try {
             NewCompressor c;
             c.set_maf(opt.maf);
@@ -146,6 +155,36 @@ int main(int argc, const char *argv[]) {
             exit(-1);
         }
 
+        if(opt.verbose) {
+            std::cerr << "INFO : Compression finished" << std::endl;
+            std::fstream original(filename, std::ios::in | std::ios::binary);
+            std::fstream compressed(ofname, std::ios::in | std::ios::binary);
+
+            if (!original.is_open())
+            {
+                std::cerr << "Cannot open " << filename << std::endl;
+                exit(-1);
+            }
+            if (!compressed.is_open())
+            {
+                std::cerr << "Cannot open " << ofname << std::endl;
+                exit(-1);
+            }
+
+            original.seekg(0, std::ios::end);
+            compressed.seekg(0, std::ios::end);
+
+            size_t original_size = original.tellg();
+            size_t compressed_size = compressed.tellg();
+
+            std::cerr << "INFO : " << filename << " size is " << human_readable_size(original_size) << std::endl;
+            std::cerr << "INFO : " << ofname << " size is " << human_readable_size(compressed_size) << std::endl;
+            std::cerr << "INFO : Compression ratio is " << std::setprecision(2) << (float)original_size / compressed_size << std::endl;
+            if (opt.zstd)
+            {
+                std::cerr << "INFO : ZSTD compression level is " << opt.zstd_compression_level << std::endl;
+            }
+        }
     } else if (opt.decompress) {
         /// @todo query overwrites
 

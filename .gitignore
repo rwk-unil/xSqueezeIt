@@ -26,9 +26,24 @@ xsqueezeit_export/**
 # Ignore these executables
 xsqueezeit
 main
+gp_compression
 
 # Mac OS index files
 .DS_Store
 
 # vscode
 .vscode
+
+# CLion
+.idea
+
+52*
+503*
+head*
+callgrind*
+doxyfile
+*.bt
+doc/*
+.cproject
+.project
+.settings/*

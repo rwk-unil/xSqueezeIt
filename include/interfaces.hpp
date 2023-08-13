@@ -188,10 +188,12 @@ template <typename T_KEY = uint32_t, typename T_VAL = uint32_t>
 class IBinaryBlock {
 public:
     /** @note Absolutely Never Ever change the values below under any circumstance ! */
-    enum Dictionary_Keys : T_KEY {
+    enum Dictionary_Keys : T_KEY
+    {
         KEY_DICTIONNARY_SIZE = (T_KEY)-1,
         KEY_BCF_LINES = 0,
         KEY_SHAPEIT5_ENTRY = 195,
+        KEY_GP_ENTRY = 196,
         KEY_GT_ENTRY = 256,
     };
 

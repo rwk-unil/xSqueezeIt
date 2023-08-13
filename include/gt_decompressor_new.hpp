@@ -61,6 +61,12 @@ public:
 
         // Read the header
         s.read((char *)(&(this->header)), sizeof(header_t));
+
+        // Load Huffman table
+        if(header.huffman_table_offset != -1) {
+            s.seekp(header.huffman_table_offset);
+            HuffmanNew::get_instance().load_lookup_table(s);
+        }
         s.close();
 
         samples_to_use.resize(sample_list.size());
@@ -71,9 +77,11 @@ public:
             // Can still be used to "extract" the variant BCF (i.e. loop through the variant BCF and copy it to output... which is useless but ok)
             genotypes = NULL;
             selected_genotypes = NULL;
+            genotypes_posteriors = NULL;
         } else {
             genotypes = new int32_t[header.hap_samples];
             selected_genotypes = new int32_t[header.hap_samples];
+            genotypes_posteriors = new float[header.num_samples * 3];
         }
     }
 
@@ -96,6 +104,9 @@ public:
         }
         if (selected_genotypes) {
             delete[] selected_genotypes;
+        }
+        if (genotypes_posteriors){
+            delete[] genotypes_posteriors;
         }
     }
 
@@ -195,11 +206,15 @@ private:
                 // This is the "non optimal way"
                 /// @todo replace this by implementing the comments below
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                if(global_app_options.compress_gp)
+                    current_line_num_gp = accessor.fill_gp_array(genotypes_posteriors, header.num_samples, bm_index); // TODO: What to do if not present
 
                 update_and_write_xsi(bcf_fri, hdr, fp, rec, ac_s);
             } else {
                 // Fill the genotype array (as bcf_get_genotypes() would do)
                 current_line_num_genotypes = accessor.fill_genotype_array(genotypes, header.hap_samples, bcf_fri.line->n_allele, bm_index);
+                if(global_app_options.compress_gp)
+                    current_line_num_gp = accessor.fill_gp_array(genotypes_posteriors, header.num_samples, bm_index); // TODO: What to do if not present
 
                 update_and_write_bcf_record(bcf_fri, hdr, fp, rec, ac_s);
             }
@@ -239,6 +254,18 @@ private:
             }
         }
         return samples_to_use.size() * CURRENT_LINE_PLOIDY;
+    }
+
+    inline float* fill_selected_genotype_posteriors()
+    {
+        float* selected_genotypes_posteriors = new float[samples_to_use.size() * 3];
+        for (size_t i = 0; i < samples_to_use.size(); i++) {
+            for (size_t j = 0; j < 3; ++j)
+            {
+                selected_genotypes_posteriors[i*3+j] = genotypes_posteriors[samples_to_use[i]*3+j];
+            }
+        }
+        return selected_genotypes_posteriors;
     }
 
     /// @todo this factory append bcf file reader info is not the most optimal way
@@ -303,13 +330,22 @@ private:
             int32_t an = fill_selected_genotypes(ac_s);
 
             ret = bcf_update_genotypes(hdr, rec, selected_genotypes, samples_to_use.size() * CURRENT_LINE_PLOIDY);
+
+            if(global_app_options.compress_gp) {
+                float *selected_gp = fill_selected_genotype_posteriors();
+                ret |= bcf_update_format_float(hdr, rec, "GP", selected_gp, samples_to_use.size() * 3);
+                delete[] selected_gp;
+            }
             // For some reason bcftools view -s "SAMPLE1,SAMPLE2,..." only update these fields
             // Note that --no-update in bcftools disables this recomputation /// @todo this
             bcf_update_info_int32(hdr, rec, "AC", ac_s.data(), bcf_fri.line->n_allele-1);
             bcf_update_info_int32(hdr, rec, "AN", &an, 1);
+
         } else {
             // Else just fill the GT values
             ret = bcf_update_genotypes(hdr, rec, genotypes, bcf_hdr_nsamples(hdr) * CURRENT_LINE_PLOIDY); // 15% of time spent in here
+            if(global_app_options.compress_gp)
+                ret |= bcf_update_format_float(hdr, rec, "GP", genotypes_posteriors, bcf_hdr_nsamples(hdr) * 3);
         }
         if (ret) {
             std::cerr << "Failed to update genotypes" << std::endl;
@@ -402,7 +438,7 @@ public:
                 file.erase(0,1); // Remove first character
             }
 
-            std::fstream fs(file);
+            std::fstream fs(file); // FIXME: fstream not closed ?
 
             if (!fs.is_open()) {
                 std::cerr << "Could not open file " << file << std::endl;
@@ -522,12 +558,17 @@ public:
                 std::cerr << "Failed to remove samples from header for" << bcf_ofname << std::endl;
                 throw "Failed to remove samples";
             }
+            bcf_hdr_append(hdr, std::string("##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Genotype posteriors\">").c_str());
+            // TODO: ADD HEADER LINE FOR GP
 
-            if (select_samples) {
+            if (select_samples)
+            {
                 for (const auto& sample_index : samples_to_use) {
                     bcf_hdr_add_sample(hdr, sample_list[sample_index].c_str());
                 }
-            } else {
+            }
+            else
+            {
                 for (const auto& sample : sample_list) {
                     bcf_hdr_add_sample(hdr, sample.c_str());
                 }
@@ -572,7 +613,9 @@ protected:
     std::unique_ptr<XsiFactoryInterface> xsi_factory = nullptr;
 
     int32_t* genotypes{NULL};
+    float* genotypes_posteriors{NULL};
     size_t current_line_num_genotypes;
+    size_t current_line_num_gp;
     int32_t* selected_genotypes{NULL};
 };
 

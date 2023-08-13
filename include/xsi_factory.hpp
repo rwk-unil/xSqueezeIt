@@ -31,6 +31,7 @@
 
 #include "gt_block.hpp"
 #include "shapeit5_block.hpp"
+#include "gp_block.hpp"
 
 #include "xsqueezeit.hpp"
 extern GlobalAppOptions global_app_options;
@@ -66,6 +67,18 @@ public:
         return indices_offset;
     }
 
+    static size_t write_huffman_table(std::fstream &s, bool zstd_compression_on = false, int zstd_compression_level = 7)
+    {
+        size_t huffman_offset = size_t(s.tellp());
+        if (zstd_compression_on) {
+            HuffmanNew::get_instance().save_lookup_table_compress(s, zstd_compression_level);
+        } else {
+            HuffmanNew::get_instance().save_lookup_table(s);
+        }
+        IWritable::padd_align<uint32_t>(s);
+        return huffman_offset;
+    }
+
     virtual ~XsiFactoryInterface() {}
 
     /** @todo these parameters need to be refactored (and do params per block) */
@@ -90,6 +103,10 @@ public:
                     active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_SHAPEIT5_ENTRY);
                 } else {
                     active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GT_ENTRY);
+                }
+                if (global_app_options.compress_gp) {
+                    active_encoders.insert(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GP_ENTRY);
+                    // * ADD GP ENCODER
                 }
         }
 
@@ -226,6 +243,9 @@ private:
             generic_encoder->add_encoder((N_HAPS <= std::numeric_limits<uint16_t>::max()) ?
                 std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint16_t, uint16_t> >(num_samples, params.BLOCK_LENGTH_IN_BCF_LINES, params.MINOR_ALLELE_COUNT_THRESHOLD, params.default_phased)) :
                 std::static_pointer_cast<IWritableBCFLineEncoder>(std::make_shared<GtBlock<uint32_t, uint16_t> >(num_samples, params.BLOCK_LENGTH_IN_BCF_LINES, params.MINOR_ALLELE_COUNT_THRESHOLD, params.default_phased)));
+        }
+        if (params.active_encoders.find(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_GP_ENTRY) != params.active_encoders.end()) {
+            generic_encoder->add_encoder(std::make_shared<GPBlock<uint8_t>>(params.BLOCK_LENGTH_IN_BCF_LINES)); //TODO: fix this
         }
         if (params.active_encoders.find(IBinaryBlock<uint32_t, uint32_t>::Dictionary_Keys::KEY_SHAPEIT5_ENTRY) != params.active_encoders.end()) {
             generic_encoder->add_encoder(std::make_shared<ShapeIt5Block<uint16_t> >(params.BLOCK_LENGTH_IN_BCF_LINES, params.MINOR_ALLELE_FREQUENCY_THRESHOLD));

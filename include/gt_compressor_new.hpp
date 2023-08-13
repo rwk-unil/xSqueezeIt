@@ -31,6 +31,7 @@
 #include "compression.hpp"
 #include "make_unique.hpp"
 #include "fs.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -82,6 +83,7 @@ public:
             .rearrangement_track_offset = (uint32_t)-1, /* Unused */
             .xcf_entries = (uint64_t)0, //this->entry_counter,
             .num_samples = (uint64_t)-1, // Will be rewritten
+            .huffman_table_offset = (uint64_t)-1, // Will be rewritten
             .sample_name_chksum = 0 /* TODO */,
             .bcf_file_chksum = 0 /* TODO */,
             .data_chksum = 0 /* TODO */,
@@ -99,7 +101,7 @@ public:
     void message_write(std::fstream& s, T msg) {
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
-        std::cout << msg << " " << written_bytes << " bytes, total " << total_bytes << " bytes written" << std::endl;
+        std::cout << msg << " " << written_bytes << " bytes, total " << human_readable_size(total_bytes) << " written" << std::endl;
     }
 
     virtual void compress_to_file() = 0;
@@ -145,6 +147,10 @@ public:
         message_write(s, "sample id's");
         header.indices_offset = XsiFactoryInterface::write_indices(s, factory->get_indices());
         message_write(s, "indices");
+        if(global_app_options.compress_gp) {
+            header.huffman_table_offset = XsiFactoryInterface::write_huffman_table(s, zstd_compression_on, zstd_compression_level);
+            message_write(s, "huffman table");
+        }
         header.ploidy = this->PLOIDY;
         header.hap_samples = this->sample_list.size() * this->PLOIDY;
         factory->overwrite_header(this->s, this->header);
@@ -423,6 +429,11 @@ public:
         // Write the indices
         this->indices_offset = XsiFactoryInterface::write_indices(s, indices);
 
+        // Write the Huffman table for decoding the GP fields
+        uint64_t huffman_offset = (uint64_t)-1;
+        if (global_app_options.compress_gp)
+            huffman_offset = XsiFactoryInterface::write_huffman_table(s);
+
         //for (auto& i : indices) {
         //    std::cerr << "Indice : " << i << std::endl;
         //}
@@ -460,6 +471,7 @@ public:
 
         header.samples_offset = samples_offset;
         header.indices_offset = indices_offset;
+        header.huffman_table_offset = huffman_offset;
 
         ///////////////////////////
         // Rewrite Filled Header //

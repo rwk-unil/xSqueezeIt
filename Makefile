@@ -27,6 +27,7 @@ CPP_OBJS := $(CPP_OBJS:.c=.o)
 OBJS := xcf.o bcf_traversal.o accessor.o c_api.o xsi_mixed_vcf.o $(OBJ)
 DEPENDENCIES := $(CPP_SOURCES:.cpp=.d)
 DEPENDENCIES := $(DEPENDENCIES:.c=.d)
+STANDALONES := gp_extract gp_compression
 
 NOT_IN_GIT_REPO := $(shell git rev-parse --short HEAD >/dev/null 2>/dev/null; echo $$?)
 ifneq ($(NOT_IN_GIT_REPO),0)
@@ -52,6 +53,12 @@ gen_git_rev :
 
 # Link the target
 $(TARGET) : $(OBJS)
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+gp_extract : gp_extract.o xcf.o bcf_traversal.o accessor.o c_api.o xsi_mixed_vcf.o
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+
+gp_compression : gp_compression.o xcf.o bcf_traversal.o accessor.o c_api.o xsi_mixed_vcf.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 xsqueezeit_standalone : $(OBJS) $(OBJ)
@@ -86,6 +93,7 @@ package-sources : xcf.cpp bcf_traversal.cpp accessor.cpp c_api.cpp xsi_mixed_vcf
 clean :
 	rm -f $(OBJS) $(TARGET) $(DEPENDENCIES)
 	rm -rf $(EXPORT_DIR)
+	rm -rf $(STANDALONES)
 
 # Rules that don't generate artifacts
 .PHONY : all clean debug package-sources datetime
