@@ -286,9 +286,8 @@ class BlockEntry {
 #include <zstd.h>
 template<typename T_KEY, typename T_VAL> /// @todo maybe not template this
 class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
-    typedef uint32_t T;
-    static_assert(std::numeric_limits<T>::is_integer, "");
-
+    /* In version 5 and above have the sizes as uint64_t to remove the
+     * limitation of 4 GB data block (compressed or uncompressed) */
     void compress_and_write(std::fstream& ofs, void* data, size_t data_size, int compression_level) override {
         size_t output_buffer_size = data_size * 2;
         void *output_buffer = malloc(output_buffer_size);
@@ -297,29 +296,18 @@ class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
             throw "Failed to compress block";
         }
 
-        auto result = ZSTD_compress(output_buffer, output_buffer_size, data, data_size, compression_level);
+        size_t result = ZSTD_compress(output_buffer, output_buffer_size, data, data_size, compression_level);
         if (ZSTD_isError(result)) {
             std::cerr << "Failed to compress file" << std::endl;
             std::cerr << "Error : " << ZSTD_getErrorName(result) << std::endl;
             throw "Failed to compress block";
         }
 
-        if (std::numeric_limits<T>::max() < data_size or std::numeric_limits<T>::max() < result) {
-            std::cerr << "Block data size : " << data_size << " Compressed block data size : " << result << std::endl;
-            if (std::numeric_limits<T>::max() < data_size) {
-                std::cerr << "Uncompressed data size (" << data_size << ") too big to be encoded with uint32_t" << std::endl;
-            }
+        uint64_t original_size = (uint64_t)data_size;
+        uint64_t compressed_size = (uint64_t)result;
 
-            if (std::numeric_limits<T>::max() < result) {
-                std::cerr << "Compressed size (" << result << ") too big to be encoded with uint32_t" << std::endl;
-            }
-            throw "Failed to write compressed block";
-        }
-        T original_size = (T)data_size;
-        T compressed_size = (T)result;
-
-        ofs.write(reinterpret_cast<const char*>(&compressed_size), sizeof(T));
-        ofs.write(reinterpret_cast<const char*>(&original_size), sizeof(T));
+        ofs.write(reinterpret_cast<const char*>(&compressed_size), sizeof(uint64_t));
+        ofs.write(reinterpret_cast<const char*>(&original_size), sizeof(uint64_t));
         ofs.write(reinterpret_cast<const char*>(output_buffer), compressed_size);
 
         free(output_buffer);

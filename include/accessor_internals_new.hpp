@@ -779,7 +779,7 @@ public:
         }
 
         // Check version
-        if (header.version != 4) {
+        if (header.version != 4 and header.version != 5) {
             std::cerr << "Bad version" << std::endl;
             throw "Bad version";
         }
@@ -848,9 +848,18 @@ protected:
         size_t offset = indices_p[block_id];
 
         if (header.zstd) {
-            size_t compressed_block_size = *(uint32_t*)(((uint8_t*)file_mmap_p) + offset);
-            size_t uncompressed_block_size = *(uint32_t*)(((uint8_t*)file_mmap_p) + offset + sizeof(uint32_t));
-            void *block_ptr = ((uint8_t*)file_mmap_p) + offset + sizeof(uint32_t)*2;
+            size_t compressed_block_size = 0;
+            size_t uncompressed_block_size = 0;
+            void *block_ptr = nullptr;
+            if (header.version <= 4) {
+                compressed_block_size = *(uint32_t*)(((uint8_t*)file_mmap_p) + offset);
+                uncompressed_block_size = *(uint32_t*)(((uint8_t*)file_mmap_p) + offset + sizeof(uint32_t));
+                block_ptr = ((uint8_t*)file_mmap_p) + offset + sizeof(uint32_t)*2;
+            } else if (header.version >= 5) {
+                compressed_block_size = *(uint64_t*)(((uint8_t*)file_mmap_p) + offset);
+                uncompressed_block_size = *(uint64_t*)(((uint8_t*)file_mmap_p) + offset + sizeof(uint64_t));
+                block_ptr = ((uint8_t*)file_mmap_p) + offset + sizeof(uint64_t)*2;
+            }
 
             if (block_p) {
                 free(block_p);

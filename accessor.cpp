@@ -42,7 +42,7 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
 
     // Check version
     if (header.version != 2 and header.version != 3) {
-        if (header.version == 4) {
+        if (header.version == 4 || header.version == 5) {
             //std::cerr << "Experimental version" << std::endl;
         } else {
             std::cerr << "Bad version" << std::endl;
@@ -60,14 +60,14 @@ Accessor::Accessor(std::string& filename) : filename(filename) {
     s.close();
 
     if (header.aet_bytes == 2) {
-        if (header.version == 4) {
+        if (header.version == 4 || header.version == 5) {
             internals = make_unique<AccessorInternalsNewTemplate<uint16_t> >(filename);
         } else {
             std::cerr << "Unsupported version : " << header.version << std::endl;
             throw "Unsupported version";
         }
     } else if (header.aet_bytes == 4) {
-        if (header.version == 4) {
+        if (header.version == 4 || header.version == 5) {
             internals = make_unique<AccessorInternalsNewTemplate<uint32_t> >(filename);
         } else {
             std::cerr << "Unsupported version : " << header.version << std::endl;

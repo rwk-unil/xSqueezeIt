@@ -466,7 +466,7 @@ public:
         // Prepare the header //
         ////////////////////////
         header = {
-            .version = (uint32_t)4, // New testing version
+            .version = (uint32_t)5, // New testing version
             .ploidy = (uint8_t)-1, // Will be rewritten
             .ind_bytes = sizeof(uint32_t), // Should never change
             .aet_bytes = sizeof(A_T), // Depends on number of hap samples
