@@ -54,7 +54,7 @@ public:
         app.add_option("--zstd-level,--zl", zstd_compression_level, "zstd compression level");
         app.add_option("--maf", maf, "Minor Allele Frequency threshold");
         app.add_flag("-i,--info", info, "Get info on file");
-        //app.add_option("--variant-block-length", reset_sort_block_length, "V3 - variant block length");
+        app.add_option("--variant-block-length", reset_sort_block_length, "Number of VCF lines to compress together (default 8192)");
 
         //app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         //app.add_flag("--inject-phase-switches", inject_phase_switches, "DEBUG injects phase switches");

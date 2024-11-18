@@ -15,6 +15,7 @@ REGIONS=""
 TARGETS=""
 SAMPLES=""
 ZSTD_LEVEL=""
+BLOCK_SIZE="--variant-block-length 8192"
 unset -v NO_KEEP
 
 POSITIONAL=()
@@ -42,6 +43,11 @@ case $key in
     ;;
     -s|--samples)
     SAMPLES="-s $2"
+    shift # past argument
+    shift # past value
+    ;;
+    --block-size)
+    BLOCK_SIZE="--variant-block-length $2"
     shift # past argument
     shift # past value
     ;;
@@ -89,7 +95,7 @@ function exit_fail_rm_tmp {
 
 # --variant-block-length 65536
 # --variant-block-length 1024
-"${SCRIPTPATH}"/../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
+"${SCRIPTPATH}"/../../xsqueezeit -c ${ZSTD} ${ZSTD_LEVEL} ${BLOCK_SIZE} --maf 0.002 -f ${FILENAME} -o ${TMPDIR}/compressed.bin || { echo "Failed to compress ${FILENAME}"; exit_fail_rm_tmp; }
 "${SCRIPTPATH}"/../../xsqueezeit -x ${REGIONS} ${TARGETS} ${SAMPLES} -f ${TMPDIR}/compressed.bin -o ${TMPDIR}/uncompressed.bcf || { echo "Failed to uncompress ${FILENAME}"; exit_fail_rm_tmp; }
 
 command -v bcftools || { echo "Failed to find bcftools, is it installed ?"; exit_fail_rm_tmp; }

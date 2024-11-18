@@ -305,7 +305,14 @@ class BlockWithZstdCompressor : public IBinaryBlock<T_KEY, T_VAL> {
         }
 
         if (std::numeric_limits<T>::max() < data_size or std::numeric_limits<T>::max() < result) {
-            std::cerr << "Size too big to be encoded with " << typeid(T).name() << std::endl;
+            std::cerr << "Block data size : " << data_size << " Compressed block data size : " << result << std::endl;
+            if (std::numeric_limits<T>::max() < data_size) {
+                std::cerr << "Uncompressed data size (" << data_size << ") too big to be encoded with uint32_t" << std::endl;
+            }
+
+            if (std::numeric_limits<T>::max() < result) {
+                std::cerr << "Compressed size (" << result << ") too big to be encoded with uint32_t" << std::endl;
+            }
             throw "Failed to write compressed block";
         }
         T original_size = (T)data_size;
