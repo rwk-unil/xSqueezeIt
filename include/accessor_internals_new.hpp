@@ -843,9 +843,16 @@ protected:
     }
 
     inline void set_block_ptr(const size_t block_id) {
-        uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap_p + header.indices_offset);
+        size_t offset;
         // Find out the block offset
-        size_t offset = indices_p[block_id];
+
+        if (header.version <= 4) {
+            uint32_t* indices_p = (uint32_t*)((uint8_t*)file_mmap_p + header.indices_offset);
+            offset = indices_p[block_id];
+        } else if (header.version >= 5) {
+            uint64_t* indices_p = (uint64_t*)((uint8_t*)file_mmap_p + header.indices_offset);
+            offset = indices_p[block_id];
+        }
 
         if (header.zstd) {
             size_t compressed_block_size = 0;

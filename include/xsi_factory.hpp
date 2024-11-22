@@ -477,9 +477,8 @@ public:
             .number_of_blocks = (uint32_t)1, // This version is single block (this is the old meaning of block...)
             .ss_rate = (uint32_t)this->RESET_SORT_BLOCK_LENGTH,
             .number_of_ssas = (uint32_t)-1, /* Set later */
-            .indices_offset = (uint32_t)-1, /* Set later */
-            .ssas_offset = (uint32_t)-1, /* Unused */
             .wahs_offset = (uint32_t)-1, /* Set later */
+            .indices_offset = (uint32_t)-1, /* Set later */
             .samples_offset = (uint32_t)-1, /* Set later */
             .rearrangement_track_offset = (uint32_t)-1, /* Unused */
             .xcf_entries = (uint64_t)0, //this->entry_counter,
@@ -531,7 +530,7 @@ private:
             // if there was a previous block, write it
             if (entry_counter) {
                 block_counter++;
-                indices.push_back((uint32_t)s.tellp());
+                indices.push_back(s.tellp());
                 current_block->write_to_file(s, zstd_compression_on, zstd_compression_level);
             }
             // Here replace the pointer instead of resetting the block, check performance...
@@ -552,14 +551,14 @@ public:
         // Write the last block if necessary
         if (current_block->get_effective_bcf_lines_in_block()) {
             block_counter++;
-            indices.push_back((uint32_t)s.tellp());
+            indices.push_back(s.tellp());
             current_block->write_to_file(s, zstd_compression_on, zstd_compression_level);
         }
 
         // Alignment padding...
-        size_t mod_uint32 = size_t(s.tellp()) % sizeof(uint32_t);
-        if (mod_uint32) {
-            size_t padding = sizeof(uint32_t) - mod_uint32;
+        size_t mod_uint64 = size_t(s.tellp()) % sizeof(uint64_t);
+        if (mod_uint64) {
+            size_t padding = sizeof(uint64_t) - mod_uint64;
             for (size_t i = 0; i < padding; ++i) {
                 s.write("", sizeof(char));
             }
@@ -578,9 +577,6 @@ public:
         written_bytes = size_t(s.tellp()) - total_bytes;
         total_bytes += written_bytes;
         std::cout << "indices " << written_bytes << " bytes, " << total_bytes << " total bytes written" << std::endl;
-
-        header.indices_sparse_offset = (uint32_t)-1; // Not used
-        header.ssas_offset = (uint32_t)-1; // Not used in this compressor
 
         ////////////////////////////
         // Write the sample names //
@@ -623,7 +619,7 @@ protected:
     std::unique_ptr<EncodingBinaryBlock<uint32_t, uint32_t, BlockWithZstdCompressor> > current_block;
 
     size_t block_counter = 0;
-    std::vector<uint32_t> indices;
+    std::vector<uint64_t> indices;
 
     int32_t default_phased;
 

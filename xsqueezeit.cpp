@@ -86,10 +86,6 @@ int main(int argc, const char *argv[]) {
             if (ret == 0) {
                 print_header_info(hdr);
                 std::cerr << "INFO : Header is\t\t\t" << sizeof(header_t) << " bytes" << std::endl;
-                if (hdr.version < 3) {
-                    std::cerr << "INFO : Indices is\t\t\t" << hdr.ssas_offset - hdr.indices_offset << " bytes" << std::endl;
-                    std::cerr << "INFO : Subsampled permutation arrays is\t" << hdr.wahs_offset - hdr.ssas_offset << " bytes" << std::endl;
-                }
                 std::cerr << "INFO : WAH Genotype data is\t\t" << hdr.samples_offset - hdr.wahs_offset << " bytes" << std::endl;
                 //std::cerr << "INFO : Samples list is\t\t\t" << fs::file_size(filename) - hdr.samples_offset << " bytes" << std::endl;
             }

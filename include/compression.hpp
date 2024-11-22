@@ -77,12 +77,9 @@ struct header_s {
     uint32_t ss_rate = 0;             // Sub Sample rate of permutation arrays / reset sort rate
     // Offsets, positions of data in the binary file
     uint32_t number_of_ssas = 0;      // Number of sampled loci for random access = ceil(num_variants/ss_rate)
-    uint32_t indices_offset = 0;      // Position in the binary file of WAH indices
-    uint32_t ssas_offset = 0;         // Position in the binary file of sub sampled permutation arrays (if any)
-    uint32_t wahs_offset = 0;         // Position in the binary file of WAH data
-    uint32_t samples_offset = 0;      // Position in the binary file of samples (e.g., "NA12878", "HG00101")
-    uint32_t indices_sparse_offset = 0; // Position in the binary file of indices for the sparse data
-    uint32_t missing_offset = 0;
+    uint64_t wahs_offset = 0;         // Position in the binary file of WAH data
+    uint64_t indices_offset = 0;      // Position in the binary file of WAH indices
+    uint64_t samples_offset = 0;      // Position in the binary file of samples (e.g., "NA12878", "HG00101")
     uint32_t rearrangement_track_offset = 0; // Position in the binary file of the rearrangement track
     uint32_t sparse_offset = 0;       // Position in the binary file of the sparse data
 
