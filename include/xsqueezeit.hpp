@@ -55,6 +55,7 @@ public:
         app.add_option("--maf", maf, "Minor Allele Frequency threshold");
         app.add_flag("-i,--info", info, "Get info on file");
         app.add_option("--variant-block-length", reset_sort_block_length, "Number of VCF lines to compress together (default 8192)");
+        app.add_flag("--wah-encode-missing", wah_encode_missing, "Encode missing alleles with WAH strategy");
 
         //app.add_flag("--sandbox", sandbox, "DEBUG - ...");
         //app.add_flag("--inject-phase-switches", inject_phase_switches, "DEBUG injects phase switches");
@@ -110,6 +111,7 @@ public:
     int  zstd_compression_level = 7; // Some acceptable default value
     double maf = 0.001;
     size_t reset_sort_block_length = 8192;
+    bool wah_encode_missing = false;
     bool no_sort = false;
     bool count_xcf = false;
     bool sandbox = false;

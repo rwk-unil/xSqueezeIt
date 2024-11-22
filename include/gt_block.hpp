@@ -27,6 +27,9 @@
 
 #include "interfaces.hpp"
 #include "internal_gt_record.hpp"
+#include "xsqueezeit.hpp"
+
+extern GlobalAppOptions global_app_options;
 
 class GTBlockDict {
 public:
@@ -168,6 +171,9 @@ public:
         a(NUM_SAMPLES*PLOIDY_2), b(NUM_SAMPLES*PLOIDY_2),
         a_weirdness(NUM_SAMPLES*PLOIDY_2), b_weirdness(NUM_SAMPLES*PLOIDY_2)
     {
+        if (global_app_options.wah_encode_missing) {
+            weirdness_strat = WS_WAH;
+        }
         //std::cerr << "Block MAC Thr : " << MAC_THRESHOLD << std::endl;
         // Reset a
         std::iota(a.begin(), a.end(), 0);
